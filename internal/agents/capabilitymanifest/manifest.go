@@ -155,6 +155,7 @@ var reviewTransportExposureByAgent = func() map[model.AgentID]ContractExposure {
 	exposure[model.AgentOpenCode] = ContractExposureAdvertised
 	exposure[model.AgentCodex] = ContractExposureAdvertised
 	exposure[model.AgentPi] = ContractExposureAdvertised
+	exposure[model.AgentAntigravityCLI] = ContractExposureAdvertised
 	return exposure
 }()
 
@@ -183,6 +184,7 @@ var immutableReviewExecutorExposureByAgent = func() map[model.AgentID]ContractEx
 	exposure[model.AgentOpenCode] = ContractExposureAdvertised
 	exposure[model.AgentCodex] = ContractExposureAdvertised
 	exposure[model.AgentPi] = ContractExposureAdvertised
+	exposure[model.AgentAntigravityCLI] = ContractExposureAdvertised
 	return exposure
 }()
 
@@ -290,6 +292,9 @@ func digest(domain string, payload []byte) string {
 var featureClaimsByAgent = map[model.AgentID]AgentFeatureClaims{
 	model.AgentAntigravity: {
 		Skills: true, SystemPrompt: true, MCP: true,
+	},
+	model.AgentAntigravityCLI: {
+		FileSubAgents: true, Skills: true, SystemPrompt: true, MCP: true,
 	},
 	model.AgentClaudeCode: {
 		OutputStyles: true, SlashCommands: true,

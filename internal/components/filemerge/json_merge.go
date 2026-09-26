@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 )
@@ -815,16 +816,17 @@ func mergeObjectScope(base map[string]any, overlay map[string]any, permission, p
 	}
 
 	for key, overlayValue := range overlay {
+		isPerm := permission || key == "permission" || key == "permissions"
 		// A generated overlay must not loosen an existing scalar restriction,
 		// including when an agent permission object replaces a scalar deny.
-		if action, ok := result[key].(string); ok && protect && (permission || key == "permission") {
+		if action, ok := result[key].(string); ok && protect && isPerm {
 			if action == "deny" || (action == "ask" && overlayValue != "deny") {
 				continue
 			}
 		}
 		// A scalar allow/ask cannot safely replace an ordered rule object:
 		// it could erase a deny anywhere in that object.
-		if _, ok := result[key].(map[string]any); ok && protect && (permission || key == "permission") {
+		if _, ok := result[key].(map[string]any); ok && protect && isPerm {
 			if overlayValue == "allow" || overlayValue == "ask" {
 				continue
 			}
@@ -844,7 +846,7 @@ func mergeObjectScope(base map[string]any, overlay map[string]any, permission, p
 			// that any nested __replace__ sentinels are unwrapped before
 			// they reach the output.
 			if overlayMap, isMap := overlayValue.(map[string]any); isMap {
-				result[key] = mergeObjectScope(map[string]any{}, overlayMap, permission || key == "permission", protect)
+				result[key] = mergeObjectScope(map[string]any{}, overlayMap, isPerm, protect)
 			} else {
 				result[key] = overlayValue
 			}
@@ -854,12 +856,38 @@ func mergeObjectScope(base map[string]any, overlay map[string]any, permission, p
 		baseMap, baseIsMap := baseValue.(map[string]any)
 		overlayMap, overlayIsMap := overlayValue.(map[string]any)
 		if baseIsMap && overlayIsMap {
-			result[key] = mergeObjectScope(baseMap, overlayMap, permission || key == "permission", protect)
+			result[key] = mergeObjectScope(baseMap, overlayMap, isPerm, protect)
+			continue
+		}
+
+		baseSlice, baseIsSlice := baseValue.([]any)
+		overlaySlice, overlayIsSlice := overlayValue.([]any)
+		if baseIsSlice && overlayIsSlice && (key == "deny" || (isPerm && (key == "ask" || key == "allow"))) {
+			result[key] = unionSlices(baseSlice, overlaySlice)
 			continue
 		}
 
 		result[key] = overlayValue
 	}
 
+	return result
+}
+
+func unionSlices(base, overlay []any) []any {
+	result := make([]any, len(base), len(base)+len(overlay))
+	copy(result, base)
+
+	for _, item := range overlay {
+		found := false
+		for _, existing := range base {
+			if reflect.DeepEqual(item, existing) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			result = append(result, item)
+		}
+	}
 	return result
 }

@@ -2,6 +2,7 @@ package filemerge
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -596,4 +597,50 @@ func TestMergeJSONObjects_Issue278_ReplaceSentinelFixesWildcard(t *testing.T) {
 	}
 
 	t.Logf("CONFIRMED: __replace__ produces exactly %d task keys (no wildcard)", len(task))
+}
+
+func TestPermissionOverlayPreservesExistingArrayDenyRules(t *testing.T) {
+	base := []byte(`{
+  "permissions": {
+    "deny": [
+      "command(git branch -d)",
+      "command(git branch -D)",
+      "read_file(.env)"
+    ]
+  }
+}`)
+	overlay := []byte(`{
+  "permissions": {
+    "deny": [
+      "command(sudo rm -rf /)",
+      "read_file(.env)",
+      "read_file(.ssh)"
+    ]
+  }
+}`)
+
+	merged, err := MergeJSONObjects(base, overlay)
+	if err != nil {
+		t.Fatalf("MergeJSONObjects() error = %v", err)
+	}
+
+	var got struct {
+		Permissions struct {
+			Deny []string `json:"deny"`
+		} `json:"permissions"`
+	}
+	if err := json.Unmarshal(merged, &got); err != nil {
+		t.Fatalf("Unmarshal error = %v", err)
+	}
+
+	expected := []string{
+		"command(git branch -d)",
+		"command(git branch -D)",
+		"read_file(.env)",
+		"command(sudo rm -rf /)",
+		"read_file(.ssh)",
+	}
+	if !reflect.DeepEqual(got.Permissions.Deny, expected) {
+		t.Fatalf("got.Permissions.Deny = %#v, want %#v", got.Permissions.Deny, expected)
+	}
 }

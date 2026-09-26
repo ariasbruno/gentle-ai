@@ -58,6 +58,38 @@ func TestAllAgentsIncludesAntigravity(t *testing.T) {
 	t.Fatalf("AllAgents() missing %s", model.AgentAntigravity)
 }
 
+func TestAllAgentsIncludesAntigravityCLI(t *testing.T) {
+	agents := AllAgents()
+
+	for _, agent := range agents {
+		if agent.ID != model.AgentAntigravityCLI {
+			continue
+		}
+
+		if agent.Name != "Antigravity CLI" {
+			t.Fatalf("Antigravity CLI Name = %q, want Antigravity CLI", agent.Name)
+		}
+
+		if agent.Tier != model.TierFull {
+			t.Fatalf("Antigravity CLI Tier = %q, want %q", agent.Tier, model.TierFull)
+		}
+
+		if agent.ConfigPath != "~/.gemini/antigravity-cli" {
+			t.Fatalf("Antigravity CLI ConfigPath = %q, want ~/.gemini/antigravity-cli", agent.ConfigPath)
+		}
+
+		return
+	}
+
+	t.Fatalf("AllAgents() missing %s", model.AgentAntigravityCLI)
+}
+
+func TestIsSupportedAgentAcceptsAntigravityCLI(t *testing.T) {
+	if !IsSupportedAgent(model.AgentAntigravityCLI) {
+		t.Fatalf("IsSupportedAgent(%q) = false, want true", model.AgentAntigravityCLI)
+	}
+}
+
 func TestIsSupportedAgentAcceptsPi(t *testing.T) {
 	if !IsSupportedAgent(model.AgentPi) {
 		t.Fatalf("IsSupportedAgent(%q) = false, want true", model.AgentPi)

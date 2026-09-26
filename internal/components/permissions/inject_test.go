@@ -11,6 +11,7 @@ import (
 
 	"github.com/gentleman-programming/gentle-ai/v3/internal/agents"
 	"github.com/gentleman-programming/gentle-ai/v3/internal/agents/antigravity"
+	"github.com/gentleman-programming/gentle-ai/v3/internal/agents/antigravitycli"
 	"github.com/gentleman-programming/gentle-ai/v3/internal/agents/claude"
 	"github.com/gentleman-programming/gentle-ai/v3/internal/agents/codex"
 	"github.com/gentleman-programming/gentle-ai/v3/internal/agents/cursor"
@@ -790,5 +791,158 @@ func TestInjectOpenCodePreservesExistingDenyRules(t *testing.T) {
 	// New sensitive-path rules must also be present
 	if readNode["**/.ssh/**"] != "deny" {
 		t.Errorf("default read deny rule '**/.ssh/**' was not added; got: %v", readNode)
+	}
+}
+
+func TestInjectAntigravityCLIPreservesUserSettingsAndInjectsDeniedResources(t *testing.T) {
+	home := t.TempDir()
+	adapter := antigravitycli.NewAdapter()
+	settingsPath := adapter.SettingsPath(home)
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+
+	existing := `{
+  "colorScheme": "tokyo night"
+}`
+	if err := os.WriteFile(settingsPath, []byte(existing), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	result, err := Inject(home, adapter)
+	if err != nil {
+		t.Fatalf("Inject() error = %v", err)
+	}
+	if !result.Changed {
+		t.Fatal("Inject() result.Changed = false, want true on first run")
+	}
+
+	content, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatalf("read settings file: %v", err)
+	}
+
+	var settings map[string]any
+	if err := json.Unmarshal(content, &settings); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	// Preserves user settings
+	if scheme, ok := settings["colorScheme"].(string); !ok || scheme != "tokyo night" {
+		t.Errorf("user setting colorScheme was lost or changed; got %v", settings["colorScheme"])
+	}
+
+	perms, ok := settings["permissions"].(map[string]any)
+	if !ok {
+		t.Fatalf("permissions object missing from settings: %v", settings)
+	}
+
+	deniedList, ok := perms["deny"].([]any)
+	if !ok {
+		t.Fatalf("permissions.deny missing or not an array: %v", perms)
+	}
+
+	deniedSet := make(map[string]bool, len(deniedList))
+	for _, item := range deniedList {
+		if s, ok := item.(string); ok {
+			deniedSet[s] = true
+		}
+	}
+
+	requiredDenies := []string{
+		"command(sudo rm -rf /)",
+		"command(rm -rf ~)",
+		"command(sudo rm -rf ~)",
+		"command(git reset --hard)",
+		"command(git clean -fd)",
+		"command(git push --force)",
+		"command(chmod -R 777)",
+		"command(chown -R)",
+		"read_file(.env)",
+		"write_file(.env)",
+		"read_file(.ssh)",
+		"write_file(.ssh)",
+		"read_file(.credentials)",
+		"write_file(.credentials)",
+		"read_file(.aws)",
+		"write_file(.aws)",
+	}
+
+	for _, req := range requiredDenies {
+		if !deniedSet[req] {
+			t.Errorf("deny missing required rule %q", req)
+		}
+	}
+
+	// Test idempotency: second injection should produce Changed = false
+	secondResult, err := Inject(home, adapter)
+	if err != nil {
+		t.Fatalf("second Inject() error = %v", err)
+	}
+	if secondResult.Changed {
+		t.Error("second Inject() result.Changed = true, want false (idempotent)")
+	}
+}
+
+func TestAntigravityCLIPermissionsPreservesExistingCustomDenyRules(t *testing.T) {
+	home := t.TempDir()
+	adapter, err := agents.NewAdapter(model.AgentAntigravityCLI)
+	if err != nil {
+		t.Fatalf("NewAdapter() error = %v", err)
+	}
+
+	settingsPath := adapter.SettingsPath(home)
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+
+	existing := `{
+  "permissions": {
+    "deny": [
+      "command(git branch -d)",
+      "command(git branch -D)",
+      "command(git remote prune)"
+    ]
+  }
+}`
+	if err := os.WriteFile(settingsPath, []byte(existing), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	result, err := Inject(home, adapter)
+	if err != nil {
+		t.Fatalf("Inject() error = %v", err)
+	}
+	if !result.Changed {
+		t.Fatal("Inject() result.Changed = false, want true")
+	}
+
+	content, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatalf("read settings file: %v", err)
+	}
+
+	var settings struct {
+		Permissions struct {
+			Deny []string `json:"deny"`
+		} `json:"permissions"`
+	}
+	if err := json.Unmarshal(content, &settings); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	deniedSet := make(map[string]bool)
+	for _, item := range settings.Permissions.Deny {
+		deniedSet[item] = true
+	}
+
+	for _, custom := range []string{"command(git branch -d)", "command(git branch -D)", "command(git remote prune)"} {
+		if !deniedSet[custom] {
+			t.Errorf("custom deny rule %q was erased by permissions injection!", custom)
+		}
+	}
+
+	if !deniedSet["command(sudo rm -rf /)"] {
+		t.Error("baseline deny rule missing")
 	}
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/gentleman-programming/gentle-ai/v3/internal/agents"
 	"github.com/gentleman-programming/gentle-ai/v3/internal/agents/antigravity"
+	"github.com/gentleman-programming/gentle-ai/v3/internal/agents/antigravitycli"
 	"github.com/gentleman-programming/gentle-ai/v3/internal/agents/claude"
 	"github.com/gentleman-programming/gentle-ai/v3/internal/agents/codex"
 	"github.com/gentleman-programming/gentle-ai/v3/internal/agents/gemini"
@@ -39,6 +40,10 @@ func qwenAdapter() agents.Adapter     { return qwen.NewAdapter() }
 func openclawAdapter() agents.Adapter { return openclaw.NewAdapter() }
 func antigravityAdapter() agents.Adapter {
 	return antigravity.NewAdapter()
+}
+
+func antigravityCLIAdapter() agents.Adapter {
+	return antigravitycli.NewAdapter()
 }
 
 func piAdapter() agents.Adapter { return pi.NewAdapter() }
@@ -655,6 +660,63 @@ func TestInjectAntigravityWritesMCPToCLIConfig(t *testing.T) {
 	desktopMCPPath := filepath.Join(home, ".gemini", "antigravity", "mcp_config.json")
 	if _, err := os.Stat(desktopMCPPath); !os.IsNotExist(err) {
 		t.Fatalf("legacy desktop MCP path %q should not be written for antigravity; stat err = %v", desktopMCPPath, err)
+	}
+}
+
+func TestInjectAntigravityCLIWritesPluginMCPConfig(t *testing.T) {
+	home := t.TempDir()
+
+	result, err := Inject(home, antigravityCLIAdapter())
+	if err != nil {
+		t.Fatalf("Inject(antigravity-cli) error = %v", err)
+	}
+	if !result.Changed {
+		t.Fatalf("Inject(antigravity-cli) changed = false")
+	}
+
+	pluginDir := filepath.Join(home, ".gemini", "config", "plugins", "gentle-ai")
+	pluginPath := filepath.Join(pluginDir, "plugin.json")
+	if _, err := os.Stat(pluginPath); !os.IsNotExist(err) {
+		t.Fatalf("Engram must not own plugin.json; stat err = %v", err)
+	}
+
+	mcpPath := filepath.Join(pluginDir, "mcp_config.json")
+	mcpContent, err := os.ReadFile(mcpPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", mcpPath, err)
+	}
+
+	var mcpConfig map[string]any
+	if err := json.Unmarshal(mcpContent, &mcpConfig); err != nil {
+		t.Fatalf("Unmarshal mcp_config.json error = %v", err)
+	}
+
+	servers, ok := mcpConfig["mcpServers"].(map[string]any)
+	if !ok {
+		t.Fatalf("mcp_config.json missing mcpServers: %v", mcpConfig)
+	}
+
+	engramServer, ok := servers["engram"].(map[string]any)
+	if !ok {
+		t.Fatalf("mcp_config.json missing engram server: %v", servers)
+	}
+
+	if cmd, _ := engramServer["command"].(string); strings.TrimSpace(cmd) == "" {
+		t.Fatalf("engram command is empty")
+	}
+
+	args, ok := engramServer["args"].([]any)
+	if !ok || len(args) == 0 || args[0] != "mcp" {
+		t.Fatalf("engram args = %v, want [\"mcp\"]", args)
+	}
+
+	// Idempotency: second run should report changed = false
+	secondResult, err := Inject(home, antigravityCLIAdapter())
+	if err != nil {
+		t.Fatalf("second Inject() error = %v", err)
+	}
+	if secondResult.Changed {
+		t.Fatal("second Inject(antigravity-cli) changed = true, want false (idempotent)")
 	}
 }
 

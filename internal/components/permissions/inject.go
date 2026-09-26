@@ -122,6 +122,37 @@ var vscodeCopilotOverlayJSON = []byte(`{
 }
 `)
 
+// antigravityCLIOverlayJSON sets hard deny rules for Antigravity CLI in
+// ~/.gemini/antigravity-cli/settings.json. The Antigravity CLI permission
+// schema defines three lists — deny, ask, allow — whose entries are
+// action(target) resources. command targets match word-by-word command
+// prefixes (a trailing "*" would be a literal character, never a wildcard);
+// file targets are absolute or workspace-relative paths, and a directory
+// target covers its whole subtree.
+var antigravityCLIOverlayJSON = []byte(`{
+  "permissions": {
+    "deny": [
+      "command(sudo rm -rf /)",
+      "command(rm -rf ~)",
+      "command(sudo rm -rf ~)",
+      "command(git reset --hard)",
+      "command(git clean -fd)",
+      "command(git push --force)",
+      "command(chmod -R 777)",
+      "command(chown -R)",
+      "read_file(.env)",
+      "write_file(.env)",
+      "read_file(.ssh)",
+      "write_file(.ssh)",
+      "read_file(.credentials)",
+      "write_file(.credentials)",
+      "read_file(.aws)",
+      "write_file(.aws)"
+    ]
+  }
+}
+`)
+
 // agentOverlay returns the correct permission overlay for the given agent,
 // or nil if the agent does not support permission injection via settings.json.
 func agentOverlay(id model.AgentID) []byte {
@@ -138,6 +169,8 @@ func agentOverlay(id model.AgentID) []byte {
 		// Antigravity manages permissions via IDE UI (Artifact Review Policy /
 		// Terminal Command Auto Execution). No injectable settings.json schema.
 		return nil
+	case model.AgentAntigravityCLI:
+		return antigravityCLIOverlayJSON
 	case model.AgentVSCodeCopilot:
 		return vscodeCopilotOverlayJSON
 	case model.AgentCursor:
