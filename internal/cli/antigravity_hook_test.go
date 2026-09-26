@@ -606,8 +606,8 @@ func TestAntigravityHookPreToolUseInvokeSubagentValidation(t *testing.T) {
 			wantReason: "arguments are malformed",
 		},
 		{
-			name: "Subagent item not an object",
-			args: map[string]any{"Subagents": []any{"not-an-object"}},
+			name:       "Subagent item not an object",
+			args:       map[string]any{"Subagents": []any{"not-an-object"}},
 			want:       "deny",
 			wantReason: "is not an object",
 		},

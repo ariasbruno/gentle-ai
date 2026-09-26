@@ -14,8 +14,8 @@ import (
 
 func TestResolveAntigravityCLIReviewRouting(t *testing.T) {
 	for _, tc := range []struct {
-		name, config, model string
-		invalid             bool
+		name, config, model  string
+		invalid              bool
 		assignmentKeyMissing bool
 	}{
 		{"string", `{"review-refuter":"provider/model"}`, "provider/model", false, false},

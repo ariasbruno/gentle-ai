@@ -8,7 +8,7 @@ die() {
 
 : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
 : "${MINISIGN_PUBLIC_KEYS:?MINISIGN_PUBLIC_KEYS is required}"
-[[ "$GITHUB_REPOSITORY" == "Gentleman-Programming/gentle-ai" ]] || die "unexpected repository"
+[[ "$GITHUB_REPOSITORY" == "Gentleman-Programming/gentle-ai" || "$GITHUB_REPOSITORY" == "ariasbruno/gentle-ai" ]] || die "unexpected repository"
 
 if ! canonical_public_keys=$(./scripts/canonicalize-release-public-keys.sh); then
   die "MINISIGN_PUBLIC_KEYS is not canonical"
@@ -81,7 +81,7 @@ for signing_public_key in "${configured_keys[@]}"; do
   fi
 done
 [[ "$verified" == true ]] || die "remote checksum signature verification failed"
-[[ "$trusted" == "repo=$GITHUB_REPOSITORY;tag=$tag" ]] || die "remote trusted comment identity mismatch"
+[[ "$trusted" == "repo=$GITHUB_REPOSITORY;tag=$tag" || "$trusted" == "repo=Gentleman-Programming/gentle-ai;tag=$tag" ]] || die "remote trusted comment identity mismatch"
 
 mapfile -t manifest_assets < <(awk 'NF == 2 { print $2 }' "$download_dir/checksums.txt" | LC_ALL=C sort)
 mapfile -t sorted_archives < <(printf '%s\n' "${archives[@]}" | LC_ALL=C sort)

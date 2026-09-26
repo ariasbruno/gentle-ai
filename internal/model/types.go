@@ -55,23 +55,23 @@ func ParsePiBackgroundIntent(raw string) (PiBackgroundIntent, error) {
 }
 
 const (
-	AgentClaudeCode    AgentID = "claude-code"
-	AgentOpenCode      AgentID = "opencode"
-	AgentKilocode      AgentID = "kilocode"
-	AgentGeminiCLI     AgentID = "gemini-cli"
-	AgentCursor        AgentID = "cursor"
-	AgentVSCodeCopilot AgentID = "vscode-copilot"
-	AgentCodex         AgentID = "codex"
+	AgentClaudeCode     AgentID = "claude-code"
+	AgentOpenCode       AgentID = "opencode"
+	AgentKilocode       AgentID = "kilocode"
+	AgentGeminiCLI      AgentID = "gemini-cli"
+	AgentCursor         AgentID = "cursor"
+	AgentVSCodeCopilot  AgentID = "vscode-copilot"
+	AgentCodex          AgentID = "codex"
 	AgentAntigravity    AgentID = "antigravity"
 	AgentAntigravityCLI AgentID = "antigravity-cli"
 	AgentWindsurf       AgentID = "windsurf"
-	AgentKimi          AgentID = "kimi"
-	AgentQwenCode      AgentID = "qwen-code"
-	AgentKiroIDE       AgentID = "kiro-ide"
-	AgentOpenClaw      AgentID = "openclaw"
-	AgentPi            AgentID = "pi"
-	AgentTrae          AgentID = "trae-ide"
-	AgentHermes        AgentID = "hermes"
+	AgentKimi           AgentID = "kimi"
+	AgentQwenCode       AgentID = "qwen-code"
+	AgentKiroIDE        AgentID = "kiro-ide"
+	AgentOpenClaw       AgentID = "openclaw"
+	AgentPi             AgentID = "pi"
+	AgentTrae           AgentID = "trae-ide"
+	AgentHermes         AgentID = "hermes"
 )
 
 // SupportTier indicates how fully an agent supports the Gentleman AI ecosystem.

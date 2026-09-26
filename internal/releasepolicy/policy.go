@@ -671,6 +671,7 @@ brews:
     description: "Gentle-AI — Ecosystem, Frameworks, Workflows for AI coding agents."
     license: "MIT"
     commit_msg_template: "chore: update gentle-ai formula to {{ .Tag }}"
+    skip_upload: true
 `
 
 const expectedReleaseWorkflowYAML = `name: Release
