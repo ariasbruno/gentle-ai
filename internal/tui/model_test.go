@@ -24,6 +24,7 @@ import (
 	"github.com/gentleman-programming/gentle-ai/v3/internal/pipeline"
 	"github.com/gentleman-programming/gentle-ai/v3/internal/planner"
 	"github.com/gentleman-programming/gentle-ai/v3/internal/reviewtransaction"
+	"github.com/gentleman-programming/gentle-ai/v3/internal/reviewerprovider"
 	"github.com/gentleman-programming/gentle-ai/v3/internal/state"
 	"github.com/gentleman-programming/gentle-ai/v3/internal/statecoord"
 	"github.com/gentleman-programming/gentle-ai/v3/internal/system"
@@ -2813,19 +2814,106 @@ func TestModelConfig_OpenCodePickerNavigation(t *testing.T) {
 	}
 }
 
-// TestModelConfig_BackNavigation verifies that selecting cursor 4 (Back) from
+// TestModelConfig_BackNavigation verifies that selecting cursor 5 (Back) from
 // ScreenModelConfig returns to ScreenWelcome.
-// Index 3 is now "Configure Codex models"; Back moved to index 4.
+// Index 4 is now "Configure Antigravity review models"; Back moved to index 5.
 func TestModelConfig_BackNavigation(t *testing.T) {
 	m := NewModel(system.DetectionResult{}, "dev")
 	m.Screen = ScreenModelConfig
-	m.Cursor = 4 // Back is now at index 4
+	m.Cursor = 5 // Back is now at index 5
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	state := updated.(Model)
 
 	if state.Screen != ScreenWelcome {
-		t.Fatalf("ModelConfig cursor=4 (Back): screen = %v, want %v", state.Screen, ScreenWelcome)
+		t.Fatalf("ModelConfig cursor=5 (Back): screen = %v, want %v", state.Screen, ScreenWelcome)
+	}
+}
+
+// TestModelConfig_AntigravityReviewModelNavigation verifies that selecting cursor 4
+// from ScreenModelConfig transitions to ScreenAntigravityReviewModelPicker with ModelConfigMode set.
+func TestModelConfig_AntigravityReviewModelNavigation(t *testing.T) {
+	m := NewModel(system.DetectionResult{}, "dev")
+	m.Screen = ScreenModelConfig
+	m.Cursor = 4
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	state := updated.(Model)
+
+	if state.Screen != ScreenAntigravityReviewModelPicker {
+		t.Fatalf("ModelConfig cursor=4 (Antigravity): screen = %v, want %v", state.Screen, ScreenAntigravityReviewModelPicker)
+	}
+	if !state.ModelConfigMode {
+		t.Fatal("expected ModelConfigMode = true after entering Antigravity review model picker")
+	}
+}
+
+// TestModelConfig_AntigravityPickerEscReturnsToModelConfig verifies that pressing
+// Esc from ScreenAntigravityReviewModelPicker when in ModelConfigMode returns to
+// ScreenModelConfig.
+func TestModelConfig_AntigravityPickerEscReturnsToModelConfig(t *testing.T) {
+	m := NewModel(system.DetectionResult{}, "dev")
+	m.Screen = ScreenAntigravityReviewModelPicker
+	m.ModelConfigMode = true
+	m.AntigravityReviewModelPicker = screens.NewAntigravityReviewModelPickerState()
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	state := updated.(Model)
+
+	if state.Screen != ScreenModelConfig {
+		t.Fatalf("AntigravityReviewModelPicker esc (ModelConfigMode): screen = %v, want %v", state.Screen, ScreenModelConfig)
+	}
+	if state.ModelConfigMode {
+		t.Fatal("expected ModelConfigMode = false after returning to ScreenModelConfig")
+	}
+}
+
+// TestModelConfig_AntigravityPickerBackReturnsToModelConfig verifies that selecting
+// Back option from ScreenAntigravityReviewModelPicker returns to ScreenModelConfig.
+func TestModelConfig_AntigravityPickerBackReturnsToModelConfig(t *testing.T) {
+	m := NewModel(system.DetectionResult{}, "dev")
+	m.Screen = ScreenAntigravityReviewModelPicker
+	m.ModelConfigMode = true
+	m.AntigravityReviewModelPicker = screens.NewAntigravityReviewModelPickerState()
+	m.Cursor = screens.AntigravityReviewModelPickerOptionCount(m.AntigravityReviewModelPicker) - 1
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	state := updated.(Model)
+
+	if state.Screen != ScreenModelConfig {
+		t.Fatalf("AntigravityReviewModelPicker Back row: screen = %v, want %v", state.Screen, ScreenModelConfig)
+	}
+	if state.ModelConfigMode {
+		t.Fatal("expected ModelConfigMode = false after returning to ScreenModelConfig")
+	}
+}
+
+// TestModelConfig_AntigravityPickerPresetSelectionSavesAndReturns verifies that selecting
+// a preset from ScreenAntigravityReviewModelPicker writes to routing and returns to ScreenModelConfig.
+func TestModelConfig_AntigravityPickerPresetSelectionSavesAndReturns(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	m := NewModel(system.DetectionResult{}, "dev")
+	m.Screen = ScreenAntigravityReviewModelPicker
+	m.ModelConfigMode = true
+	m.AntigravityReviewModelPicker = screens.NewAntigravityReviewModelPickerState()
+	m.Cursor = 0 // Recommended
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	state := updated.(Model)
+
+	if state.Screen != ScreenModelConfig {
+		t.Fatalf("AntigravityReviewModelPicker select preset: screen = %v, want %v", state.Screen, ScreenModelConfig)
+	}
+
+	loaded, err := reviewerprovider.LoadAllAntigravityCLIReviewRouting()
+	if err != nil {
+		t.Fatalf("LoadAllAntigravityCLIReviewRouting() error: %v", err)
+	}
+	if len(loaded) != 6 {
+		t.Fatalf("loaded routing len = %d, want 6", len(loaded))
 	}
 }
 

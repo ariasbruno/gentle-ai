@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gentleman-programming/gentle-ai/v3/internal/backup"
 	"github.com/gentleman-programming/gentle-ai/v3/internal/model"
+	"github.com/gentleman-programming/gentle-ai/v3/internal/reviewerprovider"
 	"github.com/gentleman-programming/gentle-ai/v3/internal/system"
 	"github.com/gentleman-programming/gentle-ai/v3/internal/tui/screens"
 )
@@ -56,18 +57,25 @@ func TestConditionalPickerNavigationResetsState(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		screen Screen
+		cursor int
 	}{
-		{"Kiro", ScreenKiroModelPicker},
-		{"Codex", ScreenCodexModelPicker},
+		{"Kiro", ScreenKiroModelPicker, 4},
+		{"Codex", ScreenCodexModelPicker, 3},
+		// Antigravity's Custom row is the last preset in AntigravityPresetOrder
+		// (Default, Recommended, Performance, Economy, Custom), unlike Kiro/Codex
+		// where Custom sits at index 3. The handler treats len-1 as the custom row.
+		{"Antigravity", ScreenAntigravityReviewModelPicker, len(reviewerprovider.AntigravityPresetOrder) - 1},
 	} {
 		t.Run(tc.name+" custom starts at first phase", func(t *testing.T) {
 			m := NewModel(system.DetectionResult{}, "dev")
-			m.Screen, m.Cursor = tc.screen, 3
-			if tc.screen == ScreenKiroModelPicker {
-				m.Cursor = 4 // Kiro has an additional Open Weight preset before Custom.
+			m.Screen, m.Cursor = tc.screen, tc.cursor
+			switch tc.screen {
+			case ScreenKiroModelPicker:
 				m.KiroModelPicker = screens.NewKiroModelPickerState()
-			} else {
+			case ScreenCodexModelPicker:
 				m.CodexModelPicker = screens.NewCodexModelPickerState()
+			case ScreenAntigravityReviewModelPicker:
+				m.AntigravityReviewModelPicker = screens.NewAntigravityReviewModelPickerState()
 			}
 			updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 			if got := updated.(Model).Cursor; got != 0 {

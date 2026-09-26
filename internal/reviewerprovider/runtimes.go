@@ -9,6 +9,7 @@ import "github.com/gentleman-programming/gentle-ai/v3/internal/model"
 // bundle verify this list offline before trusting a runtime identity; prompt
 // prose never expands it.
 var registeredRuntimeIdentities = []string{
+	"antigravity-cli",
 	"claude-code",
 	"codex",
 	"opencode",

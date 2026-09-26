@@ -49,7 +49,10 @@ func RuntimeContextBudget(agent model.AgentID) int {
 // disagrees with itself.
 func CapturesInProcess(agent model.AgentID) bool {
 	switch agent {
-	case model.AgentClaudeCode, model.AgentCodex:
+	case model.AgentClaudeCode, model.AgentCodex, model.AgentAntigravityCLI:
+		// AntigravityCLI's sandboxed agy subprocess is compiled in-process
+		// since slice 2 of the frozen review transport design, exactly like
+		// Claude's generated reviewer and Codex's advisory scratch process.
 		return true
 	default:
 		return false

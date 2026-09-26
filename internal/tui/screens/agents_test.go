@@ -6,14 +6,15 @@ import (
 	"github.com/gentleman-programming/gentle-ai/v3/internal/model"
 )
 
-func TestAgentOptionsShowsAntigravityOnly(t *testing.T) {
+func TestAgentOptionsIncludesAntigravityAndAntigravityCLI(t *testing.T) {
 	options := AgentOptions()
 
 	seenAntigravity := false
+	seenAntigravityCLI := false
 
 	for _, option := range options {
-		if option == model.AgentID("antigravity-cli") {
-			t.Fatal("AgentOptions() should not expose antigravity-cli as a separate TUI option")
+		if option == model.AgentAntigravityCLI {
+			seenAntigravityCLI = true
 		}
 		if option == model.AgentAntigravity {
 			seenAntigravity = true
@@ -22,5 +23,8 @@ func TestAgentOptionsShowsAntigravityOnly(t *testing.T) {
 
 	if !seenAntigravity {
 		t.Fatal("AgentOptions() missing Antigravity option")
+	}
+	if !seenAntigravityCLI {
+		t.Fatal("AgentOptions() missing Antigravity CLI option")
 	}
 }
