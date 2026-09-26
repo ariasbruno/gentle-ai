@@ -408,7 +408,7 @@ const antigravityCLIPluginHooksJSON = `{
   "gentle-ai": {
     "PostInvocation": [
       {
-        "command": "gentle-ai hook run --agent antigravity-cli --event PostInvocation",
+        "command": "gentle-ai hook run --agent=antigravity-cli --event PostInvocation",
         "timeout": 30,
         "type": "command"
       }
@@ -417,7 +417,7 @@ const antigravityCLIPluginHooksJSON = `{
       {
         "hooks": [
           {
-            "command": "gentle-ai hook run --agent antigravity-cli --event PostToolUse",
+            "command": "gentle-ai hook run --agent=antigravity-cli --event PostToolUse",
             "timeout": 10,
             "type": "command"
           }
@@ -427,7 +427,7 @@ const antigravityCLIPluginHooksJSON = `{
     ],
     "PreInvocation": [
       {
-        "command": "gentle-ai hook run --agent antigravity-cli --event PreInvocation",
+        "command": "gentle-ai hook run --agent=antigravity-cli --event PreInvocation",
         "timeout": 30,
         "type": "command"
       }
@@ -436,7 +436,7 @@ const antigravityCLIPluginHooksJSON = `{
       {
         "hooks": [
           {
-            "command": "gentle-ai hook run --agent antigravity-cli --event PreToolUse",
+            "command": "gentle-ai hook run --agent=antigravity-cli --event PreToolUse",
             "timeout": 10,
             "type": "command"
           }
@@ -446,14 +446,13 @@ const antigravityCLIPluginHooksJSON = `{
     ],
     "Stop": [
       {
-        "command": "gentle-ai hook run --agent antigravity-cli --event Stop",
+        "command": "gentle-ai hook run --agent=antigravity-cli --event Stop",
         "timeout": 60,
         "type": "command"
       }
     ]
   }
-}
-`
+}`
 
 // DeployPluginTree deploys embedded ODD bundle assets, native subagents, and hooks
 // into the Antigravity CLI plugin directory, and cleans up any legacy SDD assets.
@@ -510,14 +509,14 @@ func (a *Adapter) DeployPluginTree(homeDir string) error {
 		return err
 	}
 	hookShPath := filepath.Join(hooksDir, "hook.sh")
-	hookShContent := "#!/bin/sh\nexec gentle-ai hook run --agent antigravity-cli --event \"$1\"\n"
+	hookShContent := "#!/bin/sh\nexec gentle-ai hook run --agent=antigravity-cli --event \"$1\"\n"
 	if _, err := filemerge.WriteFileAtomic(hookShPath, []byte(hookShContent), 0o755); err != nil {
 		return err
 	}
 	_ = os.Chmod(hookShPath, 0o755)
 
 	hookCmdPath := filepath.Join(hooksDir, "hook.cmd")
-	hookCmdContent := "@echo off\r\ngentle-ai.exe hook run --agent antigravity-cli --event %1\r\n"
+	hookCmdContent := "@echo off\r\ngentle-ai.exe hook run --agent=antigravity-cli --event %1\r\n"
 	if _, err := filemerge.WriteFileAtomic(hookCmdPath, []byte(hookCmdContent), 0o644); err != nil {
 		return err
 	}

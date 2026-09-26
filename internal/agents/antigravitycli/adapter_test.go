@@ -535,6 +535,7 @@ func prepareImportTest(t *testing.T, manifest []byte, mode os.FileMode) (*Adapte
 func TestEnsurePluginImportedRefusesPluginTreeSymlink(t *testing.T) {
 	homeDir := t.TempDir()
 	adapter := NewAdapter()
+	adapter.lookPath = func(string) (string, error) { return "/usr/local/bin/agy", nil }
 	pluginDir := adapter.PluginDir(homeDir)
 	if err := os.MkdirAll(pluginDir, 0o755); err != nil {
 		t.Fatal(err)

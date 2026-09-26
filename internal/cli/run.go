@@ -902,6 +902,7 @@ func (s antigravityCLIPluginImportStep) Run() error {
 	}
 	agy, ok := adapter.(*antigravitycliagent.Adapter)
 	if !ok {
+		// refusal:by-design operator-knowledge: factory returned an unexpected concrete adapter type for Antigravity CLI
 		return fmt.Errorf("unexpected adapter type for %s", model.AgentAntigravityCLI)
 	}
 	if err := agy.DeployPluginTree(s.homeDir); err != nil {
