@@ -596,12 +596,19 @@ func TestDeployPluginTree(t *testing.T) {
 	adapter := NewAdapter()
 	pluginDir := adapter.PluginDir(homeDir)
 
-	// Pre-create stale SDD artifacts
+	// Pre-create stale SDD artifacts and arbitrary unmanaged agent
 	staleAgentDir := filepath.Join(pluginDir, "agents", "sdd-apply")
 	if err := os.MkdirAll(staleAgentDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(staleAgentDir, "agent.md"), []byte("stale"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	arbitraryAgentDir := filepath.Join(pluginDir, "agents", "custom-deprecated-agent")
+	if err := os.MkdirAll(arbitraryAgentDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(arbitraryAgentDir, "agent.md"), []byte("deprecated"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	staleSkillDir := filepath.Join(pluginDir, "skills", "sdd-apply")
@@ -659,9 +666,12 @@ func TestDeployPluginTree(t *testing.T) {
 		t.Errorf("missing hooks.json: %v", err)
 	}
 
-	// Verify stale SDD artifacts pruned
+	// Verify stale SDD artifacts and arbitrary unmanaged agent pruned
 	if _, err := os.Stat(staleAgentDir); !os.IsNotExist(err) {
 		t.Errorf("stale sdd agent directory %q was not removed", staleAgentDir)
+	}
+	if _, err := os.Stat(arbitraryAgentDir); !os.IsNotExist(err) {
+		t.Errorf("unmanaged agent directory %q was not removed", arbitraryAgentDir)
 	}
 	if _, err := os.Stat(staleSkillDir); !os.IsNotExist(err) {
 		t.Errorf("stale sdd skill directory %q was not removed", staleSkillDir)

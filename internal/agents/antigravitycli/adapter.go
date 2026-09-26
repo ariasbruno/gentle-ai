@@ -478,20 +478,18 @@ func (a *Adapter) DeployPluginTree(homeDir string) error {
 		}
 	}
 
-	// 2. Deploy 10 ODD Native Subagents
-	subagents := []string{
-		"gentle-ai-explore",
-		"gentle-ai-worker",
-		"gentle-ai-verify",
-		"jd-fix-agent",
-		"jd-judge-a",
-		"jd-judge-b",
-		"review-readability",
-		"review-reliability",
-		"review-resilience",
-		"review-risk",
+	// 2. Deploy Native Subagents
+	agentEntries, err := assets.FS.ReadDir("antigravitycli/agents")
+	if err != nil {
+		return fmt.Errorf("read embedded subagents: %w", err)
 	}
-	for _, name := range subagents {
+	validSubagents := make(map[string]bool)
+	for _, entry := range agentEntries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		validSubagents[name] = true
 		agentMDPath := filepath.Join("antigravitycli", "agents", name, "agent.md")
 		content, err := assets.Read(agentMDPath)
 		if err != nil {
@@ -529,15 +527,13 @@ func (a *Adapter) DeployPluginTree(homeDir string) error {
 		return err
 	}
 
-	// 4. Prune Stale Legacy SDD Assets
-	legacyAgents := []string{
-		"sdd-apply", "sdd-archive", "sdd-design", "sdd-explore",
-		"sdd-init", "sdd-onboard", "sdd-proposal", "sdd-propose",
-		"sdd-remediate", "sdd-research", "sdd-spec", "sdd-status",
-		"sdd-tasks", "sdd-verify",
-	}
-	for _, name := range legacyAgents {
-		_ = os.RemoveAll(filepath.Join(pluginDir, "agents", name))
+	// 4. Prune Stale Subagents and Legacy Assets
+	if existingEntries, err := os.ReadDir(filepath.Join(pluginDir, "agents")); err == nil {
+		for _, entry := range existingEntries {
+			if entry.IsDir() && !validSubagents[entry.Name()] {
+				_ = os.RemoveAll(filepath.Join(pluginDir, "agents", entry.Name()))
+			}
+		}
 	}
 	legacyFiles := []string{
 		filepath.Join(pluginDir, "sdd-orchestrator-workflow.md"),
