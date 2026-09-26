@@ -46,6 +46,12 @@ Port and natively integrate Gentle AI with Google Antigravity CLI (`agy`) onto o
   - Evidence: `go test ./...` PASS on bench, binary compiled (`3.0.0-...-f8c777f8`), live `gentle-ai install --agent antigravity-cli` passed 15/15 checks, and `gentle-ai hook` verified.
   - Commit: `f8c777f8` (`feat(bench): add antigravity-cli journey benchmarks and docs`)
 
+- [x] Task 6: Rule Truncation Fix & ODD Plugin Tree Deployment
+  - Target: `internal/agents/antigravitycli/adapter.go`, `internal/cli/run.go`, `internal/cli/sync.go`, `internal/components/agentguidance/inject.go`. Split routing into `rules/gentle-ai-routing.md` (< 24 KB), deployed ODD subagents (`DeployPluginTree`) and pruned legacy `sdd-*` residues.
+  - Evidence: `go test` PASS across modified packages. Installed files: `AGENTS.md` (17,378 bytes) and `gentle-ai-routing.md` (18,238 bytes) strictly under 24KB limit. `gentle-ai doctor` and live hook execution verified.
+  - Commit: `2697dbcc` (`fix(antigravitycli): deploy odd plugin assets and separate routing rule file`)
+
 ## Rollback Boundary
 
 - Backup branch: `backup/antigravity-cli-integration-pre-odd-rebase-20260925` (points to `26fa26a7`).
+
