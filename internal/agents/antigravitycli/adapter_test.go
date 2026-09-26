@@ -590,3 +590,95 @@ func writeModeFile(t *testing.T, path string, data []byte, mode os.FileMode) {
 		t.Fatal(err)
 	}
 }
+
+func TestDeployPluginTree(t *testing.T) {
+	homeDir := t.TempDir()
+	adapter := NewAdapter()
+	pluginDir := adapter.PluginDir(homeDir)
+
+	// Pre-create stale SDD artifacts
+	staleAgentDir := filepath.Join(pluginDir, "agents", "sdd-apply")
+	if err := os.MkdirAll(staleAgentDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staleAgentDir, "agent.md"), []byte("stale"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	staleSkillDir := filepath.Join(pluginDir, "skills", "sdd-apply")
+	if err := os.MkdirAll(staleSkillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	staleChain := filepath.Join(pluginDir, "chains", "sdd-full.chain.md")
+	writeModeFile(t, staleChain, []byte("stale chain"), 0o644)
+
+	// Pre-create AGENTS.md with duplicate agent-routing
+	agentsMD := filepath.Join(pluginDir, "rules", "AGENTS.md")
+	contentWithRouting := "<!-- gentle-ai:persona -->\nPersona text\n<!-- /gentle-ai:persona -->\n<!-- gentle-ai:agent-routing -->\nRouting text\n<!-- /gentle-ai:agent-routing -->\n"
+	writeModeFile(t, agentsMD, []byte(contentWithRouting), 0o644)
+
+	if err := adapter.DeployPluginTree(homeDir); err != nil {
+		t.Fatalf("DeployPluginTree() error = %v", err)
+	}
+
+	// Verify Bundle Assets
+	for _, pair := range adapter.BundleAssets() {
+		dest := filepath.Join(pluginDir, pair[1])
+		if _, err := os.Stat(dest); err != nil {
+			t.Errorf("missing deployed bundle asset %s: %v", pair[1], err)
+		}
+	}
+
+	// Verify 10 ODD subagents
+	expectedSubagents := []string{
+		"gentle-ai-explore",
+		"gentle-ai-worker",
+		"gentle-ai-verify",
+		"jd-fix-agent",
+		"jd-judge-a",
+		"jd-judge-b",
+		"review-readability",
+		"review-reliability",
+		"review-resilience",
+		"review-risk",
+	}
+	for _, name := range expectedSubagents {
+		dest := filepath.Join(pluginDir, "agents", name, "agent.md")
+		if info, err := os.Stat(dest); err != nil || info.Size() == 0 {
+			t.Errorf("missing or empty deployed subagent %s", name)
+		}
+	}
+
+	// Verify hooks
+	if info, err := os.Stat(filepath.Join(pluginDir, "hooks", "hook.sh")); err != nil || info.Mode().Perm() != 0o755 {
+		t.Errorf("invalid hook.sh: %v, info: %v", err, info)
+	}
+	if _, err := os.Stat(filepath.Join(pluginDir, "hooks", "hook.cmd")); err != nil {
+		t.Errorf("missing hook.cmd: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(pluginDir, "hooks.json")); err != nil {
+		t.Errorf("missing hooks.json: %v", err)
+	}
+
+	// Verify stale SDD artifacts pruned
+	if _, err := os.Stat(staleAgentDir); !os.IsNotExist(err) {
+		t.Errorf("stale sdd agent directory %q was not removed", staleAgentDir)
+	}
+	if _, err := os.Stat(staleSkillDir); !os.IsNotExist(err) {
+		t.Errorf("stale sdd skill directory %q was not removed", staleSkillDir)
+	}
+	if _, err := os.Stat(staleChain); !os.IsNotExist(err) {
+		t.Errorf("stale sdd chain %q was not removed", staleChain)
+	}
+
+	// Verify AGENTS.md duplicate routing stripped
+	cleanedData, err := os.ReadFile(agentsMD)
+	if err != nil {
+		t.Fatalf("read %s: %v", agentsMD, err)
+	}
+	if strings.Contains(string(cleanedData), "agent-routing") {
+		t.Errorf("AGENTS.md still contains agent-routing:\n%s", string(cleanedData))
+	}
+	if !strings.Contains(string(cleanedData), "persona") {
+		t.Errorf("AGENTS.md lost persona section:\n%s", string(cleanedData))
+	}
+}

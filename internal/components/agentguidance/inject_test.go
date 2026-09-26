@@ -151,8 +151,8 @@ func TestRemoteAuthorizationPrimaryCarriers(t *testing.T) {
 			}
 		})
 	}
-	if covered != 15 {
-		t.Fatalf("covered %d non-Pi clients, want 15", covered)
+	if covered != 16 {
+		t.Fatalf("covered %d non-Pi clients, want 16", covered)
 	}
 }
 
@@ -718,7 +718,7 @@ func markdownSectionAgents(t *testing.T) []model.AgentID {
 
 	var selected []model.AgentID
 	for _, agent := range catalog.AllAgents() {
-		if agent.ID == model.AgentOpenCode || agent.ID == model.AgentKilocode {
+		if agent.ID == model.AgentOpenCode || agent.ID == model.AgentKilocode || agent.ID == model.AgentAntigravityCLI {
 			continue
 		}
 		adapter, err := agents.NewAdapter(agent.ID)
@@ -730,8 +730,8 @@ func markdownSectionAgents(t *testing.T) []model.AgentID {
 		}
 		selected = append(selected, agent.ID)
 	}
-	if len(selected) != supportedAgentCount-3 {
-		t.Fatalf("selected %d markdown-section agents, want %d", len(selected), supportedAgentCount-3)
+	if len(selected) != supportedAgentCount-4 {
+		t.Fatalf("selected %d markdown-section agents, want %d", len(selected), supportedAgentCount-4)
 	}
 	return selected
 }
@@ -809,4 +809,25 @@ func readFile(t *testing.T, path string) string {
 		t.Fatalf("ReadFile(%q) error = %v", path, err)
 	}
 	return string(data)
+}
+
+func TestInjectRoutingAntigravityCLIUsesDedicatedRuleFile(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	result, err := InjectRoutingWithOptions(targetDir, model.AgentAntigravityCLI, RoutingOptions{})
+	if err != nil {
+		t.Fatalf("InjectRouting(antigravity-cli) error = %v", err)
+	}
+	wantPath := filepath.Join(targetDir, ".gemini", "config", "plugins", "gentle-ai", "rules", "gentle-ai-routing.md")
+	if len(result.Files) != 1 || result.Files[0] != wantPath {
+		t.Fatalf("InjectRouting(antigravity-cli) wrote %v, want %q", result.Files, wantPath)
+	}
+	data, err := os.ReadFile(wantPath)
+	if err != nil {
+		t.Fatalf("read %q: %v", wantPath, err)
+	}
+	if len(data) >= 24000 {
+		t.Fatalf("antigravity-cli routing file exceeds rule cap of 24000 bytes: %d bytes", len(data))
+	}
 }

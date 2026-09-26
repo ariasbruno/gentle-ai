@@ -471,6 +471,9 @@ func (r *syncRuntime) stagePlan() pipeline.StagePlan {
 		})
 		apply = append(apply, piCodeGraphSyncStep{id: "sync:community-tool:pi-codegraph", homeDir: r.homeDir, workspaceDir: r.workspaceDir, changedFiles: &r.changedFiles})
 	}
+	if containsAgent(r.agentIDs, model.AgentAntigravityCLI) {
+		apply = append(apply, antigravityCLIPluginImportStep{id: "sync:antigravity-cli:plugin-import", homeDir: r.homeDir})
+	}
 
 	return pipeline.StagePlan{Prepare: prepare, Apply: apply}
 }

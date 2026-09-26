@@ -200,6 +200,9 @@ func resolveRoutingDelivery(targetDir string, agent model.AgentID, options Routi
 
 	default:
 		promptPath := adapter.SystemPromptFile(targetDir)
+		if adapter.Agent() == model.AgentAntigravityCLI {
+			promptPath = filepath.Join(adapter.SystemPromptDir(targetDir), "gentle-ai-routing.md")
+		}
 		if strings.TrimSpace(promptPath) == "" {
 			return routingDelivery{}, fmt.Errorf("%w: adapter %q exposes no system prompt file", ErrInvalidTarget, agent)
 		}

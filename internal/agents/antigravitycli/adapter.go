@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gentleman-programming/gentle-ai/v3/internal/agents/capabilitymanifest"
+	"github.com/gentleman-programming/gentle-ai/v3/internal/assets"
 	"github.com/gentleman-programming/gentle-ai/v3/internal/components/filemerge"
 	"github.com/gentleman-programming/gentle-ai/v3/internal/model"
 	"github.com/gentleman-programming/gentle-ai/v3/internal/system"
@@ -184,17 +185,13 @@ func (a *Adapter) EmbeddedSubAgentsDir() string {
 func (a *Adapter) BundleAssets() [][2]string {
 	return [][2]string{
 		{"antigravitycli/plugin.json", "plugin.json"},
+		{"antigravitycli/orchestrator.md", "orchestrator.md"},
 		{"antigravitycli/orchestrator-delegation.md", "orchestrator-delegation.md"},
 		{"antigravitycli/orchestrator-memory.md", "orchestrator-memory.md"},
 		{"antigravitycli/orchestrator-skills.md", "orchestrator-skills.md"},
-		{"antigravitycli/sdd-orchestrator-workflow.md", "sdd-orchestrator-workflow.md"},
-		{"antigravitycli/support/sdd-status-contract.md", filepath.Join("support", "sdd-status-contract.md")},
 		{"antigravitycli/support/strict-tdd.md", filepath.Join("support", "strict-tdd.md")},
 		{"antigravitycli/support/strict-tdd-verify.md", filepath.Join("support", "strict-tdd-verify.md")},
 		{"antigravitycli/chains/4r-review.chain.md", filepath.Join("chains", "4r-review.chain.md")},
-		{"antigravitycli/chains/sdd-full.chain.md", filepath.Join("chains", "sdd-full.chain.md")},
-		{"antigravitycli/chains/sdd-plan.chain.md", filepath.Join("chains", "sdd-plan.chain.md")},
-		{"antigravitycli/chains/sdd-verify.chain.md", filepath.Join("chains", "sdd-verify.chain.md")},
 	}
 }
 
@@ -405,6 +402,174 @@ func (a *Adapter) failPluginImport(path string, snapshot pluginImportSnapshot, c
 func defaultPluginImportManifestWriter(path string, data []byte, mode os.FileMode) error {
 	_, err := filemerge.WriteFileAtomic(path, data, mode)
 	return err
+}
+
+const antigravityCLIPluginHooksJSON = `{
+  "gentle-ai": {
+    "PostInvocation": [
+      {
+        "command": "gentle-ai hook run --agent antigravity-cli --event PostInvocation",
+        "timeout": 30,
+        "type": "command"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "gentle-ai hook run --agent antigravity-cli --event PostToolUse",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "PreInvocation": [
+      {
+        "command": "gentle-ai hook run --agent antigravity-cli --event PreInvocation",
+        "timeout": 30,
+        "type": "command"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "gentle-ai hook run --agent antigravity-cli --event PreToolUse",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "Stop": [
+      {
+        "command": "gentle-ai hook run --agent antigravity-cli --event Stop",
+        "timeout": 60,
+        "type": "command"
+      }
+    ]
+  }
+}
+`
+
+// DeployPluginTree deploys embedded ODD bundle assets, native subagents, and hooks
+// into the Antigravity CLI plugin directory, and cleans up any legacy SDD assets.
+func (a *Adapter) DeployPluginTree(homeDir string) error {
+	pluginDir := a.PluginDir(homeDir)
+	if err := os.MkdirAll(pluginDir, 0o755); err != nil {
+		return fmt.Errorf("create plugin dir %q: %w", pluginDir, err)
+	}
+
+	// 1. Write Bundle Assets
+	for _, pair := range a.BundleAssets() {
+		content, err := assets.Read(pair[0])
+		if err != nil {
+			return fmt.Errorf("read bundle asset %s: %w", pair[0], err)
+		}
+		outPath := filepath.Join(pluginDir, pair[1])
+		if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
+			return err
+		}
+		if _, err := filemerge.WriteFileAtomic(outPath, []byte(content), 0o644); err != nil {
+			return fmt.Errorf("write bundle asset %s: %w", pair[1], err)
+		}
+	}
+
+	// 2. Deploy 10 ODD Native Subagents
+	subagents := []string{
+		"gentle-ai-explore",
+		"gentle-ai-worker",
+		"gentle-ai-verify",
+		"jd-fix-agent",
+		"jd-judge-a",
+		"jd-judge-b",
+		"review-readability",
+		"review-reliability",
+		"review-resilience",
+		"review-risk",
+	}
+	for _, name := range subagents {
+		agentMDPath := filepath.Join("antigravitycli", "agents", name, "agent.md")
+		content, err := assets.Read(agentMDPath)
+		if err != nil {
+			return fmt.Errorf("read subagent %s: %w", agentMDPath, err)
+		}
+		outPath := filepath.Join(pluginDir, "agents", name, "agent.md")
+		if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
+			return err
+		}
+		if _, err := filemerge.WriteFileAtomic(outPath, []byte(content), 0o644); err != nil {
+			return fmt.Errorf("write subagent %s: %w", name, err)
+		}
+	}
+
+	// 3. Write Fail-Open Hooks
+	hooksDir := filepath.Join(pluginDir, "hooks")
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		return err
+	}
+	hookShPath := filepath.Join(hooksDir, "hook.sh")
+	hookShContent := "#!/bin/sh\nexec gentle-ai hook run --agent antigravity-cli --event \"$1\"\n"
+	if _, err := filemerge.WriteFileAtomic(hookShPath, []byte(hookShContent), 0o755); err != nil {
+		return err
+	}
+	_ = os.Chmod(hookShPath, 0o755)
+
+	hookCmdPath := filepath.Join(hooksDir, "hook.cmd")
+	hookCmdContent := "@echo off\r\ngentle-ai.exe hook run --agent antigravity-cli --event %1\r\n"
+	if _, err := filemerge.WriteFileAtomic(hookCmdPath, []byte(hookCmdContent), 0o644); err != nil {
+		return err
+	}
+
+	hooksJSONPath := filepath.Join(pluginDir, "hooks.json")
+	if _, err := filemerge.WriteFileAtomic(hooksJSONPath, []byte(antigravityCLIPluginHooksJSON), 0o644); err != nil {
+		return err
+	}
+
+	// 4. Prune Stale Legacy SDD Assets
+	legacyAgents := []string{
+		"sdd-apply", "sdd-archive", "sdd-design", "sdd-explore",
+		"sdd-init", "sdd-onboard", "sdd-proposal", "sdd-propose",
+		"sdd-remediate", "sdd-research", "sdd-spec", "sdd-status",
+		"sdd-tasks", "sdd-verify",
+	}
+	for _, name := range legacyAgents {
+		_ = os.RemoveAll(filepath.Join(pluginDir, "agents", name))
+	}
+	legacyFiles := []string{
+		filepath.Join(pluginDir, "sdd-orchestrator-workflow.md"),
+		filepath.Join(pluginDir, "support", "sdd-status-contract.md"),
+		filepath.Join(pluginDir, "chains", "sdd-full.chain.md"),
+		filepath.Join(pluginDir, "chains", "sdd-plan.chain.md"),
+		filepath.Join(pluginDir, "chains", "sdd-verify.chain.md"),
+		filepath.Join(pluginDir, "rules", "gentle-ai-codegraph.md"),
+		filepath.Join(pluginDir, "rules", "gentle-ai-orchestrator-details.md"),
+	}
+	for _, path := range legacyFiles {
+		_ = os.Remove(path)
+	}
+	legacySkills := []string{
+		"sdd-apply", "sdd-archive", "sdd-design", "sdd-explore",
+		"sdd-init", "sdd-onboard", "sdd-propose", "sdd-research",
+		"sdd-spec", "sdd-tasks", "sdd-verify",
+	}
+	for _, name := range legacySkills {
+		_ = os.RemoveAll(filepath.Join(pluginDir, "skills", name))
+	}
+
+	// 5. Clean up duplicate agent-routing section from AGENTS.md if present
+	agentsMDPath := filepath.Join(pluginDir, "rules", "AGENTS.md")
+	if data, err := os.ReadFile(agentsMDPath); err == nil {
+		cleaned := filemerge.InjectMarkdownSection(string(data), "agent-routing", "")
+		if cleaned != string(data) {
+			_, _ = filemerge.WriteFileAtomic(agentsMDPath, []byte(cleaned), 0o644)
+		}
+	}
+
+	return nil
 }
 
 // EnsurePluginImported performs the first native AGY import only when the
