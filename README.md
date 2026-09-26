@@ -10,7 +10,7 @@
 <p><strong>The deterministic engineering environment for the AI agent you already use.</strong></p>
 
 <p>
-<a href="https://github.com/ariasbruno/gentle-ai/releases"><img src="https://img.shields.io/github/v/release/ariasbruno/gentle-ai?style=for-the-badge&labelColor=1A1218&color=F095C8" alt="Release"></a>
+<img src="https://img.shields.io/badge/Go-1.25.10+-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go 1.25.10+">
 <a href="https://github.com/ariasbruno/gentle-ai/stargazers"><img src="https://img.shields.io/github/stars/ariasbruno/gentle-ai?style=for-the-badge&labelColor=1A1218&color=F095C8" alt="Stars"></a>
 <img src="https://img.shields.io/badge/agents-17-F095C8?style=for-the-badge&labelColor=1A1218" alt="17 agents">
 <img src="https://img.shields.io/badge/macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-D7A0B8?style=for-the-badge&labelColor=1A1218" alt="Platform">
@@ -191,20 +191,27 @@ Gentle-AI brings its shared workflow to Pi, OpenCode, Claude Code, Codex, **Goog
 
 ## Get started
 
-```bash
-# macOS (Homebrew)
-brew install gentleman-programming/tap/gentle-ai
+Because this fork is a dedicated source edition with native Google Antigravity CLI support (without pre-compiled release binaries or external taps), build and install directly from source:
 
-# macOS / Linux (curl)
-curl -fsSL https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/main/scripts/install.sh | bash
+### Prerequisites
+- **Go 1.25.10+** (installed via your system package manager, [mise](https://mise.jdx.dev/), or [golang.org](https://go.dev/dl/))
+- **Git**
 
-# Windows (PowerShell) — source install, needs Go 1.25.10+
-go install github.com/gentleman-programming/gentle-ai/v3/cmd/gentle-ai@latest
-```
+### Installation
 
 ```bash
-gentle-ai          # pick your agents, components and persona
-gentle-ai doctor   # verify — read-only, changes nothing
+# 1. Clone the repository
+git clone https://github.com/ariasbruno/gentle-ai.git
+cd gentle-ai
+
+# 2. Compile and install to your PATH ($GOPATH/bin or ~/.local/share/mise/shims)
+go install ./cmd/gentle-ai
+
+# 3. Configure Google Antigravity CLI (or run 'gentle-ai' for interactive wizard)
+gentle-ai install --agent antigravity-cli
+
+# 4. Verify system health and MCP connectivity
+gentle-ai doctor
 ```
 
 Then use your agent normally. Your configs are snapshotted before every write, and **Gentle-AI never installs an AI agent for you** — it configures what you already have.
