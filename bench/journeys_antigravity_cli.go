@@ -94,7 +94,7 @@ func antigravityCLISyncArgs(*Sandbox) ([]string, error) {
 }
 
 func antigravityCLIUninstallArgs(*Sandbox) ([]string, error) {
-	return []string{"uninstall", "--agents", "antigravity-cli", "--components", "sdd", "--yes"}, nil
+	return []string{"uninstall", "--agents", "antigravity-cli", "--yes"}, nil
 }
 
 type antigravityImportManifest struct {
@@ -131,8 +131,8 @@ func assertAntigravityCLIFirstSync(sandbox *Sandbox, observation Observation) er
 		return fmt.Errorf("missing rules file %s: %w", rulesPath, err)
 	}
 	rulesStr := string(rulesBytes)
-	if !strings.Contains(rulesStr, "<!-- gentle-ai:persona -->") || !strings.Contains(rulesStr, "<!-- gentle-ai:sdd-orchestrator -->") {
-		return fmt.Errorf("rules file missing persona or sdd-orchestrator markers: %s", rulesStr)
+	if !strings.Contains(rulesStr, "<!-- gentle-ai:persona -->") {
+		return fmt.Errorf("rules file missing persona marker: %s", rulesStr)
 	}
 	sandbox.Scratch["j4500-rules-first-sync"] = rulesStr
 
@@ -158,7 +158,7 @@ func assertAntigravityCLIFirstSync(sandbox *Sandbox, observation Observation) er
 	}
 
 	// Spot-check key subagents
-	for _, agent := range []string{"sdd-init", "sdd-apply", "sdd-verify", "sdd-remediate"} {
+	for _, agent := range []string{"gentle-ai-explore", "gentle-ai-worker", "gentle-ai-verify", "jd-fix-agent", "review-readability"} {
 		agentFile := filepath.Join(pluginDir, "agents", agent, "agent.md")
 		if _, err := os.Stat(agentFile); err != nil {
 			return fmt.Errorf("missing subagent file %s: %w", agentFile, err)
@@ -166,7 +166,7 @@ func assertAntigravityCLIFirstSync(sandbox *Sandbox, observation Observation) er
 	}
 
 	// Verify satellites
-	for _, sat := range []string{"orchestrator-delegation.md", "orchestrator-memory.md", "orchestrator-skills.md", "sdd-orchestrator-workflow.md"} {
+	for _, sat := range []string{"orchestrator-delegation.md", "orchestrator-memory.md", "orchestrator-skills.md"} {
 		satFile := filepath.Join(pluginDir, sat)
 		if _, err := os.Stat(satFile); err != nil {
 			return fmt.Errorf("missing satellite file %s: %w", satFile, err)
@@ -174,7 +174,7 @@ func assertAntigravityCLIFirstSync(sandbox *Sandbox, observation Observation) er
 	}
 
 	// Verify support contracts
-	for _, sup := range []string{"strict-tdd.md", "strict-tdd-verify.md", "sdd-status-contract.md"} {
+	for _, sup := range []string{"strict-tdd.md", "strict-tdd-verify.md"} {
 		supFile := filepath.Join(pluginDir, "support", sup)
 		if _, err := os.Stat(supFile); err != nil {
 			return fmt.Errorf("missing support contract file %s: %w", supFile, err)
@@ -182,7 +182,7 @@ func assertAntigravityCLIFirstSync(sandbox *Sandbox, observation Observation) er
 	}
 
 	// Verify chains
-	for _, ch := range []string{"sdd-full.chain.md", "4r-review.chain.md"} {
+	for _, ch := range []string{"4r-review.chain.md"} {
 		chFile := filepath.Join(pluginDir, "chains", ch)
 		if _, err := os.Stat(chFile); err != nil {
 			return fmt.Errorf("missing chain file %s: %w", chFile, err)
@@ -258,7 +258,7 @@ func assertAntigravityCLIUninstall(sandbox *Sandbox, observation Observation) er
 	}
 
 	// Verify satellites are removed
-	for _, sat := range []string{"orchestrator-delegation.md", "orchestrator-memory.md", "orchestrator-skills.md", "sdd-orchestrator-workflow.md"} {
+	for _, sat := range []string{"orchestrator-delegation.md", "orchestrator-memory.md", "orchestrator-skills.md"} {
 		satFile := filepath.Join(pluginDir, sat)
 		if _, err := os.Stat(satFile); !os.IsNotExist(err) {
 			return fmt.Errorf("satellite %s was not uninstalled", sat)
@@ -266,7 +266,7 @@ func assertAntigravityCLIUninstall(sandbox *Sandbox, observation Observation) er
 	}
 
 	// Verify support contracts are removed
-	for _, sup := range []string{"strict-tdd.md", "strict-tdd-verify.md", "sdd-status-contract.md"} {
+	for _, sup := range []string{"strict-tdd.md", "strict-tdd-verify.md"} {
 		supFile := filepath.Join(pluginDir, "support", sup)
 		if _, err := os.Stat(supFile); !os.IsNotExist(err) {
 			return fmt.Errorf("support contract %s was not uninstalled", sup)
@@ -274,7 +274,7 @@ func assertAntigravityCLIUninstall(sandbox *Sandbox, observation Observation) er
 	}
 
 	// Verify chains are removed
-	for _, ch := range []string{"sdd-full.chain.md", "4r-review.chain.md"} {
+	for _, ch := range []string{"4r-review.chain.md"} {
 		chFile := filepath.Join(pluginDir, "chains", ch)
 		if _, err := os.Stat(chFile); !os.IsNotExist(err) {
 			return fmt.Errorf("chain %s was not uninstalled", ch)

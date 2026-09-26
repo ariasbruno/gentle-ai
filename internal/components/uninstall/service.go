@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gentleman-programming/gentle-ai/v3/internal/agents"
+	antigravitycli "github.com/gentleman-programming/gentle-ai/v3/internal/agents/antigravitycli"
 	"github.com/gentleman-programming/gentle-ai/v3/internal/agents/claude"
 	"github.com/gentleman-programming/gentle-ai/v3/internal/agents/pi"
 	"github.com/gentleman-programming/gentle-ai/v3/internal/assets"
@@ -528,6 +529,13 @@ func (s *Service) buildPlan(agentIDs []model.AgentID, componentIDs []model.Compo
 		for _, path := range opencodeactivation.LauncherPaths(s.homeDir, runtime.GOOS) {
 			backupTargets[path] = struct{}{}
 			operationsByKey[operationKey(removeOwnedOpenCodeLauncher(path))] = removeOwnedOpenCodeLauncher(path)
+		}
+	}
+	if slices.Contains(agentIDs, model.AgentAntigravityCLI) && removesAllAgentComponents(componentIDs) {
+		adapter, _ := s.registry.Get(model.AgentAntigravityCLI)
+		for _, op := range retainedAntigravityCLIPluginOperations(adapter, s.homeDir) {
+			backupTargets[op.path] = struct{}{}
+			operationsByKey[operationKey(op)] = op
 		}
 	}
 
@@ -1348,6 +1356,78 @@ func removeEmbeddedOpenCodePlugin(path, name string) operation {
 		}
 		return false, false, nil
 	}}
+}
+
+func retainedAntigravityCLIPluginOperations(adapter agents.Adapter, homeDir string) []operation {
+	ops := make([]operation, 0)
+	agy, ok := adapter.(*antigravitycli.Adapter)
+	if !ok {
+		return ops
+	}
+	pluginDir := agy.PluginDir(homeDir)
+	for _, asset := range agy.BundleAssets() {
+		path := filepath.Join(pluginDir, asset[1])
+		ops = append(ops, removeFile(path))
+	}
+	ops = append(ops,
+		removeDirIfEmpty(filepath.Join(pluginDir, "support")),
+		removeDirIfEmpty(filepath.Join(pluginDir, "chains")),
+	)
+	entries, err := fs.ReadDir(assets.FS, agy.EmbeddedSubAgentsDir())
+	if err == nil {
+		agentsDir := agy.SubAgentsDir(homeDir)
+		for _, entry := range entries {
+			if entry.IsDir() {
+				agentFile := filepath.Join(agentsDir, entry.Name(), "agent.md")
+				ops = append(ops, removeFile(agentFile), removeDirIfEmpty(filepath.Join(agentsDir, entry.Name())))
+			}
+		}
+		ops = append(ops, removeDirIfEmpty(agentsDir))
+	}
+	hooksJSON := filepath.Join(pluginDir, "hooks.json")
+	hookSh := filepath.Join(pluginDir, "hooks", "hook.sh")
+	hookCmd := filepath.Join(pluginDir, "hooks", "hook.cmd")
+	hooksDir := filepath.Join(pluginDir, "hooks")
+	ops = append(ops,
+		removeFile(hooksJSON),
+		removeFile(hookSh),
+		removeFile(hookCmd),
+		removeDirIfEmpty(hooksDir),
+	)
+	mcpPath := adapter.MCPConfigPath(homeDir, "codegraph")
+	ops = append(ops, rewriteJSONFile(mcpPath, jsonPath{"mcpServers", "codegraph"}))
+	manifestPath := agy.ImportManifestPath(homeDir)
+	ops = append(ops, removePluginImportOperation(manifestPath))
+	ops = append(ops, removeDirIfEmpty(pluginDir))
+	for i := range ops {
+		ops[i].agents = []model.AgentID{model.AgentAntigravityCLI}
+	}
+	return ops
+}
+
+func removePluginImportOperation(path string) operation {
+	return operation{
+		typeID: opRewriteFile,
+		path:   path,
+		agents: []model.AgentID{model.AgentAntigravityCLI},
+		apply: func(path string) (bool, bool, error) {
+			updated, changed, err := antigravitycli.RemovePluginImportRegistration(path)
+			if err != nil {
+				return false, false, fmt.Errorf("remove Gentle AI plugin import from %q: %w", path, err)
+			}
+			if !changed {
+				return false, false, nil
+			}
+			info, err := os.Lstat(path)
+			if err != nil {
+				return false, false, fmt.Errorf("inspect import manifest %q before rewrite: %w", path, err)
+			}
+			if _, err := filemerge.WriteFileAtomic(path, updated, info.Mode().Perm()); err != nil {
+				return false, false, fmt.Errorf("write import manifest %q: %w", path, err)
+			}
+			return true, false, nil
+		},
+	}
 }
 
 func modelVariantsCachePaths(cacheDir string) []string {
