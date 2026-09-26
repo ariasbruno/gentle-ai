@@ -1411,6 +1411,9 @@ func removePluginImportOperation(path string) operation {
 		path:   path,
 		agents: []model.AgentID{model.AgentAntigravityCLI},
 		apply: func(path string) (bool, bool, error) {
+			if _, err := antigravitycli.PluginImportRegistered(path); err != nil {
+				return false, false, fmt.Errorf("validate Gentle AI plugin import in %q: %w", path, err)
+			}
 			updated, changed, err := antigravitycli.RemovePluginImportRegistration(path)
 			if err != nil {
 				return false, false, fmt.Errorf("remove Gentle AI plugin import from %q: %w", path, err)

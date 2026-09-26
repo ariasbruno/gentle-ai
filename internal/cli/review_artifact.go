@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/gentleman-programming/gentle-ai/v3/internal/model"
+	"github.com/gentleman-programming/gentle-ai/v3/internal/reviewerprovider"
 	"github.com/gentleman-programming/gentle-ai/v3/internal/reviewtransaction"
 )
 
@@ -325,7 +326,11 @@ func RunReviewCaptureResult(args []string, stdout io.Writer) error {
 			}
 			return nil
 		}
-		adapter, adapterErr := reviewProviderAdapter(reviewProviderRoleLens, providerRuntime, *lens)
+		routingKey, keyErr := reviewerprovider.ReviewRoutingKeyForLens(*lens)
+		if keyErr != nil {
+			return reviewPreflightError(keyErr)
+		}
+		adapter, adapterErr := reviewProviderAdapterWithRouting(reviewProviderRoleLens, providerRuntime, routingKey)
 		if adapterErr != nil {
 			return reviewPreflightError(adapterErr)
 		}
