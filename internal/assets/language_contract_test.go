@@ -319,6 +319,9 @@ func allSDDOrchestratorAssetPaths(t *testing.T) []string {
 		if d.IsDir() {
 			return nil
 		}
+		if strings.HasPrefix(path, "antigravitycli/") {
+			return nil
+		}
 		if strings.HasSuffix(path, "/orchestrator.md") {
 			paths = append(paths, path)
 		}

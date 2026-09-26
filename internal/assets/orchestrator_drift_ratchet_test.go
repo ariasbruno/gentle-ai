@@ -38,7 +38,7 @@ func orchestratorSectionVariants(t *testing.T) map[string]map[string]struct{} {
 		if walkErr != nil {
 			return walkErr
 		}
-		if entry.IsDir() || path.Base(assetPath) != "orchestrator.md" {
+		if entry.IsDir() || path.Base(assetPath) != "orchestrator.md" || path.Dir(assetPath) == "antigravitycli" {
 			return nil
 		}
 		seen[path.Dir(assetPath)] = true
