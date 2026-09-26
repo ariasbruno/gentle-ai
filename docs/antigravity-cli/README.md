@@ -61,8 +61,8 @@ The integration was designed and implemented across 5 disciplined architectural 
 git clone https://github.com/ariasbruno/gentle-ai.git
 cd gentle-ai
 
-# Checkout the feature branch
-git checkout feat/antigravity-cli-odd-integration
+# Checkout the integration branch
+git checkout antigravity-cli-integration
 
 # Build and install the gentle-ai binary
 go install ./cmd/gentle-ai
