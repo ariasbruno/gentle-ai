@@ -10,19 +10,23 @@
 <p><strong>The deterministic engineering environment for the AI agent you already use.</strong></p>
 
 <p>
-<a href="https://github.com/Gentleman-Programming/gentle-ai/releases"><img src="https://img.shields.io/github/v/release/Gentleman-Programming/gentle-ai?style=for-the-badge&labelColor=1A1218&color=F095C8" alt="Release"></a>
-<a href="https://github.com/Gentleman-Programming/gentle-ai/stargazers"><img src="https://img.shields.io/github/stars/Gentleman-Programming/gentle-ai?style=for-the-badge&labelColor=1A1218&color=F095C8" alt="Stars"></a>
-<img src="https://img.shields.io/badge/agents-16-F095C8?style=for-the-badge&labelColor=1A1218" alt="16 agents">
+<a href="https://github.com/ariasbruno/gentle-ai/releases"><img src="https://img.shields.io/github/v/release/ariasbruno/gentle-ai?style=for-the-badge&labelColor=1A1218&color=F095C8" alt="Release"></a>
+<a href="https://github.com/ariasbruno/gentle-ai/stargazers"><img src="https://img.shields.io/github/stars/ariasbruno/gentle-ai?style=for-the-badge&labelColor=1A1218&color=F095C8" alt="Stars"></a>
+<img src="https://img.shields.io/badge/agents-17-F095C8?style=for-the-badge&labelColor=1A1218" alt="17 agents">
 <img src="https://img.shields.io/badge/macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-D7A0B8?style=for-the-badge&labelColor=1A1218" alt="Platform">
 <a href="LICENSE"><img src="https://img.shields.io/badge/MIT-D7A0B8?style=for-the-badge&labelColor=1A1218" alt="License: MIT"></a>
 </p>
 
 <p>
-<a href="https://gentlemanprogramming.com/"><strong>Website</strong></a> &bull;
+<a href="docs/antigravity-cli/README.md"><strong>Antigravity CLI Guide</strong></a> &bull;
 <a href="docs/quickstart.md"><strong>Quickstart</strong></a> &bull;
 <a href="docs/intended-usage.md"><strong>Docs</strong></a> &bull;
-<a href="https://gentle-ai-wiki.gentlemanprogramming.com/"><strong>Wiki</strong></a>
+<a href="https://gentlemanprogramming.com/"><strong>Website</strong></a>
 </p>
+
+> [!NOTE]
+> **Dedicated Google Antigravity CLI (`agy`) Edition**
+> This repository is a specialized production fork of Gentle AI providing full-tier, native support for **Google Antigravity CLI (`agy`)**. It implements the complete ODD workflow, 10 native subagents, fail-open lifecycle hooks, in-process RDD reviewer execution, 24 KB rule truncation mitigation, and dynamic self-reconciling plugin deployment. See the [**Google Antigravity CLI Architecture & User Guide**](docs/antigravity-cli/README.md).
 
 <br/>
 
@@ -155,13 +159,13 @@ Gentle Shell is a separate Pi integration package. Gentle AI configures supporte
 
 ---
 
-### 16 agents — Keep the agent you already use
+### 17 agents — Keep the agent you already use
 
 <img width="100%" src="docs/assets/features/agents.png" alt="The installer configuring multiple agents" />
 
-Gentle-AI brings its shared workflow to Pi, OpenCode, Claude Code, Codex, and twelve more agents. Each integration uses that agent's native capabilities, so available features such as delegation and RDD review can differ.
+Gentle-AI brings its shared workflow to Pi, OpenCode, Claude Code, Codex, **Google Antigravity CLI**, and twelve more agents. Each integration uses that agent's native capabilities, so available features such as delegation and RDD review can differ.
 
-**[Docs →](docs/agents.md)**
+**[Docs →](docs/agents.md)** &bull; **[Google Antigravity CLI Guide →](docs/antigravity-cli/README.md)**
 
 ---
 

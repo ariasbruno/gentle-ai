@@ -13,11 +13,12 @@ The integration was designed and implemented across 5 disciplined architectural 
 | Phase | Topic | Key Deliverables | Document |
 |---|---|---|---|
 | **Phase 1** | **Foundation & Registration** | Catalog registration, model detection, security overlay, union array merge, plugin MCP configuration | [`01-foundation.md`](01-foundation.md) |
-| **Phase 2** | **Asset Transpiler & Guardrails** | Deterministic asset transpiler, 24 subagents, 4 review chains, satellite contracts, strict invariant validation | [`02-asset-transpiler.md`](02-asset-transpiler.md) |
-| **Phase 3** | **Orchestration & Lifecycle Hooks** | `pluginBundleProvider` interface, bundle asset injection, nested subagents, PreInvocation and Stop hooks, clean uninstall | [`03-orchestration-and-hooks.md`](03-orchestration-and-hooks.md) |
+| **Phase 2** | **Asset Transpiler & Guardrails** | Deterministic asset transpiler, 10 native ODD subagents, 4R review chain, satellite contracts, strict invariant validation | [`02-asset-transpiler.md`](02-asset-transpiler.md) |
+| **Phase 3** | **Orchestration & Lifecycle Hooks** | `pluginBundleProvider` interface, bundle asset injection, nested subagents, fail-open PreInvocation, PreToolUse, and Stop hooks | [`03-orchestration-and-hooks.md`](03-orchestration-and-hooks.md) |
 | **Phase 4** | **CodeGraph & Bench Parity** | Atomic CodeGraph reconciliation, sync/install wiring, journey `j4500` lifecycle parity benchmark | [`04-codegraph-and-benchmarks.md`](04-codegraph-and-benchmarks.md) |
 | **Phase 5** | **Review Transport & Capabilities** | In-process review adapter (`agy`), role routing (`review-models.json`), curated presets, interactive TUI model picker | [`05-review-transport.md`](05-review-transport.md) |
-| **Phase 6** | **Asset Ownership & Drift Policy** | Skill mirroring with provenance manifest, CI drift test, sync preset-exclusion transparency, 2026-09-22 audit record | [`06-asset-ownership-and-drift.md`](06-asset-ownership-and-drift.md) |
+| **Phase 6** | **Asset Ownership & Drift Policy** | Skill mirroring with provenance manifest, CI drift test, sync preset-exclusion transparency | [`06-asset-ownership-and-drift.md`](06-asset-ownership-and-drift.md) |
+| **Phase 7** | **24 KB Cap Fix & Dynamic Sync** | Split routing rules into `rules/gentle-ai-routing.md` to beat AGY 24 KB rule cap, and dynamic subagent reconciliation via `assets.FS` | [`SUMMARY.md`](SUMMARY.md) |
 | **Summary** | **Master Technical Summary & References** | End-to-end architecture, parity matrix, CLI specs, lifecycle hooks, official sources, and cross-references | [`SUMMARY.md`](SUMMARY.md) |
 
 ---
@@ -25,7 +26,7 @@ The integration was designed and implemented across 5 disciplined architectural 
 ## 2. Architectural Highlights
 
 ### 2.1 Complete Filesystem & Security Boundaries
-- **Directory Layout**: Antigravity CLI global configuration lives under `~/.gemini/antigravity-cli/` (`settings.json`, `review-models.json`), while Gentle AI's system prompt, subagents, chains, and contracts are encapsulated inside the plugin bundle under `~/.gemini/config/plugins/gentle-ai/` (`rules/AGENTS.md`, `agents/`, `chains/`, `mcp_config.json`).
+- **Directory Layout**: Antigravity CLI global configuration lives under `~/.gemini/antigravity-cli/` (`settings.json`, `review-models.json`), while Gentle AI's system prompt, subagents, chains, and contracts are encapsulated inside the plugin bundle under `~/.gemini/config/plugins/gentle-ai/` (`rules/AGENTS.md`, `rules/gentle-ai-routing.md`, `agents/`, `chains/`, `mcp_config.json`).
 - **Zero Cross-Contamination**: Antigravity Desktop IDE settings (`~/.config/antigravity/`) are completely isolated and untouched by CLI operations.
 - **Security Policy**: Denies destructive host commands, sensitive directories (`.ssh`, `.gnupg`, `.aws`, `.gemini`), and protects repository integrity.
 
@@ -34,9 +35,20 @@ The integration was designed and implemented across 5 disciplined architectural 
 - Go retains full ownership of prompt materialization, token budgeting, JSON schema validation, and cryptographic receipt admission.
 - Review roles (`review-risk`, `review-resilience`, `review-readability`, `review-reliability`, `review-refuter`, `review-validator`) can be mapped individually to specialized models, curated presets, or set to inherit CLI session defaults.
 
-### 2.3 CodeGraph Reconciliation
-- Automatically validates and reconciles CodeGraph MCP tool wiring in `~/.gemini/config/plugins/gentle-ai/mcp_config.json`.
-- Enforces structural codebase navigation before broad filesystem searches.
+### 2.3 Modular Rules & 24,000-Byte Cap Mitigation
+- Antigravity CLI truncates rule files that exceed 24,000 bytes. Gentle AI partitions rules into focused modular files:
+  - `rules/AGENTS.md` (Persona, CodeGraph guidance, and Engram memory protocol ~17.4 KB < 24 KB).
+  - `rules/gentle-ai-routing.md` (ODD subagent routing, RDD boundaries, and remote authorization ~18.2 KB < 24 KB).
+- Zero silent truncation: all directives are loaded in full on startup.
+
+### 2.4 Dynamic Self-Reconciling Subagent Tree
+- `DeployPluginTree` dynamically discovers embedded subagents via `assets.FS.ReadDir` and reconciles `~/.gemini/config/plugins/gentle-ai/agents/`.
+- Obsolete or renamed subagents (e.g. legacy SDD agents) are automatically pruned on `gentle-ai sync` without requiring manual file deletion.
+
+### 2.5 Resilient Fail-Open Lifecycle Hooks
+- Dispatched via `hooks.json` to `gentle-ai hook run --agent antigravity-cli --event <event>`.
+- Implements a 3x identical-call tool loop circuit breaker in `PreToolUse` and candidate change gating in `Stop`.
+- Any unhandled event or syntax error yields `{}` and exit code 0, guaranteeing zero workflow lockouts.
 
 ---
 
@@ -46,11 +58,11 @@ The integration was designed and implemented across 5 disciplined architectural 
 
 ```bash
 # Clone the fork
-git clone git@github.com:ariasbruno/gentle-ai.git
+git clone https://github.com/ariasbruno/gentle-ai.git
 cd gentle-ai
 
-# Checkout the antigravity-cli branch
-git checkout antigravity-cli
+# Checkout the feature branch
+git checkout feat/antigravity-cli-odd-integration
 
 # Build and install the gentle-ai binary
 go install ./cmd/gentle-ai
@@ -59,14 +71,14 @@ go install ./cmd/gentle-ai
 ### 3.2 Setting up Antigravity CLI
 
 ```bash
-# Run interactive installer and select Google Antigravity CLI
-gentle-ai install
+# Install and register the Antigravity CLI plugin
+gentle-ai install --agent antigravity-cli
 
-# Or sync configuration directly for Antigravity CLI
-gentle-ai sync --agents antigravity-cli
+# Run sync to reconcile all managed assets and rules
+gentle-ai sync
 
-# Configure review models and presets (optional)
-gentle-ai model-config
+# Verify system health
+gentle-ai doctor
 ```
 
 ---
