@@ -35,11 +35,14 @@ The integration was designed and implemented across 5 disciplined architectural 
 - Go retains full ownership of prompt materialization, token budgeting, JSON schema validation, and cryptographic receipt admission.
 - Review roles (`review-risk`, `review-resilience`, `review-readability`, `review-reliability`, `review-refuter`, `review-validator`) can be mapped individually to specialized models, curated presets, or set to inherit CLI session defaults.
 
-### 2.3 Modular Rules & 24,000-Byte Cap Mitigation
-- Antigravity CLI truncates rule files that exceed 24,000 bytes. Gentle AI partitions rules into focused modular files:
-  - `rules/AGENTS.md` (Persona, CodeGraph guidance, and Engram memory protocol ~17.4 KB < 24 KB).
-  - `rules/gentle-ai-routing.md` (ODD subagent routing, RDD boundaries, and remote authorization ~18.2 KB < 24 KB).
-- Zero silent truncation: all directives are loaded in full on startup.
+### 2.3 Modular Rules, Always-On Frontmatter, and the 24,000-Byte Cap
+- Antigravity CLI auto-loads only a plugin's `rules/AGENTS.md`; every other rule file is parsed for a YAML frontmatter `trigger` and files without a valid trigger are silently dropped on every turn (`CORTEX_MEMORY_TRIGGER_UNSPECIFIED`). Gentle AI therefore ships every non-AGENTS rule file with `trigger: always_on` frontmatter:
+  - `rules/AGENTS.md` (Persona, CodeGraph guidance, and Engram memory protocol — plain markdown, no frontmatter, loaded unconditionally by agy).
+  - `rules/gentle-ai-routing.md` (ODD workflow, delegation routing, TDD policy, RDD boundaries, remote authorization — written by sync with always-on frontmatter).
+  - `rules/gentle-ai-orchestrator.md` (coordinator harness, delegation ladder, memory and skill registry pointers, and the runtime-rendered Review Execution Contract filled in place of the deterministic insert marker at deploy time).
+- **Per-file limit**: Antigravity CLI truncates rule files above 24,000 bytes. All three rule files stay under the cap (the orchestrator rule embeds the ~15 KB rendered review contract inside its ~7 KB body).
+- **Aggregate budget**: always-on rules share a 20,000-token rules budget; the three files total well under it.
+- The `orchestrator-delegation.md`, `orchestrator-memory.md`, and `orchestrator-skills.md` satellites stay at the plugin root as on-demand reads referenced by the orchestrator rule (the delegation satellite alone exceeds the per-file cap, so it cannot be an always-on rule file).
 
 ### 2.4 Dynamic Self-Reconciling Subagent Tree
 - `DeployPluginTree` dynamically discovers embedded subagents via `assets.FS.ReadDir` and reconciles `~/.gemini/config/plugins/gentle-ai/agents/`.

@@ -136,6 +136,44 @@ func assertAntigravityCLIFirstSync(sandbox *Sandbox, observation Observation) er
 	}
 	sandbox.Scratch["j4500-rules-first-sync"] = rulesStr
 
+	// agy drops plugin rule files without a valid trigger on every turn, so
+	// the ODD routing rule and the orchestrator rule must carry always_on
+	// frontmatter, and the orchestrator rule must arrive with the review
+	// execution contract already rendered in place of its insert marker.
+	routingPath := filepath.Join(pluginDir, "rules", "gentle-ai-routing.md")
+	routingBytes, err := os.ReadFile(routingPath)
+	if err != nil {
+		return fmt.Errorf("missing routing rule %s: %w", routingPath, err)
+	}
+	routingStr := string(routingBytes)
+	if !strings.HasPrefix(routingStr, "---\ntrigger: always_on\n") {
+		return fmt.Errorf("routing rule missing always_on frontmatter: %.120q", routingStr)
+	}
+	if !strings.Contains(routingStr, "<!-- gentle-ai:agent-routing -->") {
+		return fmt.Errorf("routing rule missing agent-routing marker")
+	}
+	sandbox.Scratch["j4500-routing-first-sync"] = routingStr
+
+	orchestratorPath := filepath.Join(pluginDir, "rules", "gentle-ai-orchestrator.md")
+	orchestratorBytes, err := os.ReadFile(orchestratorPath)
+	if err != nil {
+		return fmt.Errorf("missing orchestrator rule %s: %w", orchestratorPath, err)
+	}
+	orchestratorStr := string(orchestratorBytes)
+	if !strings.HasPrefix(orchestratorStr, "---\ntrigger: always_on\n") {
+		return fmt.Errorf("orchestrator rule missing always_on frontmatter: %.120q", orchestratorStr)
+	}
+	if strings.Contains(orchestratorStr, "<!-- antigravity-review-execution-contract:insert -->") {
+		return fmt.Errorf("orchestrator rule still carries the unfilled review-contract marker")
+	}
+	if !strings.Contains(orchestratorStr, "## Entry rule") || !strings.Contains(orchestratorStr, "Concurrent Reviewer Group") {
+		return fmt.Errorf("orchestrator rule missing the rendered review execution contract")
+	}
+	sandbox.Scratch["j4500-orchestrator-first-sync"] = orchestratorStr
+	if _, err := os.Stat(filepath.Join(pluginDir, "orchestrator.md")); !os.IsNotExist(err) {
+		return fmt.Errorf("legacy root orchestrator.md survived deploy: agy never reads the plugin root")
+	}
+
 	pluginManifest := filepath.Join(pluginDir, "plugin.json")
 	if _, err := os.Stat(pluginManifest); err != nil {
 		return fmt.Errorf("missing plugin manifest: %w", err)
@@ -215,6 +253,20 @@ func assertAntigravityCLISecondSync(sandbox *Sandbox, observation Observation) e
 	if string(rulesBytes) != sandbox.Scratch["j4500-rules-first-sync"] {
 		return fmt.Errorf("second sync modified rules file (idempotency violated)")
 	}
+	routingBytes, err := os.ReadFile(filepath.Join(sandbox.Home, ".gemini", "config", "plugins", "gentle-ai", "rules", "gentle-ai-routing.md"))
+	if err != nil {
+		return fmt.Errorf("missing routing rule after second sync: %w", err)
+	}
+	if string(routingBytes) != sandbox.Scratch["j4500-routing-first-sync"] {
+		return fmt.Errorf("second sync modified routing rule (idempotency violated)")
+	}
+	orchestratorBytes, err := os.ReadFile(filepath.Join(sandbox.Home, ".gemini", "config", "plugins", "gentle-ai", "rules", "gentle-ai-orchestrator.md"))
+	if err != nil {
+		return fmt.Errorf("missing orchestrator rule after second sync: %w", err)
+	}
+	if string(orchestratorBytes) != sandbox.Scratch["j4500-orchestrator-first-sync"] {
+		return fmt.Errorf("second sync modified orchestrator rule (fill not deterministic)")
+	}
 	manifestBytes, manifest, err := readAntigravityImportManifest(sandbox.Home)
 	if err != nil {
 		return fmt.Errorf("read import manifest after second sync: %w", err)
@@ -263,6 +315,15 @@ func assertAntigravityCLIUninstall(sandbox *Sandbox, observation Observation) er
 		if _, err := os.Stat(satFile); !os.IsNotExist(err) {
 			return fmt.Errorf("satellite %s was not uninstalled", sat)
 		}
+	}
+	for _, rule := range []string{"gentle-ai-routing.md", "gentle-ai-orchestrator.md"} {
+		ruleFile := filepath.Join(pluginDir, "rules", rule)
+		if _, err := os.Stat(ruleFile); !os.IsNotExist(err) {
+			return fmt.Errorf("rule file %s was not uninstalled", ruleFile)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(pluginDir, "orchestrator.md")); !os.IsNotExist(err) {
+		return fmt.Errorf("legacy root orchestrator.md was not uninstalled")
 	}
 
 	// Verify support contracts are removed
