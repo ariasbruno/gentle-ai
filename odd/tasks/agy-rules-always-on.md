@@ -108,8 +108,8 @@ Out of scope (recorded as follow-ups):
 - [x] T6: uninstall legacy root orchestrator.md + routing rule cleanup (RED→GREEN) — discovered pre-existing gap: uninstall never removed the agy routing rule (always-on rule would keep firing post-uninstall); fixed for agy; generic agent-routing section cleanup for other agents = follow-up
 - [x] T7: bench j4500 assertions + docs §2.3 update — corpus checked, no old-layout pins (issue_3500 is opencode settings, unrelated)
 - [x] T8: build, full tests, driven j4500 run — build OK; focused packages green; agentguidance+uninstall failure sets identical to clean tree (20=20, all pre-existing environmental pi/live-install); driven `gentle-ai-bench run --binary /tmp/gentle-ai-fixed --only j4500-antigravity-cli-lifecycle-parity` → **status: completed**
-- [ ] T9: local sync + headless agy probe verification (record evidence)
-- [ ] T10: work-unit commits + review assess per commit
+- [x] T9: local sync + headless agy probe verification (record evidence) — new binary installed (backup at ~/.local/bin/gentle-ai.bak-pre-agy-fix), `gentle-ai sync --agents antigravity-cli` executed; installed tree verified: routing rule 18,367 B with always_on frontmatter, orchestrator rule 22,137 B with frontmatter + rendered contract + zero unfilled markers, root orchestrator.md gone, settings allow merged (codegraph init + review assess/status among 38 entries); headless `agy --print` probe from /tmp/agy-probe: all 7 previously-probed phrases now FOUND in context (ODD predefined workflow, RDD user-owned, Mandatory Delegation Triggers, observe RED, Agent Teams Lite, review.capture-result, CodeGraph); today's agy log shows 0 `Invalid rule trigger` errors (843 before).
+- [x] T10: work-unit commits + review assess per commit — commits dc2ed27e (always-on injection core), 20e0704e (permissions allow + uninstall pruning), ae8b03bf (bench j4500 pin + docs §2.3); assess: medium, review_due (slice_budget_reached, 801 changed lines); consent relayed and granted; native review lineage review-d9ba706ac47069d3 (lens review-reliability) closed **approved** with one advisory WARNING (R3-frontmatter-closing-dash-precision, unreachable from shipped call sites, recorded as separate later work) and acknowledged — authority burned. Facade note: gentle-pi string-typed tool parameters are auto-parsed into objects by the Pi 0.85.1 bridge and rejected (gentle_review start input, gentle_review_capture collectBinding); lifecycle completed through the provider-issued CLI transitions instead.
 
 ## Progress
 
@@ -118,3 +118,11 @@ Out of scope (recorded as follow-ups):
 unusable (two stalls, pi-web-access signature) → fallback to inline execution per
 Work Routing Ladder. Delivery strategy question pending before first commit (679
 authored lines > 400 forecast).
+
+(2026-09-28) User chose "commit local, PR later". All 10 tasks complete. Review
+approved + acknowledged (lineage review-d9ba706ac47069d3). Local installation
+delivered and empirically verified: ODD/TDD/RDD/orchestrator/CodeGraph now reach
+the agy model context by default. Follow-ups recorded: (1) frontmatter strip
+closing-dash precision (advisory WARNING), (2) generic agent-routing section
+cleanup for other agents' uninstall, (3) context7 npx MCP server failing to load,
+(4) PR packaging decision (deferred by user).
