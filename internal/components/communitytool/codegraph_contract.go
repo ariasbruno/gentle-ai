@@ -41,7 +41,7 @@ var codeGraphCompatibilityTable = map[model.AgentID]codeGraphCompatibility{
 	model.AgentVSCodeCopilot:  excludedCompatibility(model.AgentVSCodeCopilot),
 	model.AgentCodex:          nativeCompatibility(model.AgentCodex, "codex"),
 	model.AgentAntigravity:    nativeCompatibility(model.AgentAntigravity, "antigravity"),
-	model.AgentAntigravityCLI: excludedCompatibility(model.AgentAntigravityCLI),
+	model.AgentAntigravityCLI: reconciledCompatibility(model.AgentAntigravityCLI, ""),
 	model.AgentWindsurf:       excludedCompatibility(model.AgentWindsurf),
 	model.AgentKimi:           excludedCompatibility(model.AgentKimi),
 	model.AgentQwenCode:       excludedCompatibility(model.AgentQwenCode),
@@ -95,6 +95,10 @@ func codeGraphToolWiringPaths(homeDir string, adapter agents.Adapter) []string {
 			filepath.Join(homeDir, ".gemini", "config", "mcp_config.json"),
 			filepath.Join(homeDir, ".gemini", "antigravity", "mcp_config.json"),
 		}
+	case model.AgentAntigravityCLI:
+		// agy reads MCP servers from the Gentle AI plugin bundle, not a global
+		// config: the plugin's own mcp_config.json is the only wiring surface.
+		return []string{adapter.MCPConfigPath(homeDir, "codegraph")}
 	case model.AgentKiroIDE:
 		return []string{filepath.Join(homeDir, ".kiro", "settings", "mcp.json")}
 	default:
@@ -117,6 +121,11 @@ func hasCodeGraphToolWiring(homeDir string, adapter agents.Adapter) (string, boo
 	}
 	if adapter.Agent() == model.AgentAntigravity {
 		path := antigravityCodeGraphMCPConfigPath(homeDir)
+		data, err := os.ReadFile(path)
+		return path, err == nil && hasCanonicalAntigravityCodeGraphServer(data)
+	}
+	if adapter.Agent() == model.AgentAntigravityCLI {
+		path := adapter.MCPConfigPath(homeDir, "codegraph")
 		data, err := os.ReadFile(path)
 		return path, err == nil && hasCanonicalAntigravityCodeGraphServer(data)
 	}

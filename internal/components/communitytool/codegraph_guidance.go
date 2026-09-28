@@ -1,6 +1,7 @@
 package communitytool
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -260,6 +261,108 @@ func CodeGraphManagedPaths(homeDir string) []string {
 	}
 	slices.Sort(managed)
 	return managed
+}
+
+// NeedsAntigravityCLICodeGraphReconcile reports whether the Antigravity CLI
+// plugin bundle is selected/detected, the CodeGraph CLI is usable, and the
+// plugin's own mcp_config.json does not yet carry the canonical codegraph
+// server. It gates the resurrected reconciler in sync and install flows.
+func NeedsAntigravityCLICodeGraphReconcile(homeDir string) bool {
+	return NeedsAntigravityCLICodeGraphReconcileWithAgents(homeDir, nil)
+}
+
+func NeedsAntigravityCLICodeGraphReconcileWithAgents(homeDir string, selectedAgents []model.AgentID) bool {
+	reg, err := agents.NewDefaultRegistry()
+	if err != nil {
+		return false
+	}
+	adapter, ok := reg.Get(model.AgentAntigravityCLI)
+	if !ok {
+		return false
+	}
+	var detected bool
+	if len(selectedAgents) > 0 {
+		detected = slices.Contains(selectedAgents, model.AgentAntigravityCLI)
+	} else {
+		detected = slices.ContainsFunc(agents.DiscoverSelected(reg, homeDir), func(agent agents.InstalledAgent) bool {
+			return agent.ID == model.AgentAntigravityCLI
+		})
+	}
+	if !detected {
+		return false
+	}
+	_, configured := hasCodeGraphToolWiring(homeDir, adapter)
+	return !configured
+}
+
+// ReconcileAntigravityCLICodeGraph upserts the canonical codegraph MCP server
+// into the Gentle AI plugin bundle's mcp_config.json (the only MCP surface agy
+// reads). It is idempotent: an already-wired server means no write, and other
+// configured servers are preserved. A malformed config file is replaced with a
+// fresh document rather than partially rewritten.
+func ReconcileAntigravityCLICodeGraph(homeDir string) (GuidanceInjectionResult, error) {
+	return ReconcileAntigravityCLICodeGraphWithAgents(homeDir, nil)
+}
+
+func ReconcileAntigravityCLICodeGraphWithAgents(homeDir string, selectedAgents []model.AgentID) (GuidanceInjectionResult, error) {
+	if !NeedsAntigravityCLICodeGraphReconcileWithAgents(homeDir, selectedAgents) {
+		return GuidanceInjectionResult{}, nil
+	}
+	reg, err := agents.NewDefaultRegistry()
+	if err != nil {
+		return GuidanceInjectionResult{}, err
+	}
+	adapter, ok := reg.Get(model.AgentAntigravityCLI)
+	if !ok {
+		return GuidanceInjectionResult{}, fmt.Errorf("antigravity-cli adapter not found")
+	}
+
+	mcpPath := adapter.MCPConfigPath(homeDir, "codegraph")
+	data, err := os.ReadFile(mcpPath)
+	if err != nil && !os.IsNotExist(err) {
+		return GuidanceInjectionResult{}, fmt.Errorf("read %q: %w", mcpPath, err)
+	}
+
+	var root map[string]any
+	if len(data) > 0 {
+		if err := json.Unmarshal(data, &root); err != nil {
+			root = make(map[string]any)
+		}
+	} else {
+		root = make(map[string]any)
+	}
+
+	servers, ok := root["mcpServers"].(map[string]any)
+	if !ok || servers == nil {
+		servers = make(map[string]any)
+		root["mcpServers"] = servers
+	}
+
+	if len(data) > 0 && hasCanonicalAntigravityCodeGraphServer(data) {
+		return GuidanceInjectionResult{Changed: false}, nil
+	}
+
+	servers["codegraph"] = map[string]any{
+		"command": "codegraph",
+		"args":    []any{"serve", "--mcp"},
+	}
+
+	formatted, err := json.MarshalIndent(root, "", "  ")
+	if err != nil {
+		return GuidanceInjectionResult{}, fmt.Errorf("marshal %q: %w", mcpPath, err)
+	}
+	formatted = append(formatted, '\n')
+
+	writeResult, err := filemerge.WriteFileAtomic(mcpPath, formatted, 0o644)
+	if err != nil {
+		return GuidanceInjectionResult{}, fmt.Errorf("write %q: %w", mcpPath, err)
+	}
+
+	res := GuidanceInjectionResult{Changed: writeResult.Changed}
+	if writeResult.Changed {
+		res.Files = []string{mcpPath}
+	}
+	return res, nil
 }
 
 func NeedsOpenCodeCodeGraphReconcile(homeDir string) bool {

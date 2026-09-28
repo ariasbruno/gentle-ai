@@ -923,6 +923,15 @@ func (s *codeGraphGuidanceSyncStep) Run() (runErr error) {
 			*s.changedFiles = append(*s.changedFiles, reconciled.Files...)
 		}
 	}
+	if status.CLI == communitytool.AvailabilityAvailable && communitytool.NeedsAntigravityCLICodeGraphReconcile(s.homeDir) {
+		reconciled, err := communitytool.ReconcileAntigravityCLICodeGraph(s.homeDir)
+		if err != nil {
+			return fmt.Errorf("sync Antigravity CLI CodeGraph wiring: %w", err)
+		}
+		if s.changedFiles != nil && reconciled.Changed {
+			*s.changedFiles = append(*s.changedFiles, reconciled.Files...)
+		}
+	}
 
 	res, configured, err := communitytool.RefreshCodeGraphGuidanceIfConfigured(s.homeDir, communitytool.DetectorFunc(cmdLookPath))
 	if err != nil {
