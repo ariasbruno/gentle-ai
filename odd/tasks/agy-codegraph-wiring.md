@@ -98,10 +98,17 @@ Out of scope:
 - [x] T3: tool.go install flow calls the agy reconcile in both branches (repair + full install)
 - [x] T4: sync step gated reconcile block (mirrors OpenCode pattern with changed-file accounting)
 - [x] T5: build + focused/full tests — go build clean; communitytool failure set identical to clean tree by name (16 environmental Pi CodeGraph tests reading the live install); cli CodeGraph/AntigravityCLI failures identical to clean tree (2, environmental); bench declarations green
-- [ ] T6: local delivery (sync) + headless probe evidence
-- [ ] T7: work-unit commits + review assess (RDD on, global)
+- [x] T6: local delivery (sync) + headless probe evidence — binary 3.8.1-087f3f19 installed (backup ~/.local/bin/gentle-ai.bak-pre-codegraph-fix); sync changed exactly the two expected files: plugin mcp_config.json now carries codegraph+context7+engram, and rules/AGENTS.md regained the gentle-ai:codegraph-guidance section (17,378 B, matching the pre-drift install); headless probe: CodeGraph ordering phrase FOUND in context and codegraph_explore available under gentle-ai_codegraph.
+- [x] T7: work-unit commits + review assess — commit 087f3f19 (429 authored lines; the user's standing "commit local, PR later" strategy applied over the 400-line ask). Assess: medium, review_due (slice_budget_reached); consent relayed and granted; lineage review-0334ccc3b0cfa930 (lens review-reliability) closed **approved** with one advisory SUGGESTION (reconciler's malformed-config replacement relies on caller-owned rollback; both shipped flows snapshot first; doc-comment follow-up recorded) and acknowledged — authority burned.
 
 ## Progress
 
 (2026-09-28) Review of the user's clean install exposed the drift; user
 authorized the fix ("si"). Pre-rebase implementation located at 69e05931.
+
+(2026-09-28) All 7 tasks complete. CodeGraph wiring restored end to end:
+contract + resurrected reconciler + install/sync wiring, review approved and
+acknowledged, local installation delivered and probe-verified. Follow-ups:
+(1) advisory SUGGESTION: document the reconciler's caller-owned rollback
+contract, (2) PR packaging decision still deferred, (3) context7 (npx) MCP
+failure remains a separate defect.
