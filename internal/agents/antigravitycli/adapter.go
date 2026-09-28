@@ -28,6 +28,13 @@ type statResult struct {
 const (
 	gentleAIPluginName = "gentle-ai"
 
+	// ReviewContractInsertMarker is the deterministic placeholder inside the
+	// transpiled orchestrator asset that the CLI layer replaces with the
+	// rendered review execution contract at deploy time. The transpiler
+	// imports this same constant so the embedded asset and the fill site can
+	// never drift.
+	ReviewContractInsertMarker = "<!-- antigravity-review-execution-contract:insert -->"
+
 	// pluginImportTimeout bounds the external AGY import. A healthy 1.2.9
 	// install completes locally in seconds; this larger safety bound still
 	// prevents sync from hanging indefinitely on a broken runtime.
@@ -185,7 +192,7 @@ func (a *Adapter) EmbeddedSubAgentsDir() string {
 func (a *Adapter) BundleAssets() [][2]string {
 	return [][2]string{
 		{"antigravitycli/plugin.json", "plugin.json"},
-		{"antigravitycli/orchestrator.md", "orchestrator.md"},
+		{"antigravitycli/orchestrator.md", filepath.Join("rules", "gentle-ai-orchestrator.md")},
 		{"antigravitycli/orchestrator-delegation.md", "orchestrator-delegation.md"},
 		{"antigravitycli/orchestrator-memory.md", "orchestrator-memory.md"},
 		{"antigravitycli/orchestrator-skills.md", "orchestrator-skills.md"},
@@ -542,6 +549,9 @@ func (a *Adapter) DeployPluginTree(homeDir string) error {
 		filepath.Join(pluginDir, "chains", "sdd-verify.chain.md"),
 		filepath.Join(pluginDir, "rules", "gentle-ai-codegraph.md"),
 		filepath.Join(pluginDir, "rules", "gentle-ai-orchestrator-details.md"),
+		// agy never reads the plugin root; this was the pre-rule-cap deploy
+		// location for the orchestrator and is dead weight on existing installs.
+		filepath.Join(pluginDir, "orchestrator.md"),
 	}
 	for _, path := range legacyFiles {
 		_ = os.Remove(path)

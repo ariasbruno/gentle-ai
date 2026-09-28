@@ -246,6 +246,23 @@ func TestBundleAssets(t *testing.T) {
 			t.Errorf("empty asset pair: %v", pair)
 		}
 	}
+	// agy never reads the plugin root; the orchestrator must deploy as an
+	// always-on rule file under rules/, never at the old root location.
+	sawOrchestratorRule := false
+	for _, pair := range assetsList {
+		if pair[0] == "antigravitycli/orchestrator.md" {
+			if pair[1] != filepath.Join("rules", "gentle-ai-orchestrator.md") {
+				t.Errorf("orchestrator asset must map to rules/gentle-ai-orchestrator.md, got %q", pair[1])
+			}
+			sawOrchestratorRule = true
+		}
+		if pair[1] == "orchestrator.md" {
+			t.Errorf("no asset may deploy to the unread plugin root: %q -> %q", pair[0], pair[1])
+		}
+	}
+	if !sawOrchestratorRule {
+		t.Errorf("BundleAssets() lost the orchestrator rule mapping")
+	}
 }
 
 func TestEnsurePluginImportedMergesDestructiveManifest(t *testing.T) {
@@ -618,6 +635,10 @@ func TestDeployPluginTree(t *testing.T) {
 	}
 	staleChain := filepath.Join(pluginDir, "chains", "sdd-full.chain.md")
 	writeModeFile(t, staleChain, []byte("stale chain"), 0o644)
+	// Pre-create the legacy root orchestrator.md from older installs: agy never
+	// reads the plugin root, so deploy must prune it.
+	staleRootOrchestrator := filepath.Join(pluginDir, "orchestrator.md")
+	writeModeFile(t, staleRootOrchestrator, []byte("legacy root orchestrator"), 0o644)
 
 	// Pre-create AGENTS.md with duplicate agent-routing
 	agentsMD := filepath.Join(pluginDir, "rules", "AGENTS.md")
@@ -634,6 +655,15 @@ func TestDeployPluginTree(t *testing.T) {
 		if _, err := os.Stat(dest); err != nil {
 			t.Errorf("missing deployed bundle asset %s: %v", pair[1], err)
 		}
+	}
+	orchestratorRule := filepath.Join(pluginDir, "rules", "gentle-ai-orchestrator.md")
+	if data, err := os.ReadFile(orchestratorRule); err != nil {
+		t.Errorf("missing orchestrator rule file %s: %v", orchestratorRule, err)
+	} else if !bytes.Contains(data, []byte(ReviewContractInsertMarker)) {
+		t.Errorf("orchestrator rule file lost its deterministic review-contract marker")
+	}
+	if _, err := os.Stat(staleRootOrchestrator); !os.IsNotExist(err) {
+		t.Errorf("legacy root orchestrator.md was not pruned")
 	}
 
 	// Verify 10 ODD subagents

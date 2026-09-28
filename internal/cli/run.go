@@ -908,6 +908,9 @@ func (s antigravityCLIPluginImportStep) Run() error {
 	if err := agy.DeployPluginTree(s.homeDir); err != nil {
 		return fmt.Errorf("deploy Antigravity CLI plugin tree: %w", err)
 	}
+	if err := ensureAntigravityOrchestratorRule(s.homeDir, agy); err != nil {
+		return fmt.Errorf("finalize Antigravity CLI orchestrator rule: %w", err)
+	}
 	if err := agy.EnsurePluginImported(context.Background(), s.homeDir); err != nil {
 		return fmt.Errorf("import Antigravity CLI plugin: %w", err)
 	}

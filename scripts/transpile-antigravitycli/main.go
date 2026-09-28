@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	antigravitycliagent "github.com/gentleman-programming/gentle-ai/v3/internal/agents/antigravitycli"
 )
 
 const (
@@ -17,7 +19,6 @@ const (
 
 	antigravityCLIReviewContractHeading = "#### Review Execution Contract"
 	antigravityCLIReviewContractNext    = "Cost and Context Balance"
-	antigravityCLIReviewContractMarker  = "<!-- antigravity-review-execution-contract:insert -->"
 )
 
 // UnmappedToolWarning records a Pi tool that lacked a native Antigravity CLI translation.
@@ -422,14 +423,14 @@ func ensureAntigravityCLIReviewContract(content string) (string, error) {
 		return "", fmt.Errorf("source contains %d review-contract headings, want exactly one", count)
 	}
 	if count == 1 {
-		if !strings.Contains(content, antigravityCLIReviewContractMarker) {
-			return "", fmt.Errorf("review-contract heading is missing deterministic marker %q", antigravityCLIReviewContractMarker)
+		if !strings.Contains(content, antigravitycliagent.ReviewContractInsertMarker) {
+			return "", fmt.Errorf("review-contract heading is missing deterministic marker %q", antigravitycliagent.ReviewContractInsertMarker)
 		}
 		return content, nil
 	}
 	anchor := "## Gentle AI RDD ownership"
 	anchorIndex := strings.Index(content, anchor)
-	section := antigravityCLIReviewContractHeading + "\n\n" + antigravityCLIReviewContractMarker + "\n\n#### " + antigravityCLIReviewContractNext + "\n\n"
+	section := antigravityCLIReviewContractHeading + "\n\n" + antigravitycliagent.ReviewContractInsertMarker + "\n\n#### " + antigravityCLIReviewContractNext + "\n\n"
 	if anchorIndex < 0 {
 		return strings.TrimRight(content, "\n") + "\n\n" + section, nil
 	}

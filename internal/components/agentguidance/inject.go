@@ -221,6 +221,15 @@ func DeliversThroughOrchestratorPrompt(agent model.AgentID) bool {
 	return agent == model.AgentOpenCode || agent == model.AgentKilocode
 }
 
+// antigravityCLIRuleFrontmatter is the YAML frontmatter agy requires on every
+// plugin rule file other than AGENTS.md: without a valid trigger, agy drops
+// the file on every turn as an unspecified trigger. AGENTS.md itself must
+// stay plain markdown because agy always loads it unconditionally.
+const antigravityCLIRuleFrontmatter = `---
+trigger: always_on
+description: Gentle AI ODD workflow, delegation routing, test-first policy, and RDD review boundaries
+---`
+
 // injectPromptSection is the default delivery: a managed marker section inside
 // the adapter's own system prompt file.
 func injectPromptSection(delivery routingDelivery, rendered string) (Result, error) {
@@ -232,6 +241,12 @@ func injectPromptSection(delivery routingDelivery, rendered string) (Result, err
 	}
 
 	updated := filemerge.InjectMarkdownSection(existing, RoutingSectionID, rendered)
+
+	// Antigravity CLI delivers routing through a dedicated plugin rule file,
+	// not AGENTS.md, so the file needs always_on frontmatter to load at all.
+	if delivery.adapter.Agent() == model.AgentAntigravityCLI {
+		updated = filemerge.PrependYAMLFrontmatter(updated, antigravityCLIRuleFrontmatter)
+	}
 
 	writeResult, err := filemerge.WriteFileAtomic(promptPath, []byte(updated), 0o644)
 	if err != nil {
