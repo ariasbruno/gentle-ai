@@ -1369,6 +1369,12 @@ func retainedAntigravityCLIPluginOperations(adapter agents.Adapter, homeDir stri
 		path := filepath.Join(pluginDir, asset[1])
 		ops = append(ops, removeFile(path))
 	}
+	// Legacy installs deployed the orchestrator at the plugin root, which agy
+	// never reads; uninstall must take that stale copy away too.
+	ops = append(ops, removeFile(filepath.Join(pluginDir, "orchestrator.md")))
+	// The routing rule file is always-on once installed: leaving it behind
+	// would keep injecting ODD guidance into agy after gentle-ai is gone.
+	ops = append(ops, removeFile(filepath.Join(pluginDir, "rules", "gentle-ai-routing.md")))
 	ops = append(ops,
 		removeDirIfEmpty(filepath.Join(pluginDir, "support")),
 		removeDirIfEmpty(filepath.Join(pluginDir, "chains")),

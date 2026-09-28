@@ -148,6 +148,11 @@ var antigravityCLIOverlayJSON = []byte(`{
       "write_file(.credentials)",
       "read_file(.aws)",
       "write_file(.aws)"
+    ],
+    "allow": [
+      "command(gentle-ai codegraph init)",
+      "command(gentle-ai review assess)",
+      "command(gentle-ai review status)"
     ]
   }
 }
