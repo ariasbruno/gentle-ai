@@ -1,0 +1,5 @@
+{
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "description": "Gentle-AI ecosystem, framework, and workflow guidance for AI coding agents.",
+  "name": "gentle-ai"
+}
