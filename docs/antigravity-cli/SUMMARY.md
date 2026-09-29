@@ -12,7 +12,7 @@ This fork integrates Antigravity CLI as a **full-tier supported agent** within G
 1. **Full Architectural Parity** with Claude Code, OpenCode, Codex, and Pi.
 2. **Strict Filesystem & Security Boundaries**: All configuration is isolated under `~/.gemini/antigravity-cli/` and plugin assets under `~/.gemini/config/plugins/gentle-ai/`, leaving Antigravity Desktop IDE settings (`~/.config/antigravity/`) untouched.
 3. **In-Process Receipt-Driven Development (RDD)**: Deterministic, headless review capture using `agy --sandbox --output-format text` without host-mediated plugin dependencies.
-4. **Deterministic Asset Transpilation**: 24 native nested subagents, 4 review chains, and satellite contracts validated against strict AST and format invariants.
+4. **Deterministic Asset Transpilation**: 10 ODD subagents, the 4R review chain, and satellite contracts validated against strict AST and format invariants.
 5. **Atomic CodeGraph Reconciliation**: Automatic MCP tool configuration in `mcp_config.json` ensuring structural repository analysis precedes broad filesystem scans.
 6. **Benchmark Parity**: Automated validation via journey `j4500-antigravity-cli-lifecycle-parity` in `bench/`.
 
@@ -67,22 +67,21 @@ This fork integrates Antigravity CLI as a **full-tier supported agent** within G
 │ │                                                                      │
 │ └── config/plugins/gentle-ai/       <-- [PluginDir] Extension Bundle   │
 │     ├── rules/                                                         │
-│     │   └── AGENTS.md               <-- Persona + SDD Orchestrator     │
-│     ├── agents/                     <-- 24 Nested Subagents            │
+│     │   ├── AGENTS.md               <-- Persona + Engram + CodeGraph   │
+│     │   ├── gentle-ai-routing.md    <-- ODD/TDD/RDD routing (always-on)│
+│     │   └── gentle-ai-orchestrator.md <-- Orchestrator + Review       │
+│     │                                  Contract (always-on)            │
+│     ├── agents/                     <-- 10 ODD Subagents               │
 │     │   ├── gentle-ai-explore/agent.md  (Frontmatter:                  │
 │     │   ├── gentle-ai-worker/agent.md    mainAgent: false, tools, model│
-│     │   └── sdd-apply/agent.md          mapped to Antigravity runtime) │
-│     ├── chains/                     <-- 4 Review & SDD Chains          │
-│     │   ├── 4r-review.chain.md                                         │
-│     │   ├── sdd-full.chain.md                                          │
-│     │   ├── sdd-plan.chain.md                                          │
-│     │   └── sdd-verify.chain.md                                        │
-│     ├── mcp_config.json             <-- CodeGraph & Engram MCP Tools   │
+│     │   └── gentle-ai-verify/agent.md   mapped to Antigravity runtime) │
+│     ├── chains/                     <-- 1 Review Chain                 │
+│     │   └── 4r-review.chain.md                                         │
+│     ├── mcp_config.json             <-- CodeGraph, Context7 & Engram   │
 │     ├── orchestrator-delegation.md  <-- Satellite Delegation Contracts │
 │     ├── orchestrator-memory.md      <-- Memory Management Satellite    │
 │     ├── orchestrator-skills.md      <-- Skill Delegation Satellite     │
-│     ├── sdd-orchestrator-workflow.md<-- SDD Phase Contracts            │
-│     └── support/contracts/          <-- Invariant Support Schemas      │
+│     └── support/                    <-- Strict-TDD Support Contracts   │
 └─────────────────────────────────┬──────────────────────────────────────┘
                                   │
                                   ▼
@@ -124,22 +123,15 @@ Antigravity CLI subagents are discovered under `~/.gemini/config/plugins/gentle-
 
 ```yaml
 ---
-name: sdd-apply
-description: Implement SDD tasks with strict TDD evidence and review workload guard.
+name: gentle-ai-verify
+description: Read-only technical verification for generic ODD work.
+tools: [view_file, list_dir, grep_search, find_by_name, run_command]
 mainAgent: false
-tools:
-  - view_file
-  - write_to_file
-  - replace_file_content
-  - run_command
-  - manage_task
-  - send_message
-model: inherit
 ---
 ```
 
 > [!IMPORTANT]
-> `mainAgent: false` is an invariant required on all 24 subagents to prevent `agy` from identifying them as the root session agent.
+> `mainAgent: false` is an invariant required on all 10 transpiled subagents to prevent `agy` from identifying them as the root session agent. (The SDD-era layout shipped 24 subagents; the ODD migration reduced the set to the 10 current workers and reviewers while keeping the invariant.)
 
 #### 4.1.3 Lifecycle Hook Protocol
 
@@ -229,8 +221,8 @@ Located at `~/.gemini/config/plugins/gentle-ai/mcp_config.json`:
 | :--- | :--- | :--- |
 | **Catalog & Adapter** | `internal/model/types.go`<br>`internal/catalog/catalog.go`<br>`internal/agents/antigravitycli/adapter.go`<br>`internal/agents/antigravitycli/adapter_test.go` | Registers `AgentAntigravityCLI`, defines filesystem paths, system files, and platform detection. |
 | **Permissions & Security** | `internal/components/permissions/inject.go`<br>`internal/components/engram/inject.go`<br>`internal/components/filemerge/json_merge.go` | Injects security deny list overlay, union array merging, and Engram MCP configuration. |
-| **Asset Transpiler** | `scripts/transpile-antigravitycli/main.go`<br>`internal/assets/antigravitycli_assets_test.go`<br>`internal/agents/antigravitycli/adapter_test.go` | Deterministic transpiler generating 24 subagents, 4 chains, and satellite contracts with Invariants 1–5 validation. |
-| **Orchestration & Hooks** | `internal/components/sdd/inject.go`<br>`internal/components/uninstall/service.go`<br>`internal/cli/antigravity_hook.go`<br>`internal/cli/antigravity_hook_test.go` | `pluginBundleProvider` interface, bundle asset distribution, `PreInvocation`/`Stop` hooks, and clean uninstallation. |
+| **Asset Transpiler** | `scripts/transpile-antigravitycli/main.go`<br>`internal/assets/antigravitycli_assets_test.go`<br>`internal/agents/antigravitycli/adapter_test.go` | Deterministic transpiler generating 10 ODD subagents, 1 review chain, and satellite contracts with Invariants 1–5 validation. |
+| **Orchestration & Hooks** | `internal/agents/antigravitycli/adapter.go` (DeployPluginTree)<br>`internal/components/uninstall/service.go`<br>`internal/cli/antigravity_hook.go`<br>`internal/cli/antigravity_hook_test.go` | `pluginBundleProvider` interface, bundle asset distribution, fail-open hooks for all five events (`PreInvocation`, `PreToolUse`, `PostToolUse`, `PostInvocation`, `Stop`), and clean uninstallation. |
 | **CodeGraph Integration** | `internal/components/communitytool/codegraph_contract.go`<br>`internal/cli/sync.go`<br>`internal/cli/run.go` | Atomic CodeGraph tool reconciliation in `mcp_config.json`, wired into `sync` and `install`. |
 | **Benchmark Parity** | `bench/journeys_antigravity_cli.go`<br>`bench/manifest.json` | Journey `j4500-antigravity-cli-lifecycle-parity` testing driven sync, idempotency, uninstall, and canary isolation. |
 | **Review Transport (RDD)** | `internal/reviewerprovider/antigravitycli_adapter.go`<br>`internal/reviewerprovider/antigravitycli_routing.go`<br>`internal/cli/review_provider_runtime.go`<br>`internal/cli/review_transport_capability.go` | In-process review adapter, role routing in `review-models.json`, presets, and AST minimality guard. |
@@ -291,6 +283,12 @@ ok      github.com/gentleman-programming/gentle-ai/bench 4.901s
 ---
 
 ## 7. Atomic Work-Unit Commits & Implementation Ledger
+
+> [!NOTE]
+> Each row records its commit as it landed. The SDD-era rows (24 subagents, SDD chains and
+> phase contracts) describe assets that were later migrated: the current tree ships 10 ODD
+> subagents, the single 4R review chain, and prunes `sdd-*` assets on every sync. Current
+> invariants live in `internal/assets/antigravitycli_assets_test.go`.
 
 The entire integration is structured as 18 clean, atomic conventional commits following `work-unit-commits` principles:
 

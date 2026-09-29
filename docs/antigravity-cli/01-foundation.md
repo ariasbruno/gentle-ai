@@ -29,11 +29,14 @@ Antigravity CLI employs an intentional separation of concerns between its runtim
 │
 └── config/plugins/gentle-ai/          # [PluginDir] Gentle AI Plugin Bundle
     ├── plugin.json                   # Antigravity CLI plugin manifest
-    ├── mcp_config.json               # MCP servers configuration (Engram, CodeGraph)
-    ├── rules/AGENTS.md               # System prompt / orchestrator rules
-    ├── agents/                       # 24 nested subagent definitions
-    ├── chains/                       # Multi-agent review & SDD chains
-    ├── hooks.json                    # PreInvocation and Stop lifecycle hooks
+    ├── mcp_config.json               # MCP servers (CodeGraph, Context7, Engram)
+    ├── rules/
+    │   ├── AGENTS.md                 # Persona + Engram + CodeGraph guidance (always-on)
+    │   ├── gentle-ai-routing.md     # ODD/TDD/RDD routing rule (always_on frontmatter)
+    │   └── gentle-ai-orchestrator.md # Orchestrator + Review Contract rule (always_on)
+    ├── agents/                       # 10 ODD subagent definitions
+    ├── chains/                       # 4R review chain
+    ├── hooks.json                    # Fail-open lifecycle hooks (5 events)
     └── hooks/                        # Platform execution shims (hook.sh / hook.cmd)
 ```
 

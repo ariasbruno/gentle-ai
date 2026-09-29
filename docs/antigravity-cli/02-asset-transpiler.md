@@ -6,7 +6,7 @@ This document details the architecture, design decisions, tool-mapping engine, a
 
 ## 1. Principle: Zero Manual Edits
 
-In a multi-agent coding ecosystem, manually maintaining 24 subagents, 4 review chains, and multiple satellite rules across different agent harnesses is an anti-pattern. Prompts inevitably drift, instructions become inconsistent, and bug fixes in upstream agents fail to propagate.
+In a multi-agent coding ecosystem, manually maintaining 10 ODD subagents, the 4R review chain, and multiple satellite contracts across different agent harnesses is an anti-pattern. Prompts inevitably drift, instructions become inconsistent, and bug fixes in upstream agents fail to propagate.
 
 **The Golden Rule**:
 > Never manually edit files under `internal/assets/antigravitycli/`.
@@ -44,7 +44,7 @@ Gentle Pi and Google Antigravity CLI expose different primitive tool names for f
 ## 3. Key Design Choices & Gotchas
 
 ### Hiding Subagents from the Interactive Picker (`mainAgent: false`)
-**Problem**: In Antigravity CLI, any agent definition located in a plugin's `agents/` directory automatically appears in the interactive `/agents` menu and `agy agents` CLI listing. Displaying all 24 specialized subagents (e.g., `jd-judge-a`, `sdd-spec`, `review-risk`) cluttered the user's agent selection and invited accidental manual invocation of agents designed strictly for machine delegation.
+**Problem**: In Antigravity CLI, any agent definition located in a plugin's `agents/` directory automatically appears in the interactive `/agents` menu and `agy agents` CLI listing. Displaying all 10 specialized subagents (e.g., `jd-judge-a`, `review-risk`) cluttered the user's agent selection and invited accidental manual invocation of agents designed strictly for machine delegation.
 
 **Solution**:
 Antigravity CLI supports the `mainAgent: false` frontmatter property. The transpiler injects `mainAgent: false` into every transpiled subagent:
@@ -56,7 +56,7 @@ tools: [view_file, list_dir, grep_search, find_by_name]
 mainAgent: false
 ---
 ```
-This keeps the interactive `/agents` UI clean for the user while leaving all 24 subagents 100% discoverable and callable by the orchestrator via `invoke_subagent`.
+This keeps the interactive `/agents` UI clean for the user while leaving all 10 subagents 100% discoverable and callable by the orchestrator via `invoke_subagent`.
 
 ### Strict Validation Mode (`--strict`)
 When executed with `--strict` (in CI or during pre-commit checks), the transpiler enforces:
@@ -71,7 +71,7 @@ When executed with `--strict` (in CI or during pre-commit checks), the transpile
 
 The transpiled assets are stored in `internal/assets/antigravitycli/` and registered into the binary via `internal/assets/assets.go`:
 - `agents/`: 24 subagent Markdown definitions.
-- `chains/`: Multi-agent execution chains (`4r-review`, `sdd-full`, `sdd-plan`, `sdd-verify`).
+- `chains/`: Multi-agent execution chains (`4r-review`).
 - `support/`: SDD status and Strict TDD contracts.
 - Satellites: `orchestrator-delegation.md`, `orchestrator-memory.md`, `orchestrator-skills.md`, `sdd-orchestrator-workflow.md`.
 
@@ -81,9 +81,9 @@ The transpiled assets are stored in `internal/assets/antigravitycli/` and regist
 
 In `internal/assets/antigravitycli_assets_test.go`, we established 5 automated invariant tests that run on every build:
 
-1. **Invariant 1: Subagents Census**: Asserts that exactly 24 subagents are present in `embed.FS` and that no duplicate or missing agents exist.
+1. **Invariant 1: Subagents Census**: Asserts that exactly 10 subagents are present in `embed.FS` and that no duplicate or missing agents exist. (The SDD-era census was 24; the ODD migration reduced the set and the invariant moved with it.)
 2. **Invariant 2: Frontmatter Fidelity**: Validates that every subagent contains non-empty name and description, a valid tools array, and `mainAgent: false`.
-3. **Invariant 3: Satellites Integrity**: Proves that all 4 orchestrator satellite files exist and exceed minimum non-trivial byte sizes.
+3. **Invariant 3: Satellites Integrity**: Proves that all 3 orchestrator satellite files exist and exceed minimum non-trivial byte sizes.
 4. **Invariant 4: Support Contracts**: Proves that Strict TDD and status contracts exist and match specifications.
 5. **Invariant 5: Chains Integrity**: Asserts that all 4 execution chain definitions exist, declare valid sequence steps, and reference real agents.
 

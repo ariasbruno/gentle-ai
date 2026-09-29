@@ -49,7 +49,7 @@ The integration was designed and implemented across 5 disciplined architectural 
 - Obsolete or renamed subagents (e.g. legacy SDD agents) are automatically pruned on `gentle-ai sync` without requiring manual file deletion.
 
 ### 2.5 Resilient Fail-Open Lifecycle Hooks
-- Dispatched via `hooks.json` to `gentle-ai hook run --agent antigravity-cli --event <event>`.
+- Dispatched via `hooks.json` to `gentle-ai hook run --agent antigravity-cli --event <event>`; five events are registered with fail-open handlers: `PreInvocation`, `PreToolUse`, `PostToolUse`, `PostInvocation`, and `Stop`.
 - Implements a 3x identical-call tool loop circuit breaker in `PreToolUse` and candidate change gating in `Stop`.
 - Any unhandled event or syntax error yields `{}` and exit code 0, guaranteeing zero workflow lockouts.
 
@@ -102,9 +102,9 @@ To keep this fork up to date with future updates and releases of upstream `Gentl
    ```
 
 3. **Rebasing the Clean Integration**:
-   Because all Antigravity CLI commits are organized as clean, isolated architectural work units on `antigravity-cli`, rebasing on top of new upstream releases is straightforward:
+   Because all Antigravity CLI commits are organized as clean, isolated architectural work units on `antigravity-cli-integration`, rebasing on top of new upstream releases is straightforward:
    ```bash
-   git checkout antigravity-cli
+   git checkout antigravity-cli-integration
    git rebase upstream/main
    ```
    *Note: Always verify test suites after rebase:*

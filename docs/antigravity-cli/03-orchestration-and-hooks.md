@@ -10,15 +10,17 @@ Antigravity CLI is designed to run in a continuous interactive terminal loop wit
 
 ### 1.1 The Thin Orchestrator Pattern
 Unlike traditional monolithic IDE prompt injections that inline hundreds of lines of phase guidelines and continuation contracts into the system prompt, Antigravity CLI adopts **Gentle Pi's thin orchestrator model**:
-- The always-on system prompt (`rules/AGENTS.md`) remains lean: it sets identity, persona boundaries, memory protocols, and the Work Routing Ladder.
-- Detailed SDD workflows, status continuation contracts, and multi-agent chains are **lazy-loaded on demand** from plugin bundle assets:
-  - `sdd-orchestrator-workflow.md`
-  - `orchestrator-delegation.md`, `orchestrator-memory.md`, `orchestrator-skills.md`
-  - `support/sdd-status-contract.md`, `support/strict-tdd.md`, `support/strict-tdd-verify.md`
-  - `chains/sdd-full.chain.md`, `chains/sdd-plan.chain.md`, `chains/sdd-verify.chain.md`, `chains/4r-review.chain.md`
+- The always-on rules stay lean: `rules/AGENTS.md` carries identity, persona boundaries, Engram protocol, and CodeGraph guidance, while `rules/gentle-ai-routing.md` and `rules/gentle-ai-orchestrator.md` (both `trigger: always_on`) carry the ODD/TDD/RDD routing and the coordinator harness.
+- Detailed delegation, memory, and skill-registry material is **lazy-loaded on demand** from plugin bundle assets:
+  - `orchestrator-delegation.md`, `orchestrator-memory.md`, `orchestrator-skills.md` (satellites at the plugin root, referenced by the orchestrator rule)
+  - `support/strict-tdd.md`, `support/strict-tdd-verify.md`
+  - `chains/4r-review.chain.md`
 
-### 1.2 The `pluginBundleProvider` Interface
-To support this modular injection cleanly without hardcoding agent-specific hacks into `sdd.Inject()`, we introduced the `pluginBundleProvider` capability:
+> [!NOTE]
+> The SDD-era assets (`sdd-orchestrator-workflow.md`, `support/sdd-status-contract.md`, and the `sdd-*` chains) were retired by the ODD migration and are pruned from the plugin tree on every sync.
+
+### 1.2 Bundle Deployment (formerly `pluginBundleProvider`)
+The Phase-3 `pluginBundleProvider` capability and its `sdd.Inject()` copy loop were retired with the SDD component. The current mechanism is `Adapter.DeployPluginTree` in `internal/agents/antigravitycli/adapter.go`: it writes the embedded bundle assets, discovers the transpiled subagents through `assets.FS`, writes each `agents/<name>/agent.md`, installs the fail-open hooks, and prunes legacy SDD files — reconciling the installed tree on every install and sync. The `antigravityCLIPluginImportStep` in `internal/cli/run.go` then finalizes the orchestrator rule and performs the one-time native `agy plugin` import.
 
 ```go
 type pluginBundleProvider interface {
@@ -27,9 +29,12 @@ type pluginBundleProvider interface {
 }
 ```
 
-Any adapter implementing this interface automatically participates in:
+Any adapter implementing this interface automatically participated in:
 1. **Atomic bundle injection**: Copying and rendering embedded satellite and contract files into the adapter's plugin directory.
 2. **Clean uninstall operations**: Pruning bundle files and empty subdirectories (`support/`, `chains/`) during `gentle-ai uninstall`.
+
+> [!NOTE]
+> The interface itself is retired; `BundleAssets()` and `PluginDir()` live on the adapter and still drive bundle deployment and uninstall cleanup today.
 
 ---
 
@@ -38,38 +43,22 @@ Any adapter implementing this interface automatically participates in:
 Antigravity CLI requires subagents to reside in dedicated subdirectories containing an `agent.md` file:
 ```
 ~/.gemini/config/plugins/gentle-ai/agents/
-├── sdd-apply/
-│   └── agent.md
-├── sdd-verify/
-│   └── agent.md
 ├── gentle-ai-explore/
 │   └── agent.md
-└── ... (24 subagents total)
+├── gentle-ai-worker/
+│   └── agent.md
+├── gentle-ai-verify/
+│   └── agent.md
+└── ... (10 ODD subagents total)
 ```
 
-### 2.1 Nested Injection & Post-Check Verification
-In `internal/components/sdd/inject.go`, the subagents copy loop checks `entry.IsDir()`:
-- Flat adapters (Cursor, Claude, Kimi) write directly to `agentsDir/<entry.Name()>`.
-- `AgentAntigravityCLI` creates `agentsDir/<entry.Name()>/` and writes `agent.md` inside it.
-- The post-injection verification validates that critical execution agents (`sdd-apply`, `sdd-verify`) exist and are non-empty:
-  ```go
-  checkPaths := []string{
-      filepath.Join(agentsDir, phase+".md"),
-      filepath.Join(agentsDir, phase+".yaml"),
-  }
-  if adapter.Agent() == model.AgentAntigravityCLI {
-      checkPaths = append(checkPaths, filepath.Join(agentsDir, phase, "agent.md"))
-  }
-  ```
+### 2.1 Subagent Deployment & Verification (ODD era)
+The SDD-era copy loop in `internal/components/sdd/inject.go` — including its `sdd-apply`/`sdd-verify` post-injection check — was retired with the SDD component. Today `Adapter.DeployPluginTree` writes every transpiled `agents/<name>/agent.md` from `assets.FS` and prunes legacy subagents, and the coverage guarantees moved to the invariant tests and the driven bench:
+- `internal/assets/antigravitycli_assets_test.go` asserts exactly 10 subagents with valid frontmatter on every build.
+- Journey `j4500` asserts on every driven run that the deployed plugin tree contains the current worker and reviewer subagents, non-empty and loadable.
 
-### 2.2 Scoped Tool Grants: `codegraph_explore`
-Tool grants must not leak to read-only reviewers or authoring agents. In `internal/components/sdd/prompts.go`, `injectCodeGraphToolGrantIntoPrompt` was enhanced:
-```go
-if agentID == model.AgentAntigravityCLI && !strings.Contains(prompt[:frontmatterEnd], "name: gentle-ai-explore") {
-    return prompt
-}
-```
-For Antigravity CLI, only `gentle-ai-explore` receives the `codegraph_explore` grant in YAML list syntax (`[view_file, ..., codegraph_explore]`).
+### 2.2 Tool Grants (formerly scoped `codegraph_explore` injection)
+The Phase-3 `injectCodeGraphToolGrantIntoPrompt` enhancement in `internal/components/sdd/prompts.go` was retired with the SDD component. Subagent tool sets now come entirely from the transpiled `agent.md` frontmatter: the current read-only `gentle-ai-explore` ships `tools: [view_file, list_dir, grep_search, find_by_name]` and does not carry `codegraph_explore`; the parent session keeps the CodeGraph MCP tool (`gentle-ai_codegraph/codegraph_explore`) available through the plugin's `mcp_config.json`.
 
 ---
 
@@ -170,7 +159,7 @@ ok      github.com/gentleman-programming/gentle-ai/v3/internal/components/uninst
 ok      github.com/gentleman-programming/gentle-ai/v3/internal/cli                     2.687s
 ```
 
-All 24 subagents, bundle assets, lifecycle hooks, and uninstall plans are fully verified and ready for production use.
+All 10 ODD subagents, bundle assets, lifecycle hooks, and uninstall plans are fully verified and ready for production use.
 
 ---
 
