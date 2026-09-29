@@ -26,7 +26,7 @@ The integration was designed and implemented across 5 disciplined architectural 
 ## 2. Architectural Highlights
 
 ### 2.1 Complete Filesystem & Security Boundaries
-- **Directory Layout**: Antigravity CLI global configuration lives under `~/.gemini/antigravity-cli/` (`settings.json`, `review-models.json`), while Gentle AI's system prompt, subagents, chains, and contracts are encapsulated inside the plugin bundle under `~/.gemini/config/plugins/gentle-ai/` (`rules/AGENTS.md`, `rules/gentle-ai-routing.md`, `agents/`, `chains/`, `mcp_config.json`).
+- **Directory Layout**: Antigravity CLI global configuration lives under `~/.gemini/antigravity-cli/` (`settings.json`; `gentle-ai/review-models.json` is created lazily by the review model picker — an absent file means every review role inherits the CLI session default), while Gentle AI's system prompt, subagents, chains, and contracts are encapsulated inside the plugin bundle under `~/.gemini/config/plugins/gentle-ai/` (`rules/AGENTS.md`, `rules/gentle-ai-routing.md`, `rules/gentle-ai-orchestrator.md`, `agents/`, `chains/`, `mcp_config.json`). The plugin's `mcp_config.json` carries the codegraph, context7, and engram MCP servers; context7 is spawned through `npx`, so the first agy session on a machine with a cold npx cache may not expose context7 tools until the one-time package download completes — subsequent sessions connect in seconds.
 - **Zero Cross-Contamination**: Antigravity Desktop IDE settings (`~/.config/antigravity/`) are completely isolated and untouched by CLI operations.
 - **Security Policy**: Denies destructive host commands, sensitive directories (`.ssh`, `.gnupg`, `.aws`, `.gemini`), and protects repository integrity.
 

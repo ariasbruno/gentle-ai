@@ -299,7 +299,10 @@ func NeedsAntigravityCLICodeGraphReconcileWithAgents(homeDir string, selectedAge
 // into the Gentle AI plugin bundle's mcp_config.json (the only MCP surface agy
 // reads). It is idempotent: an already-wired server means no write, and other
 // configured servers are preserved. A malformed config file is replaced with a
-// fresh document rather than partially rewritten.
+// fresh document rather than partially rewritten — that replacement drops the
+// previous bytes, so the CALLER owns backup and rollback for malformed input:
+// the shipped install and sync flows snapshot CodeGraphManagedPaths before
+// calling and restore it on failure.
 func ReconcileAntigravityCLICodeGraph(homeDir string) (GuidanceInjectionResult, error) {
 	return ReconcileAntigravityCLICodeGraphWithAgents(homeDir, nil)
 }

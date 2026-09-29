@@ -123,6 +123,7 @@ authored lines > 400 forecast).
 approved + acknowledged (lineage review-d9ba706ac47069d3). Local installation
 delivered and empirically verified: ODD/TDD/RDD/orchestrator/CodeGraph now reach
 the agy model context by default. Follow-ups recorded: (1) frontmatter strip
-closing-dash precision (advisory WARNING), (2) generic agent-routing section
+closing-dash precision (advisory WARNING) — CLOSED 2026-09-28: line-end guard added,
+FourDash tests pin the behavior, (2) generic agent-routing section
 cleanup for other agents' uninstall, (3) context7 npx MCP server failing to load,
 (4) PR packaging decision (deferred by user).

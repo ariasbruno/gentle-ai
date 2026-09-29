@@ -110,5 +110,5 @@ authorized the fix ("si"). Pre-rebase implementation located at 69e05931.
 contract + resurrected reconciler + install/sync wiring, review approved and
 acknowledged, local installation delivered and probe-verified. Follow-ups:
 (1) advisory SUGGESTION: document the reconciler's caller-owned rollback
-contract, (2) PR packaging decision still deferred, (3) context7 (npx) MCP
+contract — CLOSED 2026-09-28: doc-comment added on ReconcileAntigravityCLICodeGraph, (2) PR packaging decision still deferred, (3) context7 (npx) MCP
 failure remains a separate defect.

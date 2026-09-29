@@ -48,18 +48,23 @@ func stripLeadingYAMLFrontmatter(content string) string {
 
 	// Look for closing `---` at line start
 	for i := searchStart; i < len(content); i++ {
-		if content[i] == '\n' && i+3 < len(content) && content[i+1] == '-' && content[i+2] == '-' && content[i+3] == '-' {
-			// Found closing --- at line start
-			// Check if it's followed by newline or end of content
-			endIdx := i + 4
-			if endIdx <= len(content) {
-				// Return content after the closing ---
-				if endIdx < len(content) && content[endIdx] == '\n' {
-					endIdx++ // consume the newline after closing ---
-				}
-				return content[endIdx:]
-			}
+		if content[i] != '\n' {
+			continue
 		}
+		if i+3 >= len(content) || content[i+1] != '-' || content[i+2] != '-' || content[i+3] != '-' {
+			continue
+		}
+		endIdx := i + 4
+		// The closing delimiter is exactly three dashes on their own line.
+		// A longer dash run (for example a four-dash markdown horizontal rule)
+		// is body content, not a frontmatter closer: keep scanning.
+		if endIdx < len(content) && content[endIdx] != '\n' {
+			continue
+		}
+		if endIdx < len(content) {
+			endIdx++ // consume the newline after closing ---
+		}
+		return content[endIdx:]
 	}
 
 	// No valid closing --- found, return original content

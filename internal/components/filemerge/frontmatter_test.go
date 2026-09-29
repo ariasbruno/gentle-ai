@@ -88,6 +88,33 @@ func TestPrependYAMLFrontmatter_NoLeadingFrontmatterWhenContentStartsWithDashes(
 	}
 }
 
+func TestPrependYAMLFrontmatter_FourDashRuleIsNotACloser(t *testing.T) {
+	// A four-dash markdown horizontal rule after a malformed leading `---`
+	// opener is body content, not a frontmatter closer: the strip must not
+	// half-consume it and glue a stray dash onto the body.
+	content := "---\nx: y\n----\nbody line\n"
+	frontmatter := "---\ntrigger: always_on\n---\n"
+
+	result := PrependYAMLFrontmatter(content, frontmatter)
+
+	if result != frontmatter+content {
+		t.Fatalf("four-dash rule must stay intact:\ngot:  %q\nwant: %q", result, frontmatter+content)
+	}
+}
+
+func TestPrependYAMLFrontmatter_FourDashRuleBeforeRealCloser(t *testing.T) {
+	// A longer dash run does not close the block, but a later true `---` still
+	// does: only the real closing delimiter is stripped.
+	content := "---\nx: y\n----\n---\nbody line\n"
+	frontmatter := "---\ntrigger: always_on\n---\n"
+
+	result := PrependYAMLFrontmatter(content, frontmatter)
+
+	if result != frontmatter+"body line\n" {
+		t.Fatalf("real closer after a four-dash rule must still be stripped:\ngot:  %q\nwant: %q", result, frontmatter+"body line\n")
+	}
+}
+
 func TestPrependYAMLFrontmatter_FrontmatterWithOnlyOpeningDash(t *testing.T) {
 	// Content has opening --- but no closing ---
 	content := "---\ntrigger: something\n# My Document\n\nContent.\n"
