@@ -348,3 +348,25 @@ func TestAntigravityCLI_RuleSizeLimit(t *testing.T) {
 		t.Errorf("antigravitycli/orchestrator.md size (%d bytes) exceeds rule limit of %d bytes", len(content), maxRuleBytes)
 	}
 }
+
+// TestAntigravityCLI_ExploreAgentUsesMCPBridgeForCodeGraph pins the explore
+// agent's body to the runtime reality: agy has no cwd-scoped `codegraph` tool
+// with init/query/explore operations (that is the Pi interface), and MCP tools
+// are reached through the injected call_mcp_tool bridge. Phantom instructions
+// would make the agent fail into its grep fallback on every structural task.
+func TestAntigravityCLI_ExploreAgentUsesMCPBridgeForCodeGraph(t *testing.T) {
+	data, err := assets.Read("antigravitycli/agents/gentle-ai-explore/agent.md")
+	if err != nil {
+		t.Fatalf("read gentle-ai-explore agent: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "call_mcp_tool") || !strings.Contains(content, "gentle-ai_codegraph") {
+		t.Errorf("explore body must route CodeGraph through the MCP bridge (call_mcp_tool, server gentle-ai_codegraph)")
+	}
+	if strings.Contains(content, "cwd-scoped") || strings.Contains(content, `operation: "init"`) {
+		t.Errorf("explore body still describes the Pi-only cwd-scoped codegraph tool interface")
+	}
+	if strings.Contains(content, "`read`, `grep`, and `find`") {
+		t.Errorf("explore fallback names Pi tools; agy names them view_file, grep_search, find_by_name")
+	}
+}
