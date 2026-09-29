@@ -41,7 +41,7 @@ func ensureAntigravityOrchestratorRule(homeDir string, agy *antigravitycliagent.
 	if marker := antigravitycliagent.ReviewContractInsertMarker; strings.Contains(content, marker) {
 		content = strings.Replace(content, marker, contract, 1)
 	} else if !strings.Contains(content, contract) {
-		return fmt.Errorf("orchestrator rule %q carries neither the deterministic insert marker nor an already-filled contract", rulePath)
+		return fmt.Errorf("orchestrator rule %q carries neither the deterministic insert marker nor an already-filled contract; redeploy the plugin tree with `gentle-ai sync --agents antigravity-cli` and retry", rulePath)
 	}
 
 	content = filemerge.PrependYAMLFrontmatter(content, antigravityOrchestratorRuleFrontmatter)
