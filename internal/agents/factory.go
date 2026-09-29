@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/antigravity"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/antigravitycli"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/claude"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/codex"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/conductor"
@@ -32,6 +33,7 @@ var defaultAgentIDs = []model.AgentID{
 	model.AgentVSCodeCopilot,
 	model.AgentCodex,
 	model.AgentAntigravity,
+	model.AgentAntigravityCLI,
 	model.AgentWindsurf,
 	model.AgentKimi,
 	model.AgentQwenCode,
@@ -61,6 +63,8 @@ func NewAdapter(agent model.AgentID) (Adapter, error) {
 		return codex.NewAdapter(), nil
 	case model.AgentAntigravity:
 		return antigravity.NewAdapter(), nil
+	case model.AgentAntigravityCLI:
+		return antigravitycli.NewAdapter(), nil
 	case model.AgentWindsurf:
 		return windsurf.NewAdapter(), nil
 	case model.AgentKimi:

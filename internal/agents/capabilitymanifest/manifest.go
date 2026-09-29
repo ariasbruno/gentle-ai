@@ -168,6 +168,7 @@ var reviewTransportExposureByAgent = func() map[model.AgentID]ContractExposure {
 	exposure[model.AgentOpenCode] = ContractExposureAdvertised
 	exposure[model.AgentCodex] = ContractExposureAdvertised
 	exposure[model.AgentPi] = ContractExposureAdvertised
+	exposure[model.AgentAntigravityCLI] = ContractExposureAdvertised
 	return exposure
 }()
 
@@ -196,6 +197,7 @@ var immutableReviewExecutorExposureByAgent = func() map[model.AgentID]ContractEx
 	exposure[model.AgentOpenCode] = ContractExposureAdvertised
 	exposure[model.AgentCodex] = ContractExposureAdvertised
 	exposure[model.AgentPi] = ContractExposureAdvertised
+	exposure[model.AgentAntigravityCLI] = ContractExposureAdvertised
 	return exposure
 }()
 
@@ -315,6 +317,9 @@ var featureClaimsByAgent = map[model.AgentID]AgentFeatureClaims{
 	// Code's own adapter surface, so Gentle AI claims no write capabilities for
 	// it: no skills, MCP, system prompt, or other managed file writes.
 	model.AgentConductor: {},
+	model.AgentAntigravityCLI: {
+		FileSubAgents: true, Skills: true, SystemPrompt: true, MCP: true,
+	},
 	model.AgentClaudeCode: {
 		OutputStyles: true, SlashCommands: true,
 		FileSubAgents: true, Skills: true, SystemPrompt: true, MCP: true,
