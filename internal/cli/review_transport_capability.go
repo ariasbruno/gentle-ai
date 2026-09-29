@@ -58,6 +58,11 @@ const (
 	// the raw final bytes through the exact capture operation. Go keeps
 	// prompt materialization, admission, budgets, receipts, and gates.
 	reviewImmutableTransportPiHostRelay reviewImmutableTransport = "pi_host_relay"
+	// reviewImmutableTransportAntigravityCLIInProcess is a fresh `agy`
+	// subprocess in an empty scratch directory: Go sends the opaque prompt
+	// via stdin and reads the raw final bytes back (in-process capture, no
+	// host plugin).
+	reviewImmutableTransportAntigravityCLIInProcess reviewImmutableTransport = "antigravitycli_in_process"
 )
 
 // reviewPiHostRelayContract is the exact relay contract this binary admits.
@@ -107,6 +112,8 @@ func reviewImmutableRuntimeCapability(agent model.AgentID) reviewImmutableRuntim
 			return policy
 		}
 		policy.Eligible = true
+	case model.AgentAntigravityCLI:
+		policy.Eligible = true
 	case model.AgentPi:
 		// The relay's declared contract is a required conjunct: it can only
 		// narrow the compiled boundary, never expand it. Without the exact
@@ -130,6 +137,8 @@ func reviewImmutableRuntimeCapability(agent model.AgentID) reviewImmutableRuntim
 		policy.Transport = reviewImmutableTransportOpenCodeProviderInjected
 	case model.AgentCodex:
 		policy.Transport = reviewImmutableTransportCodexAdvisoryScratchProcess
+	case model.AgentAntigravityCLI:
+		policy.Transport = reviewImmutableTransportAntigravityCLIInProcess
 	case model.AgentPi:
 		policy.Transport = reviewImmutableTransportPiHostRelay
 	}
@@ -140,7 +149,8 @@ func (capability reviewImmutableRuntimePolicy) supportsImmutableReceiptReview() 
 	return capability.Transport == reviewImmutableTransportClaudePromptCarried ||
 		capability.Transport == reviewImmutableTransportOpenCodeProviderInjected ||
 		capability.Transport == reviewImmutableTransportCodexAdvisoryScratchProcess ||
-		capability.Transport == reviewImmutableTransportPiHostRelay
+		capability.Transport == reviewImmutableTransportPiHostRelay ||
+		capability.Transport == reviewImmutableTransportAntigravityCLIInProcess
 }
 
 // reviewTransportSupportedRuntimeIDs derives the actionable runtime list from

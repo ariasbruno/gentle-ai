@@ -56,7 +56,8 @@ func run(args []string) error {
 	if !anyReleaseIdentityPresent() {
 		return releaseprovenance.WriteLocal(*output, *config)
 	}
-	if os.Getenv("GITHUB_REPOSITORY") != "Gentleman-Programming/gentle-ai" {
+	repo := os.Getenv("GITHUB_REPOSITORY")
+	if repo != "Gentleman-Programming/gentle-ai" && repo != "ariasbruno/gentle-ai" {
 		return fmt.Errorf("release provenance input is invalid")
 	}
 	runAttempt, err := strconv.Atoi(os.Getenv("GITHUB_RUN_ATTEMPT"))

@@ -29,6 +29,7 @@ import (
 	"github.com/gentleman-programming/gentle-ai/v4/internal/opencode"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/pipeline"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/planner"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/reviewerprovider"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/reviewtransaction"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/state"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/statecoord"
@@ -530,6 +531,7 @@ const (
 	ScreenClaudeModelPicker
 	ScreenKiroModelPicker
 	ScreenCodexModelPicker
+	ScreenAntigravityReviewModelPicker
 	ScreenCommunityTools
 	ScreenCommunityToolInstalling
 	ScreenCommunityToolResult
@@ -602,6 +604,7 @@ type Model struct {
 	ClaudeModelPicker              screens.ClaudeModelPickerState
 	KiroModelPicker                screens.KiroModelPickerState
 	CodexModelPicker               screens.CodexModelPickerState
+	AntigravityReviewModelPicker   screens.AntigravityReviewModelPickerState
 	SkillPicker                    []model.SkillID
 	Err                            error
 
@@ -1428,6 +1431,8 @@ func (m Model) View() string {
 		return screens.RenderKiroModelPicker(m.KiroModelPicker, m.Cursor)
 	case ScreenCodexModelPicker:
 		return screens.RenderCodexModelPicker(m.CodexModelPicker, m.Cursor, m.Height)
+	case ScreenAntigravityReviewModelPicker:
+		return screens.RenderAntigravityReviewModelPicker(m.AntigravityReviewModelPicker, m.Cursor)
 	case ScreenCommunityTools:
 		return screens.RenderCommunityTools(m.Selection.CommunityTools, m.Cursor, m.CommunityToolStatuses, m.CommunityToolStatusLoading, m.CommunityToolStatusErr)
 	case ScreenCommunityToolInstalling:
@@ -1678,6 +1683,24 @@ func (m Model) handleKeyPress(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.setScreen(ScreenSync)
 				} else if next, ok := m.pickerNextScreen(); ok {
 					return m, m.advanceToNextPickerScreen(next)
+				}
+			}
+			return m, nil
+		}
+	}
+
+	if m.Screen == ScreenAntigravityReviewModelPicker {
+		previousMode := m.AntigravityReviewModelPicker.CustomMode
+		handled, assignments := screens.HandleAntigravityReviewModelPickerNav(keyStr, &m.AntigravityReviewModelPicker, m.Cursor)
+		if handled {
+			if previousMode != m.AntigravityReviewModelPicker.CustomMode {
+				m.Cursor = 0
+			}
+			if assignments != nil {
+				_ = reviewerprovider.SaveAntigravityCLIReviewRouting(assignments)
+				if m.ModelConfigMode {
+					m.ModelConfigMode = false
+					m.setScreen(ScreenModelConfig)
 				}
 			}
 			return m, nil
@@ -2196,7 +2219,12 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 			m.CodexModelPicker = screens.NewCodexModelPickerStateFromAssignments(m.Selection.CodexModelAssignments)
 			m.restoreCodexCustomAssignments()
 			m.setScreen(ScreenCodexModelPicker)
-		case 4: // Back
+		case 4: // Configure Antigravity review models
+			m.ModelConfigMode = true
+			routes, _ := reviewerprovider.LoadAllAntigravityCLIReviewRouting()
+			m.AntigravityReviewModelPicker = screens.NewAntigravityReviewModelPickerStateFromAssignments(routes)
+			m.setScreen(ScreenAntigravityReviewModelPicker)
+		case 5: // Back
 			m.setScreen(ScreenWelcome)
 		}
 		return m, nil
@@ -2286,6 +2314,18 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 		}
 	case ScreenCodexModelPicker:
 		if m.CodexModelPicker.CustomMode == screens.CodexCustomModeNone && m.Cursor == screens.CodexModelPickerOptionCount(m.CodexModelPicker)-1 {
+			if m.ModelConfigMode {
+				m.ModelConfigMode = false
+				m.setScreen(ScreenModelConfig)
+				return m, nil
+			}
+			if prev, ok := m.pickerPreviousScreen(); ok {
+				m.applyPickerEntry(prev)
+			}
+			return m, nil
+		}
+	case ScreenAntigravityReviewModelPicker:
+		if m.AntigravityReviewModelPicker.CustomMode == screens.AntigravityReviewCustomModeNone && m.Cursor == screens.AntigravityReviewModelPickerOptionCount(m.AntigravityReviewModelPicker)-1 {
 			if m.ModelConfigMode {
 				m.ModelConfigMode = false
 				m.setScreen(ScreenModelConfig)
@@ -3529,7 +3569,7 @@ func (m Model) goBack(cmd *tea.Cmd) Model {
 	}
 
 	// ModelConfigMode: pickers reached via Model Config shortcut return to ScreenModelConfig.
-	if m.ModelConfigMode && (m.Screen == ScreenClaudeModelPicker || m.Screen == ScreenKiroModelPicker || m.Screen == ScreenCodexModelPicker || m.Screen == ScreenModelPicker) {
+	if m.ModelConfigMode && (m.Screen == ScreenClaudeModelPicker || m.Screen == ScreenKiroModelPicker || m.Screen == ScreenCodexModelPicker || m.Screen == ScreenAntigravityReviewModelPicker || m.Screen == ScreenModelPicker) {
 		m.ModelConfigMode = false
 		m.setScreen(ScreenModelConfig)
 		return m
@@ -3766,6 +3806,8 @@ func (m Model) optionCount() int {
 		return screens.KiroModelPickerOptionCount(m.KiroModelPicker)
 	case ScreenCodexModelPicker:
 		return screens.CodexModelPickerOptionCount(m.CodexModelPicker)
+	case ScreenAntigravityReviewModelPicker:
+		return screens.AntigravityReviewModelPickerOptionCount(m.AntigravityReviewModelPicker)
 	case ScreenCommunityTools:
 		return screens.CommunityToolsOptionCount()
 	case ScreenCommunityToolInstalling:

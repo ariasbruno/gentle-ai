@@ -133,6 +133,21 @@ func TestCIBuildStillProducesReleaseProvenance(t *testing.T) {
 			t.Fatal("a refused CI build still wrote a manifest")
 		}
 	})
+	t.Run("fork repository produces release provenance", func(t *testing.T) {
+		out, args := provenanceArgs(t)
+		ciEnvironment(t)
+		t.Setenv("GITHUB_REPOSITORY", "ariasbruno/gentle-ai")
+		if err := run(args); err != nil {
+			t.Fatalf("fork build refused: %v", err)
+		}
+		payload, err := os.ReadFile(out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(payload), `"schema":"gentle-ai.release-provenance/v1"`) {
+			t.Fatalf("fork manifest is not release provenance: %s", payload)
+		}
+	})
 	t.Run("another repository still refuses", func(t *testing.T) {
 		out, args := provenanceArgs(t)
 		ciEnvironment(t)

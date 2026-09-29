@@ -116,6 +116,8 @@ var reviewProviderAdapterFor = func(contract reviewerprovider.Contract, agent mo
 		return reviewerprovider.NewClaudeAdapter(), nil
 	case model.AgentCodex:
 		return reviewerprovider.NewCodexAdapter(), nil
+	case model.AgentAntigravityCLI:
+		return reviewerprovider.NewAntigravityCLIAdapter(), nil
 	case model.AgentOpenCode:
 		return nil, fmt.Errorf("reviewer provider runtime %q is host-mediated; launch the provider-issued OpenCode reviewer task", agent) // refusal:by-design world-action: OpenCode must relay through its ordinary managed host
 	case model.AgentPi:
@@ -123,6 +125,37 @@ var reviewProviderAdapterFor = func(contract reviewerprovider.Contract, agent mo
 	default:
 		return nil, fmt.Errorf("reviewer provider runtime %q has no registered adapter", agent) // refusal:by-design world-action: immutable reviewer execution requires a compiled adapter binding
 	}
+}
+
+// reviewProviderAdapterWithRouting resolves the antigravity-cli routing
+// assignment for the named role or lens before building the compiled
+// adapter; every other runtime delegates unchanged.
+func reviewProviderAdapterWithRouting(role string, agent model.AgentID, routingKey string) (reviewerprovider.Adapter, error) {
+	contract, err := reviewProviderRoleContractFor(role)
+	if err != nil {
+		return nil, err
+	}
+	if !slices.Contains(contract.RequiredCapabilities, reviewProviderTransportCapability) {
+		return nil, fmt.Errorf("reviewer provider role %q does not permit the compiled transport", contract.Role) // refusal:by-design world-action: only a role contract change can permit the compiled transport
+	}
+	// The agent equality alone routes only antigravity-cli here; Claude Code
+	// and Codex capture in process but never enter this branch. The capture
+	// predicate is defense in depth: if a future antigravity-cli identity
+	// stopped capturing in process, this routing branch would turn off instead
+	// of routing a non-capture runtime through the home assignment file.
+	if reviewProviderCaptureRuntime(agent) && agent == model.AgentAntigravityCLI {
+		route, assignmentKeyMissing, err := reviewerprovider.ResolveAntigravityCLIReviewRouting(routingKey)
+		if err != nil {
+			return nil, err
+		}
+		if assignmentKeyMissing {
+			fmt.Fprintf(os.Stderr, "review routing: no assignment for %q, using antigravity-cli runtime defaults\n", routingKey)
+		}
+		adapter := reviewerprovider.NewAntigravityCLIAdapter()
+		adapter.Model = route.Model
+		return adapter, nil
+	}
+	return reviewProviderAdapter(role, agent, routingKey)
 }
 
 // reviewProviderCaptureRuntime reads the one canonical answer rather than
