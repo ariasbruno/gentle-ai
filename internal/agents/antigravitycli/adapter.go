@@ -407,7 +407,13 @@ func (a *Adapter) failPluginImport(path string, snapshot pluginImportSnapshot, c
 }
 
 func defaultPluginImportManifestWriter(path string, data []byte, mode os.FileMode) error {
-	_, err := filemerge.WriteFileAtomic(path, data, mode)
+	// The import manifest is Gentle AI-owned: when the external agy plugin
+	// install rewrote it destructively, the recorded snapshot mode must be
+	// restored rather than preserved from the mutated file. WriteFileAtomic
+	// in v4 preserves an existing file's mode; WriteFileAtomicMode forces
+	// the caller-owned recorded mode (see writer.go: "a backup restore
+	// recreating a recorded mode").
+	_, err := filemerge.WriteFileAtomicMode(path, data, mode)
 	return err
 }
 

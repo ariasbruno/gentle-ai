@@ -14,6 +14,7 @@ var receiptDrivenDevelopmentAgents = []AgentID{
 	AgentCodex,
 	AgentOpenCode,
 	AgentPi,
+	AgentAntigravityCLI,
 }
 
 // SupportsReceiptDrivenDevelopment reports whether agent receives

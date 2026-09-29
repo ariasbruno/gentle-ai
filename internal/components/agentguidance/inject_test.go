@@ -904,8 +904,8 @@ func markdownSectionAgents(t *testing.T) []model.AgentID {
 		}
 		selected = append(selected, agent.ID)
 	}
-	if len(selected) != supportedAgentCount-4 {
-		t.Fatalf("selected %d markdown-section agents, want %d", len(selected), supportedAgentCount-4)
+	if len(selected) != supportedAgentCount-5 {
+		t.Fatalf("selected %d markdown-section agents, want %d", len(selected), supportedAgentCount-5)
 	}
 	return selected
 }
