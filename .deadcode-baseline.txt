@@ -67,9 +67,6 @@ internal/components/gga/config.go	PostInstallMessages
 internal/components/gga/install.go	ShouldInstall
 internal/components/gga/runtime.go	RuntimeBinDir
 internal/components/mcp/inject.go	context7Args
-internal/components/reviewassets/contract.go	ContractFor
-internal/components/reviewassets/contract.go	ReviewExecutionContractFor
-internal/components/reviewassets/contract.go	selectTransport
 internal/components/telemetryruntime/managed.go	Reconcile
 internal/installcmd/resolver.go	GitBashPath
 internal/installcmd/resolver.go	validateGoForModuleInstall

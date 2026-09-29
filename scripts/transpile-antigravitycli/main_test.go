@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	antigravitycliagent "github.com/gentleman-programming/gentle-ai/v3/internal/agents/antigravitycli"
 )
 
 func TestTranspileSubagentsCount(t *testing.T) {
@@ -165,7 +167,7 @@ Stay safe.
 	got := string(first)
 	for _, want := range []string{
 		antigravityCLIReviewContractHeading,
-		antigravityCLIReviewContractMarker,
+		antigravitycliagent.ReviewContractInsertMarker,
 		"`invoke_subagent`",
 		"ask_question",
 		"~/.gemini/config/plugins/gentle-ai",

@@ -57,8 +57,10 @@ The SDD-era copy loop in `internal/components/sdd/inject.go` — including its `
 - `internal/assets/antigravitycli_assets_test.go` asserts exactly 10 subagents with valid frontmatter on every build.
 - Journey `j4500` asserts on every driven run that the deployed plugin tree contains the current worker and reviewer subagents, non-empty and loadable.
 
-### 2.2 Tool Grants (formerly scoped `codegraph_explore` injection)
-The Phase-3 `injectCodeGraphToolGrantIntoPrompt` enhancement in `internal/components/sdd/prompts.go` was retired with the SDD component. Subagent tool sets now come entirely from the transpiled `agent.md` frontmatter: the current read-only `gentle-ai-explore` ships `tools: [view_file, list_dir, grep_search, find_by_name]` and does not carry `codegraph_explore`; the parent session keeps the CodeGraph MCP tool (`gentle-ai_codegraph/codegraph_explore`) available through the plugin's `mcp_config.json`.
+### 2.2 Tool Grants and the MCP Bridge
+The Phase-3 `injectCodeGraphToolGrantIntoPrompt` enhancement in `internal/components/sdd/prompts.go` was retired with the SDD component, and with it the frontmatter-level `codegraph_explore` grant: agy validates a subagent's `tools:` list against its built-in component registry, so declaring an MCP tool name there prevents the subagent from constructing at all. The `tools:` frontmatter carries built-in components only — the current read-only `gentle-ai-explore` ships `tools: [view_file, list_dir, grep_search, find_by_name]`.
+
+MCP access works through a different surface: every subagent receives the injected `call_mcp_tool` bridge, through which the plugin's MCP servers are reachable. The transpiled `gentle-ai-explore` body therefore routes CodeGraph through the bridge (`call_mcp_tool`, server `gentle-ai_codegraph`, tool `codegraph_explore`), and the transpiler's `mutateAgentRuntimeInstructions` maps the Pi-runtime instructions — the cwd-scoped `codegraph` tool with init/query/explore operations and the `read`/`grep`/`find` fallback names — to that bridge and to agy's `view_file`/`grep_search`/`find_by_name`. The mapping is pinned by `TestAntigravityCLI_ExploreAgentUsesMCPBridgeForCodeGraph` in the assets invariant tests, and the runtime permission is covered by the settings.json allow entry for `mcp(gentle-ai_codegraph/codegraph_explore)`.
 
 ---
 
