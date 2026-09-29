@@ -256,6 +256,9 @@ func resolveRoutingDelivery(targetDir string, agent model.AgentID, options Routi
 
 	default:
 		promptPath := adapter.SystemPromptFile(targetDir)
+		if adapter.Agent() == model.AgentAntigravityCLI {
+			promptPath = filepath.Join(adapter.SystemPromptDir(targetDir), "gentle-ai-routing.md")
+		}
 		if strings.TrimSpace(promptPath) == "" {
 			return routingDelivery{}, fmt.Errorf("%w: adapter %q exposes no system prompt file", ErrInvalidTarget, agent)
 		}
@@ -277,6 +280,15 @@ func DeliversThroughOrchestratorPrompt(agent model.AgentID) bool {
 // guidanceMerge folds every managed guidance section into existing content.
 type guidanceMerge func(existing string) string
 
+// antigravityCLIRuleFrontmatter is the YAML frontmatter agy requires on every
+// plugin rule file other than AGENTS.md: without a valid trigger, agy drops
+// the file on every turn as an unspecified trigger. AGENTS.md itself must
+// stay plain markdown because agy always loads it unconditionally.
+const antigravityCLIRuleFrontmatter = `---
+trigger: always_on
+description: Gentle AI ODD workflow, delegation routing, test-first policy, and RDD review boundaries
+---`
+
 // injectPromptSection is the default delivery: managed marker sections inside
 // the adapter's own system prompt file.
 func injectPromptSection(delivery routingDelivery, merge guidanceMerge) (Result, error) {
@@ -288,6 +300,12 @@ func injectPromptSection(delivery routingDelivery, merge guidanceMerge) (Result,
 	}
 
 	updated := merge(existing)
+
+	// Antigravity CLI delivers routing through a dedicated plugin rule file,
+	// not AGENTS.md, so the file needs always_on frontmatter to load at all.
+	if delivery.adapter.Agent() == model.AgentAntigravityCLI {
+		updated = filemerge.PrependYAMLFrontmatter(updated, antigravityCLIRuleFrontmatter)
+	}
 
 	writeResult, err := filemerge.WriteFileAtomic(promptPath, []byte(updated), filemerge.ExistingFileMode(promptPath, 0o644))
 	if err != nil {

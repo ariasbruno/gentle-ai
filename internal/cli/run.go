@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents"
+	antigravitycliagent "github.com/gentleman-programming/gentle-ai/v4/internal/agents/antigravitycli"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/claude"
 	codexagent "github.com/gentleman-programming/gentle-ai/v4/internal/agents/codex"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/kimi"
@@ -900,8 +901,42 @@ func (r *installRuntime) stagePlan() pipeline.StagePlan {
 		}
 		apply = append(apply, piCodeGraphReconcileStep{id: stepID, homeDir: r.homeDir, workspaceDir: r.workspaceDir, selected: selected, state: r.state})
 	}
+	if containsAgent(r.resolved.Agents, model.AgentAntigravityCLI) {
+		apply = append(apply, antigravityCLIPluginImportStep{id: "install:antigravity-cli:plugin-import", homeDir: r.homeDir})
+	}
 
 	return pipeline.StagePlan{Prepare: prepare, Apply: apply}
+}
+
+// antigravityCLIPluginImportStep deploys bundle assets, native subagents, and hooks,
+// and ensures the plugin is imported in Antigravity CLI.
+type antigravityCLIPluginImportStep struct {
+	id      string
+	homeDir string
+}
+
+func (s antigravityCLIPluginImportStep) ID() string { return s.id }
+
+func (s antigravityCLIPluginImportStep) Run() error {
+	adapter, err := agents.NewAdapter(model.AgentAntigravityCLI)
+	if err != nil {
+		return err
+	}
+	agy, ok := adapter.(*antigravitycliagent.Adapter)
+	if !ok {
+		// refusal:by-design operator-knowledge: factory returned an unexpected concrete adapter type for Antigravity CLI
+		return fmt.Errorf("unexpected adapter type for %s", model.AgentAntigravityCLI)
+	}
+	if err := agy.DeployPluginTree(s.homeDir); err != nil {
+		return fmt.Errorf("deploy Antigravity CLI plugin tree: %w", err)
+	}
+	if err := ensureAntigravityOrchestratorRule(s.homeDir, agy); err != nil {
+		return fmt.Errorf("finalize Antigravity CLI orchestrator rule: %w", err)
+	}
+	if err := agy.EnsurePluginImported(context.Background(), s.homeDir); err != nil {
+		return fmt.Errorf("import Antigravity CLI plugin: %w", err)
+	}
+	return nil
 }
 
 type nativeReviewAgentStep struct {

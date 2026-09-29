@@ -159,8 +159,8 @@ func TestRemoteAuthorizationPrimaryCarriers(t *testing.T) {
 			}
 		})
 	}
-	if covered != 15 {
-		t.Fatalf("covered %d non-Pi clients, want 15", covered)
+	if covered != 16 {
+		t.Fatalf("covered %d non-Pi clients, want 16", covered)
 	}
 }
 
@@ -889,7 +889,7 @@ func markdownSectionAgents(t *testing.T) []model.AgentID {
 
 	var selected []model.AgentID
 	for _, agent := range catalog.AllAgents() {
-		if agent.ID == model.AgentOpenCode || agent.ID == model.AgentKilocode {
+		if agent.ID == model.AgentOpenCode || agent.ID == model.AgentKilocode || agent.ID == model.AgentAntigravityCLI {
 			continue
 		}
 		if agent.ID == model.AgentConductor {
@@ -983,4 +983,106 @@ func readFile(t *testing.T, path string) string {
 		t.Fatalf("ReadFile(%q) error = %v", path, err)
 	}
 	return string(data)
+}
+
+const antigravityCLIRoutingFrontmatter = "---\ntrigger: always_on\ndescription: Gentle AI ODD workflow, delegation routing, test-first policy, and RDD review boundaries\n---"
+
+func TestInjectRoutingAntigravityCLIRuleFileCarriesAlwaysOnFrontmatter(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	result, err := InjectRoutingWithOptions(targetDir, model.AgentAntigravityCLI, RoutingOptions{})
+	if err != nil {
+		t.Fatalf("InjectRouting(antigravity-cli) error = %v", err)
+	}
+	wantPath := filepath.Join(targetDir, ".gemini", "config", "plugins", "gentle-ai", "rules", "gentle-ai-routing.md")
+	if len(result.Files) != 1 || result.Files[0] != wantPath {
+		t.Fatalf("InjectRouting(antigravity-cli) wrote %v, want %q", result.Files, wantPath)
+	}
+	data, err := os.ReadFile(wantPath)
+	if err != nil {
+		t.Fatalf("read %q: %v", wantPath, err)
+	}
+	content := string(data)
+	if !strings.HasPrefix(content, antigravityCLIRoutingFrontmatter+"\n") {
+		t.Fatalf("antigravity-cli routing file must start with always_on frontmatter, got prefix:\n%.200q", content)
+	}
+	if !strings.Contains(content, "<!-- gentle-ai:agent-routing -->") {
+		t.Fatalf("antigravity-cli routing file missing agent-routing marker")
+	}
+	if strings.Count(content, "trigger: always_on") != 1 {
+		t.Fatalf("antigravity-cli routing file has duplicated frontmatter blocks")
+	}
+	if len(data) >= 24000 {
+		t.Fatalf("antigravity-cli routing file exceeds rule cap of 24000 bytes: %d bytes", len(data))
+	}
+
+	// A second sync must be idempotent: exactly one frontmatter block survives.
+	if _, err := InjectRoutingWithOptions(targetDir, model.AgentAntigravityCLI, RoutingOptions{}); err != nil {
+		t.Fatalf("second InjectRouting(antigravity-cli) error = %v", err)
+	}
+	data, err = os.ReadFile(wantPath)
+	if err != nil {
+		t.Fatalf("re-read %q: %v", wantPath, err)
+	}
+	content = string(data)
+	if !strings.HasPrefix(content, antigravityCLIRoutingFrontmatter+"\n") || strings.Count(content, "trigger: always_on") != 1 {
+		t.Fatalf("second inject duplicated or dropped frontmatter:\n%.200q", content)
+	}
+}
+
+func TestInjectRoutingNeverFrontmattersNonAntigravityPromptCarriers(t *testing.T) {
+	t.Parallel()
+
+	for _, agent := range markdownSectionAgents(t) {
+		if agent == model.AgentAntigravityCLI {
+			continue
+		}
+		t.Run(string(agent), func(t *testing.T) {
+			t.Parallel()
+
+			targetDir := t.TempDir()
+			adapter, err := agents.NewAdapter(agent)
+			if err != nil {
+				t.Fatalf("NewAdapter error = %v", err)
+			}
+			// Some adapters (e.g. pi) resolve their carrier outside the supplied
+			// target dir to the real live installation; never touch that from a test.
+			resolved := adapter.SystemPromptFile(targetDir)
+			if !strings.HasPrefix(resolved, targetDir) {
+				t.Skipf("carrier %q resolves outside the test target dir", resolved)
+			}
+			if _, err := InjectRoutingWithOptions(targetDir, agent, RoutingOptions{}); err != nil {
+				t.Fatalf("InjectRouting(%q) error = %v", agent, err)
+			}
+			data, err := os.ReadFile(adapter.SystemPromptFile(targetDir))
+			if err != nil {
+				t.Fatalf("read %q: %v", adapter.SystemPromptFile(targetDir), err)
+			}
+			if strings.HasPrefix(string(data), "---\n") {
+				t.Fatalf("%q prompt carrier must never gain YAML frontmatter", agent)
+			}
+		})
+	}
+}
+
+func TestInjectRoutingAntigravityCLIUsesDedicatedRuleFile(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	result, err := InjectRoutingWithOptions(targetDir, model.AgentAntigravityCLI, RoutingOptions{})
+	if err != nil {
+		t.Fatalf("InjectRouting(antigravity-cli) error = %v", err)
+	}
+	wantPath := filepath.Join(targetDir, ".gemini", "config", "plugins", "gentle-ai", "rules", "gentle-ai-routing.md")
+	if len(result.Files) != 1 || result.Files[0] != wantPath {
+		t.Fatalf("InjectRouting(antigravity-cli) wrote %v, want %q", result.Files, wantPath)
+	}
+	data, err := os.ReadFile(wantPath)
+	if err != nil {
+		t.Fatalf("read %q: %v", wantPath, err)
+	}
+	if len(data) >= 24000 {
+		t.Fatalf("antigravity-cli routing file exceeds rule cap of 24000 bytes: %d bytes", len(data))
+	}
 }
