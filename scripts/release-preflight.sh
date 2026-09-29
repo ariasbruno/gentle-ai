@@ -15,7 +15,7 @@ require_env GITHUB_REPOSITORY
 require_env GITHUB_REF_TYPE
 require_env GITHUB_REF_NAME
 require_env GITHUB_SHA
-[[ "$GITHUB_REPOSITORY" == "Gentleman-Programming/gentle-ai" ]] || die "unexpected repository $GITHUB_REPOSITORY"
+[[ "$GITHUB_REPOSITORY" == "Gentleman-Programming/gentle-ai" || "$GITHUB_REPOSITORY" == "ariasbruno/gentle-ai" ]] || die "unexpected repository $GITHUB_REPOSITORY"
 [[ "$GITHUB_REF_TYPE" == "tag" ]] || die "release must run from a tag push"
 
 tag=$GITHUB_REF_NAME
@@ -44,9 +44,24 @@ event_sha=$(git rev-parse "$GITHUB_SHA^{commit}")
 tag_sha=$(git rev-parse "refs/tags/$tag^{commit}")
 [[ "$head_sha" == "$event_sha" && "$head_sha" == "$tag_sha" ]] || die "checkout, event, and tag do not resolve to one commit"
 
-git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
-main_sha=$(git rev-parse 'refs/remotes/origin/main^{commit}')
-[[ "$head_sha" == "$main_sha" ]] || die "tagged commit is not exact current origin/main"
+release_branch=${RELEASE_BRANCH:-main}
+if [[ "$GITHUB_REPOSITORY" == "ariasbruno/gentle-ai" && -z "${RELEASE_BRANCH:-}" ]]; then
+  if git fetch --no-tags origin '+refs/heads/antigravity-cli-integration:refs/remotes/origin/antigravity-cli-integration' 2>/dev/null; then
+    candidate_sha=$(git rev-parse 'refs/remotes/origin/antigravity-cli-integration^{commit}' 2>/dev/null || true)
+    if [[ "$head_sha" == "$candidate_sha" ]]; then
+      release_branch=antigravity-cli-integration
+    fi
+  fi
+fi
+
+if [[ "$release_branch" == "main" ]]; then
+  git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+  branch_sha=$(git rev-parse 'refs/remotes/origin/main^{commit}')
+else
+  git fetch --no-tags origin "+refs/heads/${release_branch}:refs/remotes/origin/${release_branch}"
+  branch_sha=$(git rev-parse "refs/remotes/origin/${release_branch}^{commit}")
+fi
+[[ "$head_sha" == "$branch_sha" ]] || die "tagged commit is not exact current origin/${release_branch}"
 
 remote_tag_sha=$(git ls-remote origin "refs/tags/$tag^{}" | awk 'NR == 1 { print $1 }')
 [[ -n "$remote_tag_sha" && "$remote_tag_sha" == "$head_sha" ]] || die "remote annotated tag does not peel to the checkout"

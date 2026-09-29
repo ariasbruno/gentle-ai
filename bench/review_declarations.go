@@ -101,6 +101,7 @@ var coreJourneyReviewModes = map[string]ReviewPrecondition{
 	"j125-claude-code-stop-hook-reminds-once-per-candidate":                     reviewOptedIn,
 	"j126-selected-untracked-terminal-status-resumes-without-flags":             reviewOptedIn,
 	"j2995-selector-scoped-historical-disposition-quarantine":                   reviewOptedIn,
+	"j4500-antigravity-cli-lifecycle-parity":                                    reviewUntouched,
 }
 
 func declareCoreJourneyReviewModes(journeys []Journey) []Journey {
