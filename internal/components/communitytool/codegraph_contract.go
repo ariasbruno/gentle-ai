@@ -33,22 +33,23 @@ type codeGraphCompatibility struct {
 // codeGraphCompatibilityTable is deliberately exhaustive. Tests compare its
 // keys with the registry so a newly added agent cannot silently enter setup.
 var codeGraphCompatibilityTable = map[model.AgentID]codeGraphCompatibility{
-	model.AgentClaudeCode:    nativeCompatibility(model.AgentClaudeCode, "claude"),
-	model.AgentOpenCode:      reconciledCompatibility(model.AgentOpenCode, "opencode"),
-	model.AgentKilocode:      excludedCompatibility(model.AgentKilocode),
-	model.AgentGeminiCLI:     nativeCompatibility(model.AgentGeminiCLI, "gemini"),
-	model.AgentCursor:        nativeCompatibility(model.AgentCursor, "cursor"),
-	model.AgentVSCodeCopilot: excludedCompatibility(model.AgentVSCodeCopilot),
-	model.AgentCodex:         nativeCompatibility(model.AgentCodex, "codex"),
-	model.AgentAntigravity:   nativeCompatibility(model.AgentAntigravity, "antigravity"),
-	model.AgentWindsurf:      excludedCompatibility(model.AgentWindsurf),
-	model.AgentKimi:          excludedCompatibility(model.AgentKimi),
-	model.AgentQwenCode:      excludedCompatibility(model.AgentQwenCode),
-	model.AgentKiroIDE:       nativeCompatibility(model.AgentKiroIDE, "kiro"),
-	model.AgentOpenClaw:      excludedCompatibility(model.AgentOpenClaw),
-	model.AgentPi:            reconciledCompatibility(model.AgentPi, ""),
-	model.AgentTrae:          excludedCompatibility(model.AgentTrae),
-	model.AgentHermes:        nativeCompatibility(model.AgentHermes, "hermes"),
+	model.AgentClaudeCode:     nativeCompatibility(model.AgentClaudeCode, "claude"),
+	model.AgentOpenCode:       reconciledCompatibility(model.AgentOpenCode, "opencode"),
+	model.AgentKilocode:       excludedCompatibility(model.AgentKilocode),
+	model.AgentGeminiCLI:      nativeCompatibility(model.AgentGeminiCLI, "gemini"),
+	model.AgentCursor:         nativeCompatibility(model.AgentCursor, "cursor"),
+	model.AgentVSCodeCopilot:  excludedCompatibility(model.AgentVSCodeCopilot),
+	model.AgentCodex:          nativeCompatibility(model.AgentCodex, "codex"),
+	model.AgentAntigravity:    nativeCompatibility(model.AgentAntigravity, "antigravity"),
+	model.AgentAntigravityCLI: reconciledCompatibility(model.AgentAntigravityCLI, ""),
+	model.AgentWindsurf:       excludedCompatibility(model.AgentWindsurf),
+	model.AgentKimi:           excludedCompatibility(model.AgentKimi),
+	model.AgentQwenCode:       excludedCompatibility(model.AgentQwenCode),
+	model.AgentKiroIDE:        nativeCompatibility(model.AgentKiroIDE, "kiro"),
+	model.AgentOpenClaw:       excludedCompatibility(model.AgentOpenClaw),
+	model.AgentPi:             reconciledCompatibility(model.AgentPi, ""),
+	model.AgentTrae:           excludedCompatibility(model.AgentTrae),
+	model.AgentHermes:         nativeCompatibility(model.AgentHermes, "hermes"),
 	// Conductor is detection/catalog-only and inherits Claude Code
 	// configuration for its workspaces, so it owns no direct CodeGraph wiring;
 	// it stays in the table so a future capability claim cannot silently
@@ -99,6 +100,10 @@ func codeGraphToolWiringPaths(homeDir string, adapter agents.Adapter) []string {
 			filepath.Join(homeDir, ".gemini", "config", "mcp_config.json"),
 			filepath.Join(homeDir, ".gemini", "antigravity", "mcp_config.json"),
 		}
+	case model.AgentAntigravityCLI:
+		// agy reads MCP servers from the Gentle AI plugin bundle, not a global
+		// config: the plugin's own mcp_config.json is the only wiring surface.
+		return []string{adapter.MCPConfigPath(homeDir, "codegraph")}
 	case model.AgentKiroIDE:
 		return []string{filepath.Join(homeDir, ".kiro", "settings", "mcp.json")}
 	default:
@@ -121,6 +126,11 @@ func hasCodeGraphToolWiring(homeDir string, adapter agents.Adapter) (string, boo
 	}
 	if adapter.Agent() == model.AgentAntigravity {
 		path := antigravityCodeGraphMCPConfigPath(homeDir)
+		data, err := os.ReadFile(path)
+		return path, err == nil && hasCanonicalAntigravityCodeGraphServer(data)
+	}
+	if adapter.Agent() == model.AgentAntigravityCLI {
+		path := adapter.MCPConfigPath(homeDir, "codegraph")
 		data, err := os.ReadFile(path)
 		return path, err == nil && hasCanonicalAntigravityCodeGraphServer(data)
 	}

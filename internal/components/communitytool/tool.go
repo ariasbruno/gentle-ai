@@ -154,6 +154,9 @@ func InstallWithHome(id model.CommunityToolID, workspaceDir string, homeDir stri
 		if err != nil {
 			return rollback(err)
 		}
+		if _, err := ReconcileAntigravityCLICodeGraph(homeDir); err != nil {
+			return rollback(err)
+		}
 		guidanceResult, err := InjectCodeGraphGuidanceIfSelected(homeDir, []model.CommunityToolID{id})
 		if err != nil {
 			return rollback(err)
@@ -232,6 +235,9 @@ func InstallWithHome(id model.CommunityToolID, workspaceDir string, homeDir stri
 		}
 	}
 	if _, err := ReconcileOpenCodeCodeGraph(homeDir, runner); err != nil {
+		return rollback(err)
+	}
+	if _, err := ReconcileAntigravityCLICodeGraph(homeDir); err != nil {
 		return rollback(err)
 	}
 	if _, err := InjectCodeGraphGuidanceIfSelected(homeDir, []model.CommunityToolID{id}); err != nil {
