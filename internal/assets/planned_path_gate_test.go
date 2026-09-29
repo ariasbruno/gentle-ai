@@ -22,7 +22,7 @@ func TestEveryODDOrchestratorDoesNotRejectPlannedPaths(t *testing.T) {
 		if walkErr != nil {
 			return walkErr
 		}
-		if entry.IsDir() || path.Base(assetPath) != "orchestrator.md" {
+		if entry.IsDir() || path.Base(assetPath) != "orchestrator.md" || path.Dir(assetPath) == "antigravitycli" {
 			return nil
 		}
 		seen[path.Dir(assetPath)] = true

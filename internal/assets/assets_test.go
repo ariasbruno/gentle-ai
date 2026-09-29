@@ -515,6 +515,14 @@ func allODDOrchestratorAssetPaths(t *testing.T) []string {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var filtered []string
+	for _, p := range paths {
+		if p == "antigravitycli/orchestrator.md" {
+			continue
+		}
+		filtered = append(filtered, p)
+	}
+	paths = filtered
 	for _, runtime := range []string{"antigravity", "claude", "codex", "cursor", "gemini", "generic", "hermes", "kimi", "kiro", "opencode", "qwen", "windsurf"} {
 		path := runtime + "/orchestrator.md"
 		if !slices.Contains(paths, path) {

@@ -28,6 +28,7 @@ func TestImmutableReviewRuntimeMatrix(t *testing.T) {
 		{name: "Claude prompt carried fresh executor", runtime: string(model.AgentClaudeCode), eligible: true, transport: reviewImmutableTransportClaudePromptCarried, supported: true},
 		{name: "OpenCode provider relay", runtime: string(model.AgentOpenCode), eligible: true, transport: reviewImmutableTransportOpenCodeProviderInjected, supported: true},
 		{name: "Codex subprocess boundary", runtime: string(model.AgentCodex), eligible: true, transport: reviewImmutableTransportCodexAdvisoryScratchProcess, supported: true},
+		{name: "Antigravity CLI in-process", runtime: string(model.AgentAntigravityCLI), eligible: true, transport: reviewImmutableTransportAntigravityCLIInProcess, supported: true},
 		{name: "Kilo has no immutable transport", runtime: string(model.AgentKilocode), transport: reviewImmutableTransportUnsupported},
 		{name: "Pi host relay", runtime: string(model.AgentPi), eligible: true, transport: reviewImmutableTransportPiHostRelay, supported: true},
 		{name: "unknown", runtime: "unknown-runtime", transport: reviewImmutableTransportUnsupported},
@@ -56,7 +57,7 @@ func TestImmutableReviewRuntimeMatrix(t *testing.T) {
 func TestImmutableReviewRuntimeCapabilityIsClosedCatalogSet(t *testing.T) {
 	t.Setenv(reviewPiHostRelayContractEnvironment, reviewPiHostRelayContract)
 
-	const wantExposed = 4
+	const wantExposed = 5
 	exposed := 0
 	for _, agent := range catalog.AllAgents() {
 		t.Run(string(agent.ID), func(t *testing.T) {
@@ -64,7 +65,8 @@ func TestImmutableReviewRuntimeCapabilityIsClosedCatalogSet(t *testing.T) {
 			want := agent.ID == model.AgentClaudeCode ||
 				agent.ID == model.AgentOpenCode ||
 				agent.ID == model.AgentCodex ||
-				agent.ID == model.AgentPi
+				agent.ID == model.AgentPi ||
+				agent.ID == model.AgentAntigravityCLI
 			if capability.Eligible != want || capability.supportsImmutableReceiptReview() != want {
 				t.Fatalf("runtime capability = %#v, supported = %t, want exposed = %t", capability, capability.supportsImmutableReceiptReview(), want)
 			}
@@ -184,6 +186,7 @@ func TestSupportedImmutableReviewTransportReachesRepositoryValidation(t *testing
 		{name: "OpenCode", runtime: string(model.AgentOpenCode)},
 		{name: "Codex", runtime: string(model.AgentCodex)},
 		{name: "Pi", runtime: string(model.AgentPi)},
+		{name: "AntigravityCLI", runtime: string(model.AgentAntigravityCLI)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var output bytes.Buffer
@@ -214,7 +217,7 @@ func TestImmutableReviewTransportRefusalNamesWorkingExits(t *testing.T) {
 			if !strings.Contains(err.Error(), exit) {
 				t.Fatalf("refusal does not name the clone-scoped kill switch: %v", err)
 			}
-			if !strings.Contains(err.Error(), string(model.AgentClaudeCode)) || !strings.Contains(err.Error(), string(model.AgentOpenCode)) || !strings.Contains(err.Error(), string(model.AgentCodex)) || !strings.Contains(err.Error(), string(model.AgentPi)) {
+			if !strings.Contains(err.Error(), string(model.AgentClaudeCode)) || !strings.Contains(err.Error(), string(model.AgentOpenCode)) || !strings.Contains(err.Error(), string(model.AgentCodex)) || !strings.Contains(err.Error(), string(model.AgentPi)) || !strings.Contains(err.Error(), string(model.AgentAntigravityCLI)) {
 				t.Fatalf("refusal does not name every supported runtime: %v", err)
 			}
 			if strings.Contains(err.Error(), "supported immutable review runtimes: "+string(runtime)) {

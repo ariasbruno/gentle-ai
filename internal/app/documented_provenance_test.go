@@ -67,6 +67,9 @@ func TestRenderedSurfaceNamesOnlyItsOwnRuntime(t *testing.T) {
 	slugToAgent := map[string]model.AgentID{}
 	for _, agent := range catalog.AllAgents() {
 		slug := strings.SplitN(string(agent.ID), "-", 2)[0]
+		if agent.ID == model.AgentAntigravityCLI {
+			slug = "antigravitycli"
+		}
 		if other, duplicate := slugToAgent[slug]; duplicate {
 			t.Fatalf("agents %s and %s project the same filename slug %q; the derivation is ambiguous and must be repaired before this rule can decide ownership", other, agent.ID, slug)
 		}

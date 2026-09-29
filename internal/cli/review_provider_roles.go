@@ -525,7 +525,7 @@ func reviewProviderCaptureRefuter(ctx context.Context, repo string, store review
 	if err != nil {
 		return facadeRefuterResult{}, false, err
 	}
-	adapter, err := reviewProviderAdapter(reviewProviderRoleRefuter, agent)
+	adapter, err := reviewProviderAdapterWithRouting(reviewProviderRoleRefuter, agent, reviewerprovider.ReviewRoutingKeyRefuter)
 	if err != nil {
 		return facadeRefuterResult{}, false, err
 	}

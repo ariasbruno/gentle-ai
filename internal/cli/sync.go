@@ -659,6 +659,9 @@ func (r *syncRuntime) stagePlan() pipeline.StagePlan {
 		})
 		apply = append(apply, piCodeGraphSyncStep{id: "sync:community-tool:pi-codegraph", homeDir: r.homeDir, workspaceDir: r.workspaceDir, changedFiles: &r.changedFiles})
 	}
+	if containsAgent(r.agentIDs, model.AgentAntigravityCLI) {
+		apply = append(apply, antigravityCLIPluginImportStep{id: "sync:antigravity-cli:plugin-import", homeDir: r.homeDir})
+	}
 
 	return pipeline.StagePlan{Prepare: prepare, Apply: apply}
 }
@@ -1308,6 +1311,15 @@ func (s *codeGraphGuidanceSyncStep) Run() (runErr error) {
 		reconciled, err := communitytool.ReconcileOpenCodeCodeGraph(s.homeDir, s.runner)
 		if err != nil {
 			return fmt.Errorf("sync OpenCode CodeGraph wiring: %w", err)
+		}
+		if s.changedFiles != nil && reconciled.Changed {
+			*s.changedFiles = append(*s.changedFiles, reconciled.Files...)
+		}
+	}
+	if status.CLI == communitytool.AvailabilityAvailable && communitytool.NeedsAntigravityCLICodeGraphReconcile(s.homeDir) {
+		reconciled, err := communitytool.ReconcileAntigravityCLICodeGraph(s.homeDir)
+		if err != nil {
+			return fmt.Errorf("sync Antigravity CLI CodeGraph wiring: %w", err)
 		}
 		if s.changedFiles != nil && reconciled.Changed {
 			*s.changedFiles = append(*s.changedFiles, reconciled.Files...)

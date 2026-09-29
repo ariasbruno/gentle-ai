@@ -209,7 +209,7 @@ func RunReviewCaptureRefuter(args []string, stdout io.Writer) error {
 		return nil
 	}
 	if reviewProviderCaptureRuntime(binding.runtime) {
-		adapter, adapterErr := reviewProviderAdapter(reviewProviderRoleRefuter, binding.runtime)
+		adapter, adapterErr := reviewProviderAdapterWithRouting(reviewProviderRoleRefuter, binding.runtime, reviewerprovider.ReviewRoutingKeyRefuter)
 		if adapterErr != nil {
 			return reviewPreflightError(adapterErr)
 		}
@@ -289,7 +289,7 @@ func RunReviewCaptureValidation(args []string, stdout io.Writer) error {
 		return nil
 	}
 	if reviewProviderCaptureRuntime(binding.runtime) {
-		adapter, adapterErr := reviewProviderAdapter(reviewProviderRoleTargetedValidator, binding.runtime)
+		adapter, adapterErr := reviewProviderAdapterWithRouting(reviewProviderRoleTargetedValidator, binding.runtime, reviewerprovider.ReviewRoutingKeyValidator)
 		if adapterErr != nil {
 			return reviewPreflightError(adapterErr)
 		}
