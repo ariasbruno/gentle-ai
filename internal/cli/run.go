@@ -3527,6 +3527,11 @@ func componentPathsWithWorkspaceScoped(homeDir, workspaceDir string, scope Insta
 				paths = append(paths, filepath.Join(adapter.GlobalConfigDir(homeDir), "hooks.json"))
 			}
 		case model.ComponentSkills:
+			// The skills component does not deliver for Antigravity CLI (the
+			// plugin bundle owns its skills), so no paths are declared for it.
+			if !skills.DeliversFor(adapter.Agent()) {
+				break
+			}
 			for _, skillID := range selectedSkillIDs(selection) {
 				if skills.IsSDDSkill(skillID) {
 					continue
