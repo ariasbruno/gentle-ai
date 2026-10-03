@@ -47,10 +47,10 @@ the render into N section-coherent always_on rule files, with a byte-exact union
 - [x] T4: bench j4500 journey update (first-sync parts existence+frontmatter+marker+per-part cap;
       second-sync byte-idempotency for ALL parts; uninstall removes ALL parts) + `go test ./bench`
       declarations green.
-- [ ] T5: driven j4500 re-verification with the exact CI command (gentle-ai-bench skill rules).
-- [ ] T6: full env-scrubbed suite vs the NEW contract: the 2 cap-guard failures must turn green;
+- [x] T5: driven j4500 re-verification with the exact CI command (gentle-ai-bench skill rules).
+- [x] T6: full env-scrubbed suite vs the NEW contract: the 2 cap-guard failures must turn green;
       expected known failures reduce to exactly 1 (environmental opencode uninstall mode). Tripwire green.
-- [ ] T7: work-unit commits + close (feature doc evidence; push remains the user's decision).
+- [x] T7: work-unit commits + close (feature doc evidence; push remains the user's decision).
 
 ## Evidence
 - 2026-10-02/03: start. Standing context: rebase complete (antigravity-cli-v4 16 ahead / 0 behind);
@@ -76,3 +76,17 @@ the render into N section-coherent always_on rule files, with a byte-exact union
   end-to-end proof.
 - Parent verification: agentguidance green; uninstall green except the KNOWN environmental
   opencode mode test; bench declarations green; tripwire 4/4 green; gofmt clean on all touched files.
+- T5 DONE: driven j4500-antigravity-cli-lifecycle-parity COMPLETED with the exact CI commands
+  (bench harness build + `go build -trimpath` binary + `--only j4500... --out json`): real
+  install → sync idempotency → uninstall all pass with the split parts.
+- T6 DONE: full-suite contract verified in two steps. (1) Verifier full run on 28f900cd: exactly 2
+  failures — the known environmental opencode mode test PLUS one STALE PIN discovered:
+  internal/cli TestInstallAndSyncDeliverOrchestratorOnceForEveryRuntime/antigravity-cli asserted
+  the OLD merged delivery (canonical orchestrator render inside the routing file). (2) The pin was
+  updated to the ratified contract in ab23402b (agy leaves the merged loop; the IDE keeps it; new
+  dedicated routing-only test with ODD protocol + RDD kill-switch + install/sync idempotency),
+  after which the FULL internal/cli package passed (398s, all green: tripwire + both ratchets).
+  The previously-red cap-guard tests are GREEN — the standing 24KB design signal is CLOSED.
+  New standing baseline: exactly 1 known failure (environmental uninstall opencode mode).
+- T7 DONE: commits 28f900cd (split + uninstall + j4500) and ab23402b (routing-only contract pin).
+  NOT pushed — user decision.
