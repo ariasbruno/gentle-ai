@@ -46,10 +46,10 @@ list. Any NEW red after the rebase = integration loss caught by the tripwire (su
 - [x] T5: Re-derive capabilitymanifest digests under evidence-budget semantics; fix digest tests.
 - [x] T6: Post-rebase verification — gofmt/vet/build + env-scrubbed full suite vs T2 baseline
       + 3 ratchets (refusal-resolution, deadcode with GOTOOLCHAIN=go.mod, guard-population).
-- [ ] T7: Re-measure the 24KB cap question (rendered rule file sizes; recorded 38168 B did not
+- [x] T7: Re-measure the 24KB cap question (rendered rule file sizes; recorded 38168 B did not
       reproduce; recomputation gave 22137→22550 B). Report options; the design decision stays open
       for the user.
-- [ ] T8: Close — report verified outcome, failed/skipped checks, next step. Push/release
+- [x] T8: Close — report verified outcome, failed/skipped checks, next step. Push/release
       explicitly deferred to the user.
 
 ## Evidence
@@ -98,3 +98,24 @@ list. Any NEW red after the rebase = integration loss caught by the tripwire (su
   internal/cli ALL GREEN (491s: tripwire 4/4, refusal-resolution ratchet, guard-population ratchet).
   Deadcode ratchet GREEN (GOTOOLCHAIN=go1.25.10 needed; 3 baselined entries now reachable —
   optional future `--update` tighten). gofmt clean, full build ok. Comparison contract HELD: no loss.
+- T7 DONE (fresh measurement, decision deliberately left to the user):
+  - Rendered file: `.gemini/config/plugins/gentle-ai/rules/gentle-ai-routing.md`, frontmatter
+    `trigger: always_on`, cap check at inject_test.go:1017,1086 (`len(data) >= 24000`).
+  - Routing file NOW: **66,834 B** (65,613 B pre-rebase; upstream's +2 commits grew it ~1.2 KB).
+    Overflow: **2.78x the 24,000 B cap**. ALL recorded figures (38168 / 22137 / 22550 B) are stale
+    — those measured the ORCHESTRATOR rule, and even that file only has ~1.4 KB headroom left.
+  - Options (from the recorded design question, updated with fresh math):
+    (a) split into multiple always-on rule files — at 66.8 KB this now needs 3 files, not 2;
+    (b) slim agy-specific routing at the transpiler — canon divergence, needs explicit approval;
+    (c) accept runtime truncation — agy silently drops the last ~42 KB of routing guidance.
+    Aggregate risk also stands: routing 66.8 KB + orchestrator ~22.5 KB + AGENTS.md ~17 KB
+    vs agy's 20K-token aggregate rules budget.
+  - NO code changed for this; the 2 red cap-guard tests remain the standing signal of the open
+    question.
+- T8 DONE: native review entry checked (RDD on global). The facade-derived candidate = the latest
+  work-unit commit, which is docs-only (`odd/tasks/agy-v4-upstream-sync.md` evidence) — trivial
+  passive documentation, skipped per the entry rule. The substantive new unit (tripwire test,
+  64f3351e) was verified mechanically (RED-proof + full-suite baseline contract) and remains
+  available for an explicit native review at the user's discretion. Push: NOT done — user decision.
+  Final state: `antigravity-cli-v4` 15 ahead / 0 behind `upstream/main` (5140c5f5); backup branch
+  `backup/antigravity-cli-v4-pre-v4-sync-20261002` preserves the pre-sync state (141b9485-era).
