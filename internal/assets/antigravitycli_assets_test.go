@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -242,20 +243,24 @@ func TestAntigravityCLI_AssetsHaveNoUnsupportedSlashCommands(t *testing.T) {
 }
 
 // TestAntigravityCLI_AssetsUseInstalledRuntimePaths keeps package source paths
-// out of shipped assets. `assets/...` is the repository layout; the installed
-// plugin lives under ~/.gemini/config/plugins/gentle-ai, so a reference to the
-// source tree is runtime-broken text.
+// out of shipped assets. `assets/<layout-dir>` is the repository layout; the
+// installed plugin lives under ~/.gemini/config/plugins/gentle-ai, so a
+// reference into the source tree is runtime-broken text. A bare `assets/`
+// mention is allowed: skills legitimately use it as a generic directory-name
+// convention ("put templates in `assets/`", "skills/{skill-name}/assets/")
+// that has nothing to do with the repository layout.
 func TestAntigravityCLI_AssetsUseInstalledRuntimePaths(t *testing.T) {
 	paths, err := antigravityCLIAssetMarkdownPaths()
 	if err != nil {
 		t.Fatal(err)
 	}
+	assetSourceRefPattern := regexp.MustCompile(`assets/(agents|skills|support|chains)/|assets/orchestrator`)
 	for _, path := range paths {
 		content, err := assets.Read(path)
 		if err != nil {
 			t.Fatalf("read %s: %v", path, err)
 		}
-		if strings.Contains(content, "assets/") {
+		if assetSourceRefPattern.MatchString(content) {
 			t.Errorf("%s references package source paths instead of installed paths", path)
 		}
 	}

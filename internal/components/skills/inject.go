@@ -25,12 +25,22 @@ type InjectionResult struct {
 	Skipped []model.SkillID
 }
 
+// DeliversFor reports whether the skills component delivers catalog skills
+// for the agent. Antigravity CLI is the single exception: its skills arrive
+// with the plugin bundle, transpiled from gentle-shell — single source of
+// truth; see odd/tasks/agy-bundle-provenance-skills.md. Callers that
+// enumerate expected skill paths (install/sync backup targets, verification)
+// must consult this so the expectation side matches the write side.
+func DeliversFor(agent model.AgentID) bool {
+	return agent != model.AgentAntigravityCLI
+}
+
 // InjectWithCapability writes retained skill files for the given capability.
 func InjectWithCapability(homeDir string, adapter agents.Adapter, skillIDs []model.SkillID, capability string) (InjectionResult, error) {
 	// Antigravity CLI (AgentAntigravityCLI) is skipped entirely: its skills
 	// arrive with the plugin bundle, transpiled from gentle-shell — single
 	// source of truth; see odd/tasks/agy-bundle-provenance-skills.md.
-	if adapter.Agent() == model.AgentAntigravityCLI {
+	if !DeliversFor(adapter.Agent()) {
 		return InjectionResult{Skipped: skillIDs}, nil
 	}
 	if !adapter.SupportsSkills() {

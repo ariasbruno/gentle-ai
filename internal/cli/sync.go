@@ -874,6 +874,11 @@ func syncAdapterSkillBackupTargetsScoped(homeDir, workspaceDir string, scope Ins
 		if !adapter.SupportsSkills() {
 			continue
 		}
+		// The skills component does not deliver for Antigravity CLI (bundle
+		// owns its skills), so it declares no skill backup/verify targets either.
+		if !skills.DeliversFor(adapter.Agent()) {
+			continue
+		}
 		if slices.Contains(selection.Components, model.ComponentSkills) {
 			skillDir := adapter.SkillsDir(componentInjectionDirScoped(homeDir, workspaceDir, scope, adapter))
 			if skillDir == "" {
