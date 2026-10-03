@@ -43,14 +43,34 @@ Two ratified deliverables of the agy-vs-gentle-shell 1:1 adaptation:
 ## Tasks
 - [x] T0: local hygiene — 11 legacy sdd-* skills moved out of ~/.agents/skills to
       ~/.agents/skills/.trash-sdd-legacy-20261003 (rm blocked by safety policy; mv is reversible).
-- [ ] T1 (Gap 5, worker A): provenance emission + --check gate + CI job + tests; regen to land
+- [x] T1 (Gap 5, worker A): provenance emission + --check gate + CI job + tests; regen to land
       PROVENANCE.json with a clean (expected no-op besides provenance) bundle diff.
-- [ ] T2 (Gap 2, worker B): skills consumption in the transpiler + regen (new bundle skills/) +
+- [x] T2 (Gap 2, worker B): skills consumption in the transpiler + regen (new bundle skills/) +
       DeployPluginTree prune + skills component agy skip + tests + journey check.
-- [ ] T3: verification — focused packages + driven j4500 (exact CI commands) + full suite vs the
+- [x] T3: verification — focused packages + driven j4500 (exact CI commands) + full suite vs the
       standing contract (exactly 1 known environmental failure).
-- [ ] T4: work-unit commits (one per gap) + close. Push remains the user's decision.
+- [x] T4: work-unit commits (one per gap) + close. Push remains the user's decision.
 
 ## Evidence
 - 2026-10-03: start. Recon verified the transpiler surface, CopyFS deployment, and catalog-vs-bundle
   test boundaries. Item 4 (user request) done: 11 sdd-* skills moved to trash.
+- T1 DONE (4630db30): PROVENANCE.json {source_repo, source_commit=7a27c1c0…} + --check gate
+  (temp re-transpile at pin, byte-diff, per-file drift report) + CI job antigravitycli-drift-check
+  (blocking gate + advisory freshness warning). Regen landed the gentle-shell canon updates that
+  arrived since the last transpile (evidence-budget rule, ~150k context backstop, delivery-strategy
+  menu, explorer/verify token limits) — parent-reviewed hunk by hunk. 14 transpiler tests green.
+- T2 DONE (8d01d104 + 9b4515cd + bf7bd50b): transpiler consumes ALL gentle-shell/skills (13 entries
+  incl. _shared + the gentle-ai harness skill, references preserved) through the standard pipeline;
+  DeployPluginTree deploys + prunes plugin skills/ to the bundle set; skills component skips agy
+  (DeliversFor) with the expectation side mirrored in adapterSkillBackupTargets,
+  syncAdapterSkillBackupTargetsScoped, and componentPaths/ComponentSkills. NOTE: gentle-ai-worker
+  failed 3x mid-task (completed inline per the routing ladder fallback, reported); the dying
+  worker had hallucinated test expectations (_shared/SKILL.md, skill-style-guide.md,
+  review-execution-contract.md) — corrected against the real canon. The driven j4500 caught the
+  INCOMPLETE skip end-to-end (7 missing files at post-sync verify) — the exact class of defect
+  only driven execution proves.
+- T3 DONE: driven j4500 COMPLETED (exact CI commands) after the full expectation-side fix; full
+  suite: exactly 1 known environmental failure (opencode uninstall mode), 72 packages ok,
+  0 build failures. TestAntigravityCLI_AssetsUseInstalledRuntimePaths narrowed to repository-layout
+  references (bare assets/ is a legit skill-structure convention).
+- T4 DONE: commits 4630db30, 8d01d104, 9b4515cd, bf7bd50b. NOT pushed — user decision.
