@@ -41,10 +41,10 @@ list. Any NEW red after the rebase = integration loss caught by the tripwire (su
 - [x] T2: Pre-rebase baseline — env-scrubbed full `go test ./...` (verifier), record the exact
       known-failure list to compare after the rebase.
 - [x] T3: Backup branch `backup/antigravity-cli-v4-pre-v4-sync-<date>` + fresh `git fetch upstream`.
-- [ ] T4: Rebase `antigravity-cli-v4` onto `upstream/main`; resolve the 2 textual conflicts;
+- [x] T4: Rebase `antigravity-cli-v4` onto `upstream/main`; resolve the 2 textual conflicts;
       verify the 4 semantic minefields against both sides (no silent drop, no semantic smush).
-- [ ] T5: Re-derive capabilitymanifest digests under evidence-budget semantics; fix digest tests.
-- [ ] T6: Post-rebase verification — gofmt/vet/build + env-scrubbed full suite vs T2 baseline
+- [x] T5: Re-derive capabilitymanifest digests under evidence-budget semantics; fix digest tests.
+- [x] T6: Post-rebase verification — gofmt/vet/build + env-scrubbed full suite vs T2 baseline
       + 3 ratchets (refusal-resolution, deadcode with GOTOOLCHAIN=go.mod, guard-population).
 - [ ] T7: Re-measure the 24KB cap question (rendered rule file sizes; recorded 38168 B did not
       reproduce; recomputation gave 22137→22550 B). Report options; the design decision stays open
@@ -74,3 +74,27 @@ list. Any NEW red after the rebase = integration loss caught by the tripwire (su
   NOTE: measured routing size is now 65613 B, NOT the recorded 38168/22137/22550 figures — T7 must
   re-measure with this as the fresh anchor. ~50 packages ok, 0 build failures.
   Post-rebase comparison contract: same 3 failures and nothing else; anything new = loss caught.
+- T4 DONE: rebase onto `5140c5f5` completed, 15/15 commits replayed (13 fork + tripwire + docs).
+  3 conflict stops resolved:
+  1. manifest_test.go @c209e123: upstream evidence-budget digests (17 agents incl. Pi) + agy row
+     re-derived; non-Pi count check 16→17 (message made consistent).
+  2. internal/tui/model.go @a93a2568: kept ScreenAntigravityReviewModelPicker (ours), dropped the 5
+     opencode-plugin screens upstream retired in fbfe89ec (#5200) — upstream surface, upstream intent.
+  3. README.md @df490d31: kept the fork's source-edition `### Installation` section; dropped upstream's
+     official-release Windows/PowerShell install block (does not apply to this fork edition).
+  4. manifest_test.go @2a1bfa02: trivial Fatalf-message leftover; map auto-resolved via rerere.
+  Minefields verified post-rebase: hooks ALIVE at run.go:905 + sync.go:663 (tripwire 4/4 green);
+  engram agy special case args=["mcp"] alive at inject.go:135 merged with upstream transfer lock;
+  tui agy picker present (7 refs) / opencode plugin screens 0. Full `go build ./...` ok; gofmt clean.
+  Rebase note: `git rebase --continue` needs GIT_EDITOR=true in this harness (interactive editor hangs).
+- T5 DONE: agy digest re-derived under evidence-budget semantics:
+  `AgentAntigravityCLI = sha256:7013f647fe77e95f2bfcfc9f77cdf47351b415702a01be58fdc17c15718d083a`
+  (old fork value 92499795... invalid under v4). All 17 upstream agents pass with upstream's own v4
+  digests; the fork registration shifts NO other agent digest; routing digest unchanged.
+  capabilitymanifest package fully green at both the intermediate and final replayed states.
+- T6 DONE (verifier, env-scrubbed): full `go test ./... -count=1` (~14m, ~73 packages) — SAME 3
+  baseline failures, ZERO new: the 2 agy cap-guard tests (routing file now 66,834 B > 24,000 cap;
+  pre-rebase 65,613 B — upstream content grew it ~1.2 KB) + 1 environmental uninstall opencode mode.
+  internal/cli ALL GREEN (491s: tripwire 4/4, refusal-resolution ratchet, guard-population ratchet).
+  Deadcode ratchet GREEN (GOTOOLCHAIN=go1.25.10 needed; 3 baselined entries now reachable —
+  optional future `--update` tighten). gofmt clean, full build ok. Comparison contract HELD: no loss.
