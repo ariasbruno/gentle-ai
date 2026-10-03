@@ -303,6 +303,11 @@ func TestInjectRequiredBundledSkillsForEverySkillsCapableDefaultAdapter(t *testi
 		if !adapter.SupportsSkills() {
 			continue
 		}
+		// Antigravity CLI skills are bundle-owned (transpiled from gentle-shell),
+		// not delivered by the skills component.
+		if agentID == model.AgentAntigravityCLI {
+			continue
+		}
 
 		t.Run(string(agentID), func(t *testing.T) {
 			home := t.TempDir()
@@ -510,5 +515,41 @@ func requiredBundledSkillIDs() []model.SkillID {
 		model.SkillRDDDefectWorkflow,
 		model.SkillSystemicIssueTriage,
 		model.SkillGentleAIBench,
+	}
+}
+
+func TestInjectSkipsAntigravityCLI(t *testing.T) {
+	home := t.TempDir()
+	adapter, err := agents.NewAdapter(model.AgentAntigravityCLI)
+	if err != nil {
+		t.Fatalf("NewAdapter() error = %v", err)
+	}
+
+	// Antigravity CLI skills are bundle-owned (transpiled from gentle-shell),
+	// not delivered by the skills component.
+	result, err := Inject(home, adapter, []model.SkillID{model.SkillCreator, model.SkillJudgmentDay})
+	if err != nil {
+		t.Fatalf("Inject() error = %v", err)
+	}
+	if result.Changed {
+		t.Fatalf("Inject() changed = true, want false for Antigravity CLI")
+	}
+	if len(result.Skipped) != 2 {
+		t.Fatalf("Inject() skipped = %v, want 2 skills", result.Skipped)
+	}
+	if result.Skipped[0] != model.SkillCreator || result.Skipped[1] != model.SkillJudgmentDay {
+		t.Fatalf("Inject() skipped = %v, want [creator, judgment-day]", result.Skipped)
+	}
+
+	// Also verify InjectWithCapability skips.
+	result2, err := InjectWithCapability(home, adapter, []model.SkillID{model.SkillCreator}, "capable")
+	if err != nil {
+		t.Fatalf("InjectWithCapability() error = %v", err)
+	}
+	if result2.Changed {
+		t.Fatalf("InjectWithCapability() changed = true, want false for Antigravity CLI")
+	}
+	if len(result2.Skipped) != 1 {
+		t.Fatalf("InjectWithCapability() skipped = %v, want 1 skill", result2.Skipped)
 	}
 }

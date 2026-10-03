@@ -5,9 +5,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -251,6 +253,11 @@ func transpileAll(piRoot, outputDir string) error {
 	// 6. Generate top-level orchestrator asset (orchestrator.md)
 	if err := transpileTopLevelOrchestrator(piRoot, outputDir); err != nil {
 		return fmt.Errorf("transpile top-level orchestrator: %w", err)
+	}
+
+	// 7. Transpile Skills (all gentle-shell skills + _shared + gentle-ai harness)
+	if err := transpileSkills(piRoot, filepath.Join(outputDir, "skills")); err != nil {
+		return fmt.Errorf("transpile skills: %w", err)
 	}
 
 	return nil
@@ -515,6 +522,76 @@ func ensureAntigravityCLIReviewContract(content string) (string, error) {
 		return strings.TrimRight(content, "\n") + "\n\n" + section, nil
 	}
 	return content[:anchorIndex] + section + content[anchorIndex:], nil
+}
+
+// transpileSkills consumes ALL of gentle-shell/skills (every skill dir + _shared fragments + gentle-ai harness)
+// and emits them to <output>/skills/<name>/... preserving each skill's file layout (SKILL.md plus any extra files).
+// Runs the SAME transformation pipeline already used for the other assets.
+func transpileSkills(piRoot, skillsDestDir string) error {
+	piSkillsDir := filepath.Join(piRoot, "skills")
+	if _, err := os.Stat(piSkillsDir); err != nil {
+		return fmt.Errorf("source skills directory %s does not exist: %w", piSkillsDir, err)
+	}
+
+	entries, err := os.ReadDir(piSkillsDir)
+	if err != nil {
+		return fmt.Errorf("read pi skills dir: %w", err)
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		skillName := entry.Name()
+		srcSkillDir := filepath.Join(piSkillsDir, skillName)
+		destSkillDir := filepath.Join(skillsDestDir, skillName)
+
+		if err := copyAndTransformSkillDir(srcSkillDir, destSkillDir, skillName); err != nil {
+			return fmt.Errorf("transpile skill %s: %w", skillName, err)
+		}
+	}
+
+	return nil
+}
+
+// copyAndTransformSkillDir recursively copies a skill directory, applying transformations to markdown files.
+func copyAndTransformSkillDir(srcDir, destDir, skillName string) error {
+	return filepath.WalkDir(srcDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		relPath, err := filepath.Rel(srcDir, path)
+		if err != nil {
+			return err
+		}
+		destPath := filepath.Join(destDir, relPath)
+
+		if d.IsDir() {
+			return os.MkdirAll(destPath, 0o755)
+		}
+
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read %s: %w", path, err)
+		}
+
+		// Apply transformations to markdown files (SKILL.md and any .md files in references/)
+		if strings.HasSuffix(strings.ToLower(d.Name()), ".md") {
+			transformed := transformSkillContent(string(content), skillName)
+			return writeDeterministicFile(destPath, transformed)
+		}
+
+		// Copy non-markdown files as-is
+		return writeDeterministicFile(destPath, string(content))
+	})
+}
+
+// transformSkillContent applies the standard transpilation pipeline to skill markdown content.
+func transformSkillContent(content, skillName string) string {
+	content = stripDynamicInjections(content)
+	content = applyCommonTextMutations(content)
+	content = applyAntigravityCLIParentMutations(content)
+	return content
 }
 
 func transpileSatellites(piRoot, outputDir string) error {
@@ -952,7 +1029,9 @@ func applyAntigravityCLIParentMutations(content string) string {
 	content = strings.ReplaceAll(content, "`ask_user_question`", "`ask_question`")
 	content = strings.ReplaceAll(content, "ask_user_question", "ask_question")
 	content = strings.ReplaceAll(content, "`gentle_review`", "the native review lifecycle")
-	content = strings.ReplaceAll(content, "gentle_review", "the native review lifecycle")
+	content = strings.ReplaceAll(content, "`gentle_review_capture_group`", "the native review lifecycle capture group")
+	gentleReviewRe := regexp.MustCompile(`\bgentle_review\b`)
+	content = gentleReviewRe.ReplaceAllString(content, "the native review lifecycle")
 	content = strings.ReplaceAll(content, "{{GENTLE_PI_BACKGROUND_POLICY}}", "Use Antigravity's native `invoke_subagent` and keep delegated work foreground until the result returns")
 	content = strings.ReplaceAll(content, ".pi/skills", "~/.gemini/config/skills")
 	content = strings.ReplaceAll(content, "~/.pi/agent/gentle-ai/", "~/.gemini/config/plugins/gentle-ai/")

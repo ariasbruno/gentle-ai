@@ -334,6 +334,29 @@ func writeMinimalSourceTree(t *testing.T, sourceRoot string) {
 	if err := os.WriteFile(filepath.Join(assetsDir, "orchestrator.md"), []byte("# Orchestrator\n\nContent.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// skills (minimal fixture for transpiler)
+	skillsDir := filepath.Join(sourceRoot, "skills")
+	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Create a minimal test skill
+	testSkillDir := filepath.Join(skillsDir, "test-skill")
+	if err := os.MkdirAll(testSkillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	testSkillContent := "---\nname: test-skill\ndescription: Test skill fixture.\n---\n\nTest skill content.\n"
+	if err := os.WriteFile(filepath.Join(testSkillDir, "SKILL.md"), []byte(testSkillContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// _shared fragment
+	sharedDir := filepath.Join(skillsDir, "_shared")
+	if err := os.MkdirAll(sharedDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sharedContent := "# Shared Fragment\n\nShared content.\n"
+	if err := os.WriteFile(filepath.Join(sharedDir, "test-fragment.md"), []byte(sharedContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestProvenanceEmissionDeterministic(t *testing.T) {

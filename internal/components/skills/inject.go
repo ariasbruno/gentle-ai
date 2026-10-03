@@ -27,6 +27,12 @@ type InjectionResult struct {
 
 // InjectWithCapability writes retained skill files for the given capability.
 func InjectWithCapability(homeDir string, adapter agents.Adapter, skillIDs []model.SkillID, capability string) (InjectionResult, error) {
+	// Antigravity CLI (AgentAntigravityCLI) is skipped entirely: its skills
+	// arrive with the plugin bundle, transpiled from gentle-shell — single
+	// source of truth; see odd/tasks/agy-bundle-provenance-skills.md.
+	if adapter.Agent() == model.AgentAntigravityCLI {
+		return InjectionResult{Skipped: skillIDs}, nil
+	}
 	if !adapter.SupportsSkills() {
 		return InjectionResult{Skipped: skillIDs}, nil
 	}
@@ -181,7 +187,14 @@ func InjectDirectoryWithCapabilityWithWriter(skillDir string, skillIDs []model.S
 //
 // Individual skill failures (e.g., missing embedded asset) are logged
 // and skipped rather than aborting the entire operation.
+//
+// Antigravity CLI (AgentAntigravityCLI) is skipped entirely: its skills
+// arrive with the plugin bundle, transpiled from gentle-shell — single
+// source of truth; see odd/tasks/agy-bundle-provenance-skills.md.
 func Inject(homeDir string, adapter agents.Adapter, skillIDs []model.SkillID) (InjectionResult, error) {
+	if adapter.Agent() == model.AgentAntigravityCLI {
+		return InjectionResult{Skipped: skillIDs}, nil
+	}
 	return InjectWithCapability(homeDir, adapter, skillIDs, "")
 }
 

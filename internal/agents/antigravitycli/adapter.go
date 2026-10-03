@@ -539,7 +539,52 @@ func (a *Adapter) DeployPluginTree(homeDir string) error {
 		return err
 	}
 
-	// 4. Prune Stale Subagents and Legacy Assets
+	// 4. Deploy Bundle Skills
+	skillsDir := filepath.Join(pluginDir, "skills")
+	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
+		return fmt.Errorf("create skills dir %q: %w", skillsDir, err)
+	}
+	validSkills := make(map[string]bool)
+	skillsEntries, err := assets.FS.ReadDir("antigravitycli/skills")
+	if err != nil {
+		return fmt.Errorf("read embedded skills: %w", err)
+	}
+	for _, entry := range skillsEntries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		validSkills[name] = true
+		skillsSourceDir := filepath.Join("antigravitycli", "skills", name)
+		if err := fs.WalkDir(assets.FS, skillsSourceDir, func(source string, entry fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if entry.IsDir() {
+				return nil
+			}
+			relative, err := filepath.Rel(filepath.FromSlash(skillsSourceDir), filepath.FromSlash(source))
+			if err != nil {
+				return fmt.Errorf("resolve relative path for %q: %w", source, err)
+			}
+			content, err := assets.Read(source)
+			if err != nil {
+				return fmt.Errorf("read skill asset %q: %w", source, err)
+			}
+			outPath := filepath.Join(skillsDir, name, relative)
+			if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
+				return err
+			}
+			if _, err := filemerge.WriteFileAtomic(outPath, []byte(content), 0o644); err != nil {
+				return fmt.Errorf("write skill %s: %w", name, err)
+			}
+			return nil
+		}); err != nil {
+			return fmt.Errorf("deploy skill %s: %w", name, err)
+		}
+	}
+
+	// 5. Prune Stale Subagents, Legacy Assets, and Stale Skills
 	if existingEntries, err := os.ReadDir(filepath.Join(pluginDir, "agents")); err == nil {
 		for _, entry := range existingEntries {
 			if entry.IsDir() && !validSubagents[entry.Name()] {
@@ -562,16 +607,19 @@ func (a *Adapter) DeployPluginTree(homeDir string) error {
 	for _, path := range legacyFiles {
 		_ = os.Remove(path)
 	}
-	legacySkills := []string{
-		"sdd-apply", "sdd-archive", "sdd-design", "sdd-explore",
-		"sdd-init", "sdd-onboard", "sdd-propose", "sdd-research",
-		"sdd-spec", "sdd-tasks", "sdd-verify",
-	}
-	for _, name := range legacySkills {
-		_ = os.RemoveAll(filepath.Join(pluginDir, "skills", name))
+	// Prune stale skills: remove any skill directories in plugin skills/ that are
+	// not present in the current bundle (validSkills). This subsumes the legacy
+	// per-name SDD skills list and catches any stale selected skills from the
+	// old selection-driven flow (e.g., go-testing deployed on real machines).
+	if existingSkillEntries, err := os.ReadDir(skillsDir); err == nil {
+		for _, entry := range existingSkillEntries {
+			if entry.IsDir() && !validSkills[entry.Name()] {
+				_ = os.RemoveAll(filepath.Join(skillsDir, entry.Name()))
+			}
+		}
 	}
 
-	// 5. Clean up duplicate agent-routing section from AGENTS.md if present
+	// 6. Clean up duplicate agent-routing section from AGENTS.md if present
 	agentsMDPath := filepath.Join(pluginDir, "rules", "AGENTS.md")
 	if data, err := os.ReadFile(agentsMDPath); err == nil {
 		cleaned := filemerge.InjectMarkdownSection(string(data), "agent-routing", "")

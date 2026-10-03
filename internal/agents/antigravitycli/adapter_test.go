@@ -723,3 +723,77 @@ func TestDeployPluginTree(t *testing.T) {
 		t.Errorf("AGENTS.md lost persona section:\n%s", string(cleanedData))
 	}
 }
+
+func TestDeployPluginTreePrunesStaleSkills(t *testing.T) {
+	homeDir := t.TempDir()
+	adapter := NewAdapter()
+	skillsDir := adapter.SkillsDir(homeDir)
+
+	// Pre-create a stale skill that was deployed by the old selection-driven flow
+	// (e.g., go-testing on real machines) but is NOT in the current bundle.
+	staleSkillDir := filepath.Join(skillsDir, "go-testing")
+	if err := os.MkdirAll(filepath.Join(staleSkillDir, "references"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staleSkillDir, "SKILL.md"), []byte("stale go-testing skill"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staleSkillDir, "references", "examples.md"), []byte("stale examples"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Also pre-create a stale SDD skill (legacy per-name prune should still catch it)
+	staleSDDSkillDir := filepath.Join(skillsDir, "sdd-apply")
+	if err := os.MkdirAll(staleSDDSkillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staleSDDSkillDir, "SKILL.md"), []byte("stale sdd-apply"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := adapter.DeployPluginTree(homeDir); err != nil {
+		t.Fatalf("DeployPluginTree() error = %v", err)
+	}
+
+	// Verify stale skills are pruned
+	if _, err := os.Stat(staleSkillDir); !os.IsNotExist(err) {
+		t.Errorf("stale go-testing skill directory %q was not removed", staleSkillDir)
+	}
+	if _, err := os.Stat(staleSDDSkillDir); !os.IsNotExist(err) {
+		t.Errorf("stale sdd-apply skill directory %q was not removed", staleSDDSkillDir)
+	}
+
+	// Verify bundle skills are deployed (spot-check a few known bundle skills).
+	// _shared is deliberately excluded: it is a fragments directory referenced by
+	// skills, not a skill itself, and carries no SKILL.md in the gentle-shell canon.
+	bundleSkills := []string{
+		"branch-pr",
+		"chained-pr",
+		"cognitive-doc-design",
+		"comment-writer",
+		"gentle-ai",
+		"issue-creation",
+		"judgment-day",
+		"rdd-defect-workflow",
+		"skill-creator",
+		"skill-improver",
+		"skill-registry",
+		"work-unit-commits",
+	}
+	for _, name := range bundleSkills {
+		skillPath := filepath.Join(skillsDir, name, "SKILL.md")
+		if info, err := os.Stat(skillPath); err != nil || info.Size() == 0 {
+			t.Errorf("missing or empty deployed bundle skill %s at %s", name, skillPath)
+		}
+	}
+	// Verify the _shared fragments directory is deployed with its canon contents.
+	sharedRefs := []string{
+		"review-ledger-contract.md",
+	}
+	for _, name := range sharedRefs {
+		sharedPath := filepath.Join(skillsDir, "_shared", name)
+		if info, err := os.Stat(sharedPath); err != nil || info.Size() == 0 {
+			t.Errorf("missing or empty _shared fragment %s at %s", name, sharedPath)
+		}
+	}
+}
