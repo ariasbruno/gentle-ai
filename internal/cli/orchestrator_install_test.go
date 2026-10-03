@@ -20,13 +20,17 @@ const (
 )
 
 // orchestratorRuntimesForInstall lists every runtime whose installed prompt
-// carries the orchestrator; Pi's prompt belongs to the Gentle Shell package.
+// carries the orchestrator merged ahead of routing. Pi's prompt belongs to
+// the Gentle Shell package, and Antigravity CLI's orchestrator arrives
+// exactly once through the plugin bundle rule (gentle-ai-orchestrator.md,
+// review contract filled) — pinned end-to-end by the driven j4500 journey
+// and asserted routing-only by the dedicated Antigravity CLI test below.
 func orchestratorRuntimesForInstall(t *testing.T) []model.AgentID {
 	t.Helper()
 
 	var selected []model.AgentID
 	for _, agent := range catalog.AllAgents() {
-		if agent.ID == model.AgentPi {
+		if agent.ID == model.AgentPi || agent.ID == model.AgentAntigravityCLI {
 			continue
 		}
 		adapter, err := agents.NewAdapter(agent.ID)
@@ -184,6 +188,59 @@ func TestInstallAndSyncDeliverOrchestratorOnceForEveryRuntime(t *testing.T) {
 				t.Fatalf("second sync changed %s:\n%s", path, got)
 			}
 		})
+	}
+}
+
+// Antigravity CLI's guidance file must stay routing-only: the orchestrator
+// arrives exactly once through the plugin bundle rule (gentle-ai-orchestrator.md,
+// review contract filled), pinned end-to-end by the driven j4500 journey.
+// Merging the canonical orchestrator render into the routing file duplicated
+// the bundle rule and pushed the file past agy's 24,000-byte per-file rule
+// cap, where agy truncates on line boundaries (odd/tasks/agy-routing-split.md).
+func TestInstallAndSyncKeepAntigravityCLIRoutingGuidanceRoutingOnly(t *testing.T) {
+	home := t.TempDir()
+	selection := model.Selection{
+		Agents:     []model.AgentID{model.AgentAntigravityCLI},
+		Components: []model.ComponentID{model.ComponentPersona},
+		Persona:    model.PersonaGentleman,
+	}
+
+	runInstallInjectionSteps(t, newTestInstallRuntime(t, home, selection))
+	path, prompt := installedGuidance(t, home, model.AgentAntigravityCLI)
+	installed := readTextFile(t, path)
+
+	rendered, err := agentguidance.RenderOrchestratorWithSource(model.AgentAntigravityCLI, reviewassets.ReviewExecutionContractFor, "")
+	if err != nil {
+		t.Fatalf("RenderOrchestrator(%q) error = %v", model.AgentAntigravityCLI, err)
+	}
+	if got := strings.Count(prompt, strings.TrimSpace(rendered)); got != 0 {
+		t.Fatalf("routing rule carries the canonical orchestrator render %d times, want 0 (the orchestrator is delivered once via the plugin bundle rule)", got)
+	}
+	if got := strings.Count(prompt, orchestratorOpenMarker); got != 0 {
+		t.Fatalf("routing rule carries the orchestrator marker %d times, want 0", got)
+	}
+	if strings.Count("\n"+prompt, "\n### ODD protocol") != 1 {
+		t.Fatal("routing rule must carry the ODD protocol exactly once")
+	}
+	if !strings.Contains(prompt, routingOpenMarker) {
+		t.Fatal("routing rule must carry the routing marker")
+	}
+	// Routing still carries the RDD boundaries canon (kill-switch guidance).
+	if !strings.Contains(prompt, "gentle-ai review mode") {
+		t.Fatal("routing rule lost the RDD kill-switch guidance")
+	}
+
+	runInstallInjectionSteps(t, newTestInstallRuntime(t, home, selection))
+	if got := readTextFile(t, path); got != installed {
+		t.Fatalf("second install changed %s:\n%s", path, got)
+	}
+	runSyncInjectionSteps(t, home, selection)
+	if got := readTextFile(t, path); got != installed {
+		t.Fatalf("sync after install changed %s:\n%s", path, got)
+	}
+	runSyncInjectionSteps(t, home, selection)
+	if got := readTextFile(t, path); got != installed {
+		t.Fatalf("second sync changed %s:\n%s", path, got)
 	}
 }
 
