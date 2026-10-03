@@ -38,9 +38,9 @@ list. Any NEW red after the rebase = integration loss caught by the tripwire (su
 - [x] T1: Tripwire tests — assert install & sync `stagePlan` include the agy plugin-import step
       (`install:antigravity-cli:plugin-import` / `sync:antigravity-cli:plugin-import`); prove the
       guard fires (temporarily remove hook → RED, restore → GREEN); work-unit commit.
-- [ ] T2: Pre-rebase baseline — env-scrubbed full `go test ./...` (verifier), record the exact
+- [x] T2: Pre-rebase baseline — env-scrubbed full `go test ./...` (verifier), record the exact
       known-failure list to compare after the rebase.
-- [ ] T3: Backup branch `backup/antigravity-cli-v4-pre-v4-sync-<date>` + fresh `git fetch upstream`.
+- [x] T3: Backup branch `backup/antigravity-cli-v4-pre-v4-sync-<date>` + fresh `git fetch upstream`.
 - [ ] T4: Rebase `antigravity-cli-v4` onto `upstream/main`; resolve the 2 textual conflicts;
       verify the 4 semantic minefields against both sides (no silent drop, no semantic smush).
 - [ ] T5: Re-derive capabilitymanifest digests under evidence-budget semantics; fix digest tests.
@@ -60,4 +60,17 @@ list. Any NEW red after the rebase = integration loss caught by the tripwire (su
   removed, clean syntax) → RED on both positive cases, negative discrimination cases still
   green; hooks restored via `git checkout`, suite back to 4/4 green. gofmt clean, `go vet ./internal/cli/` ok.
   All go test runs executed under `env -u PI_CODING_AGENT_DIR -u GENTLE_PI_AGENT_HOME`.
-  Commit: <pending>
+  Commit: 141b9485 `test(cli): guard the antigravity-cli plugin-import plan hooks with a tripwire`
+- T3 DONE: backup branch `backup/antigravity-cli-v4-pre-v4-sync-20261002` @ 141b9485. Fresh fetch:
+  upstream/main MOVED past the recorded risk-map tip: `9dfe17d8` → `5140c5f5` (+2: fbfe89ec
+  retire external community plugins #5200, 5140c5f5 fix(sync) preserved native agent recovery #5202).
+  Divergence now 14 ahead / 32 behind. T4 must recompute the merge-tree against `5140c5f5`, not 9dfe17d8.
+- T2 DONE: baseline recorded (verifier, env-scrubbed). `internal/cli` ALL GREEN (327s, default
+  timeout; includes tripwire 4/4). The first attempt's `-timeout=180s` cap produced a false hang
+  report on this 5.5-min package. Known-failure set is EXACTLY the 3 predicted, nothing else:
+  1. `agentguidance` TestInjectRoutingAntigravityCLIUsesDedicatedRuleFile — routing file 65613 B > 24000 cap
+  2. `agentguidance` TestInjectRoutingAntigravityCLIRuleFileCarriesAlwaysOnFrontmatter — same 65613 B
+  3. `uninstall` TestUninstallOpenCodeFamilyManagedAgents/opencode — environmental (file mode)
+  NOTE: measured routing size is now 65613 B, NOT the recorded 38168/22137/22550 figures — T7 must
+  re-measure with this as the fresh anchor. ~50 packages ok, 0 build failures.
+  Post-rebase comparison contract: same 3 failures and nothing else; anything new = loss caught.
