@@ -1419,9 +1419,11 @@ func retainedAntigravityCLIPluginOperations(adapter agents.Adapter, homeDir stri
 	// Legacy installs deployed the orchestrator at the plugin root, which agy
 	// never reads; uninstall must take that stale copy away too.
 	ops = append(ops, removeFile(filepath.Join(pluginDir, "orchestrator.md")))
-	// The routing rule file is always-on once installed: leaving it behind
+	// The routing rule files are always-on once installed: leaving them behind
 	// would keep injecting ODD guidance into agy after gentle-ai is gone.
-	ops = append(ops, removeFile(filepath.Join(pluginDir, "rules", "gentle-ai-routing.md")))
+	// Remove all gentle-ai-routing*.md files that carry our ownership marker.
+	rulesDir := filepath.Join(pluginDir, "rules")
+	ops = append(ops, removeAntigravityCLIRoutingParts(rulesDir))
 	ops = append(ops,
 		removeDirIfEmpty(filepath.Join(pluginDir, "support")),
 		removeDirIfEmpty(filepath.Join(pluginDir, "chains")),
@@ -1456,6 +1458,47 @@ func retainedAntigravityCLIPluginOperations(adapter agents.Adapter, homeDir stri
 		ops[i].agents = []model.AgentID{model.AgentAntigravityCLI}
 	}
 	return ops
+}
+
+// antigravityCLIRoutingMarker is the ownership marker that identifies
+// Gentle AI routing rule files for cleanup.
+const antigravityCLIRoutingMarker = "<!-- gentle-ai:agent-routing -->"
+
+// removeAntigravityCLIRoutingParts removes all gentle-ai-routing*.md files
+// in the given directory that contain the ownership marker.
+func removeAntigravityCLIRoutingParts(rulesDir string) operation {
+	return operation{
+		typeID: opRemoveFile,
+		path:   rulesDir, // path is the directory for logging purposes
+		apply: func(path string) (bool, bool, error) {
+			entries, err := os.ReadDir(rulesDir)
+			if err != nil {
+				if os.IsNotExist(err) {
+					return false, false, nil
+				}
+				return false, false, err
+			}
+			anyRemoved := false
+			for _, entry := range entries {
+				name := entry.Name()
+				if !strings.HasPrefix(name, "gentle-ai-routing") || !strings.HasSuffix(name, ".md") {
+					continue
+				}
+				fullPath := filepath.Join(rulesDir, name)
+				data, err := os.ReadFile(fullPath)
+				if err != nil {
+					continue // Best effort
+				}
+				if strings.Contains(string(data), antigravityCLIRoutingMarker) {
+					if err := os.Remove(fullPath); err != nil {
+						return false, false, err
+					}
+					anyRemoved = true
+				}
+			}
+			return anyRemoved, anyRemoved, nil
+		},
+	}
 }
 
 func removePluginImportOperation(path string) operation {

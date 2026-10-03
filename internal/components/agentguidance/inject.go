@@ -125,7 +125,7 @@ func InjectRoutingWithOptions(targetDir string, agent model.AgentID, options Rou
 	// and the same write, so the two can never land in different files or be
 	// half-applied. Pi is the only runtime without one: Gentle Shell owns it.
 	var orchestrator string
-	if agent != model.AgentPi {
+	if agent != model.AgentPi && agent != model.AgentAntigravityCLI {
 		orchestrator, err = RenderOrchestratorWithSource(agent, options.ReviewContract, options.OrchestratorCapability)
 		if err != nil {
 			return Result{}, err
@@ -143,6 +143,8 @@ func InjectRoutingWithOptions(targetDir string, agent model.AgentID, options Rou
 		return injectOrchestratorPrompt(delivery, agent, merge)
 	case deliveryJinjaModule:
 		return injectJinjaModule(targetDir, delivery, agent, merge)
+	case deliveryAntigravityCLISplit:
+		return injectAntigravityCLISplit(targetDir, delivery, rendered)
 	default:
 		return injectPromptSection(delivery, merge)
 	}
@@ -197,6 +199,7 @@ const (
 	deliveryPromptSection routingDeliveryKind = iota
 	deliveryJinjaModule
 	deliveryOrchestratorPrompt
+	deliveryAntigravityCLISplit
 )
 
 // routingDelivery is the single resolution of how and where guidance reaches
@@ -254,11 +257,21 @@ func resolveRoutingDelivery(targetDir string, agent model.AgentID, options Routi
 			paths:        []string{filepath.Join(configDir, routingModuleFile), adapter.SystemPromptFile(targetDir)},
 		}, nil
 
+	case agent == model.AgentAntigravityCLI:
+		rulesDir := adapter.SystemPromptDir(targetDir)
+		if strings.TrimSpace(rulesDir) == "" {
+			return routingDelivery{}, fmt.Errorf("%w: adapter %q exposes no system prompt dir", ErrInvalidTarget, agent)
+		}
+		// Return the canonical first part path; the split writer will generate
+		// the full part set from this base.
+		return routingDelivery{
+			kind:    deliveryAntigravityCLISplit,
+			adapter: adapter,
+			paths:   []string{filepath.Join(rulesDir, "gentle-ai-routing.md")},
+		}, nil
+
 	default:
 		promptPath := adapter.SystemPromptFile(targetDir)
-		if adapter.Agent() == model.AgentAntigravityCLI {
-			promptPath = filepath.Join(adapter.SystemPromptDir(targetDir), "gentle-ai-routing.md")
-		}
 		if strings.TrimSpace(promptPath) == "" {
 			return routingDelivery{}, fmt.Errorf("%w: adapter %q exposes no system prompt file", ErrInvalidTarget, agent)
 		}
@@ -280,6 +293,11 @@ func DeliversThroughOrchestratorPrompt(agent model.AgentID) bool {
 // guidanceMerge folds every managed guidance section into existing content.
 type guidanceMerge func(existing string) string
 
+// antigravityCLIRuleCap is the per-file byte limit enforced by agy (1.2.16).
+// agy truncates any rule file at 24,000 bytes on line boundaries (builtin docs
+// rules.md:29-37). Files must be strictly less than this limit.
+const antigravityCLIRuleCap = 24000
+
 // antigravityCLIRuleFrontmatter is the YAML frontmatter agy requires on every
 // plugin rule file other than AGENTS.md: without a valid trigger, agy drops
 // the file on every turn as an unspecified trigger. AGENTS.md itself must
@@ -288,6 +306,242 @@ const antigravityCLIRuleFrontmatter = `---
 trigger: always_on
 description: Gentle AI ODD workflow, delegation routing, test-first policy, and RDD review boundaries
 ---`
+
+// antigravityCLIRoutingMarker is the ownership marker that identifies
+// Gentle AI routing rule files for stale-part cleanup.
+const antigravityCLIRoutingMarker = "<!-- gentle-ai:agent-routing -->"
+
+// injectAntigravityCLISplit writes the routing render split into N parts at
+// H3 (### ) boundaries, each carrying the same frontmatter and ownership
+// marker. Part 1 is gentle-ai-routing.md, parts 2..N are gentle-ai-routing-2.md,
+// etc. After writing the current part set, stale marked parts are removed.
+func injectAntigravityCLISplit(targetDir string, delivery routingDelivery, rendered string) (Result, error) {
+	rulesDir := delivery.adapter.SystemPromptDir(targetDir)
+	if strings.TrimSpace(rulesDir) == "" {
+		return Result{}, fmt.Errorf("%w: adapter %q exposes no system prompt dir", ErrInvalidTarget, delivery.adapter.Agent())
+	}
+
+	// Split the rendered content into parts
+	parts, err := splitRoutingForAntigravityCLI(rendered)
+	if err != nil {
+		return Result{}, err
+	}
+
+	writtenPaths := make([]string, 0, len(parts))
+	anyChanged := false
+	for i, part := range parts {
+		var partPath string
+		if i == 0 {
+			partPath = filepath.Join(rulesDir, "gentle-ai-routing.md")
+		} else {
+			partPath = filepath.Join(rulesDir, fmt.Sprintf("gentle-ai-routing-%d.md", i+1))
+		}
+
+		// Wrap part with marker and prepend frontmatter
+		wrapped := filemerge.InjectMarkdownSection("", RoutingSectionID, part)
+		withFrontmatter := filemerge.PrependYAMLFrontmatter(wrapped, antigravityCLIRuleFrontmatter)
+
+		writeResult, err := filemerge.WriteFileAtomic(partPath, []byte(withFrontmatter), filemerge.ExistingFileMode(partPath, 0o644))
+		if err != nil {
+			return Result{}, err
+		}
+		if writeResult.Changed {
+			anyChanged = true
+		}
+		writtenPaths = append(writtenPaths, partPath)
+	}
+
+	// Stale-part cleanup: remove gentle-ai-routing*.md files that have our
+	// ownership marker but are not in the written set.
+	entries, err := os.ReadDir(rulesDir)
+	if err != nil {
+		return Result{}, err
+	}
+	writtenSet := make(map[string]struct{}, len(writtenPaths))
+	for _, p := range writtenPaths {
+		writtenSet[filepath.Base(p)] = struct{}{}
+	}
+
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasPrefix(name, "gentle-ai-routing") || !strings.HasSuffix(name, ".md") {
+			continue
+		}
+		if _, ok := writtenSet[name]; ok {
+			continue
+		}
+		// Check if file contains our ownership marker
+		fullPath := filepath.Join(rulesDir, name)
+		data, err := os.ReadFile(fullPath)
+		if err != nil {
+			continue // Best effort
+		}
+		if strings.Contains(string(data), antigravityCLIRoutingMarker) {
+			_ = os.Remove(fullPath) // Best effort cleanup
+		}
+	}
+
+	return Result{Changed: anyChanged, Files: writtenPaths}, nil
+}
+
+// splitRoutingForAntigravityCLI splits the rendered routing at H3 (### )
+// boundaries with greedy in-order packing. Each part body (without frontmatter
+// and marker) must be < antigravityCLIRuleCap minus overhead.
+// Returns parts in order, each as a string (the body content for one part).
+func splitRoutingForAntigravityCLI(rendered string) ([]string, error) {
+	// Split at H3 boundaries (\n### ). The preamble (before first H3) is the first block.
+	blocks := strings.Split(rendered, "\n### ")
+	if len(blocks) == 0 {
+		return []string{rendered}, nil
+	}
+
+	// Restore the "### " prefix for blocks 1..N
+	for i := 1; i < len(blocks); i++ {
+		blocks[i] = "### " + blocks[i]
+	}
+
+	// Calculate overhead per part: frontmatter + marker open/close + newlines
+	frontmatterBytes := len(antigravityCLIRuleFrontmatter) + 1 // +1 for trailing \n after frontmatter
+	markerOpen := "<!-- gentle-ai:agent-routing -->\n"
+	markerClose := "\n<!-- /gentle-ai:agent-routing -->\n"
+	overhead := frontmatterBytes + len(markerOpen) + len(markerClose)
+	bodyBudget := antigravityCLIRuleCap - overhead - 1 // -1 for safety margin
+
+	if bodyBudget <= 0 {
+		return nil, fmt.Errorf("antigravityCLIRuleCap %d too small for frontmatter+marker overhead %d", antigravityCLIRuleCap, overhead)
+	}
+
+	var parts []string
+	var currentPart strings.Builder
+	currentSize := 0
+
+	for _, block := range blocks {
+		blockSize := len(block)
+		// If adding this block would exceed budget, finalize current part
+		if currentSize > 0 && currentSize+1+blockSize > bodyBudget { // +1 for \n between blocks
+			parts = append(parts, strings.TrimRight(currentPart.String(), "\n"))
+			currentPart.Reset()
+			currentSize = 0
+		}
+
+		// If single block exceeds budget, split it further
+		if blockSize > bodyBudget {
+			if currentSize > 0 {
+				parts = append(parts, strings.TrimRight(currentPart.String(), "\n"))
+				currentPart.Reset()
+				currentSize = 0
+			}
+			subParts, err := splitLargeBlock(block, bodyBudget)
+			if err != nil {
+				return nil, err
+			}
+			parts = append(parts, subParts...)
+			continue
+		}
+
+		if currentSize > 0 {
+			currentPart.WriteString("\n")
+			currentSize++
+		}
+		currentPart.WriteString(block)
+		currentSize += blockSize
+	}
+
+	if currentSize > 0 {
+		parts = append(parts, strings.TrimRight(currentPart.String(), "\n"))
+	}
+
+	if len(parts) == 0 {
+		parts = []string{""}
+	}
+
+	return parts, nil
+}
+
+// splitLargeBlock splits a single block that exceeds the body budget.
+// First tries paragraph (\n\n) boundaries, then list-item boundaries.
+// If a single line still exceeds budget, returns an error.
+func splitLargeBlock(block string, budget int) ([]string, error) {
+	// Try paragraph split first
+	paragraphs := strings.Split(block, "\n\n")
+	if len(paragraphs) > 1 {
+		var parts []string
+		var current strings.Builder
+		currentSize := 0
+		for _, para := range paragraphs {
+			paraSize := len(para)
+			if currentSize > 0 && currentSize+2+paraSize > budget { // +2 for \n\n
+				parts = append(parts, strings.TrimRight(current.String(), "\n"))
+				current.Reset()
+				currentSize = 0
+			}
+			if paraSize > budget {
+				// Paragraph still too large, try list-item split
+				if currentSize > 0 {
+					parts = append(parts, strings.TrimRight(current.String(), "\n"))
+					current.Reset()
+					currentSize = 0
+				}
+				subParts, err := splitByListItems(para, budget)
+				if err != nil {
+					return nil, err
+				}
+				parts = append(parts, subParts...)
+				continue
+			}
+			if currentSize > 0 {
+				current.WriteString("\n\n")
+				currentSize += 2
+			}
+			current.WriteString(para)
+			currentSize += paraSize
+		}
+		if currentSize > 0 {
+			parts = append(parts, strings.TrimRight(current.String(), "\n"))
+		}
+		return parts, nil
+	}
+
+	// Try list-item split (lines starting with - , * , or digits)
+	return splitByListItems(block, budget)
+}
+
+// splitByListItems splits at top-level list item boundaries.
+func splitByListItems(block string, budget int) ([]string, error) {
+	lines := strings.Split(block, "\n")
+	var parts []string
+	var current strings.Builder
+	currentSize := 0
+
+	for _, line := range lines {
+		lineSize := len(line) + 1 // +1 for \n
+		isListItem := strings.HasPrefix(strings.TrimSpace(line), "- ") ||
+			strings.HasPrefix(strings.TrimSpace(line), "* ") ||
+			(len(line) > 0 && line[0] >= '1' && line[0] <= '9' && strings.HasPrefix(strings.TrimSpace(line)[1:], ". "))
+
+		if currentSize > 0 && isListItem && currentSize+lineSize > budget {
+			parts = append(parts, strings.TrimRight(current.String(), "\n"))
+			current.Reset()
+			currentSize = 0
+		}
+
+		if lineSize > budget {
+			return nil, fmt.Errorf("single line exceeds body budget %d bytes: %d bytes (line: %.80q)", budget, lineSize, line)
+		}
+
+		if currentSize > 0 {
+			current.WriteString("\n")
+			currentSize++
+		}
+		current.WriteString(line)
+		currentSize += len(line)
+	}
+
+	if currentSize > 0 {
+		parts = append(parts, strings.TrimRight(current.String(), "\n"))
+	}
+	return parts, nil
+}
 
 // injectPromptSection is the default delivery: managed marker sections inside
 // the adapter's own system prompt file.

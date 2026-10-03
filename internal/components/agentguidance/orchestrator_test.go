@@ -24,8 +24,9 @@ const (
 
 // orchestratorRuntimes lists every agent whose installed prompt carries the
 // orchestrator. Pi is excluded because its prompt is owned by Gentle Shell,
-// and Conductor is excluded because it is detection/catalog-only and has no
-// prompt file of its own.
+// Conductor is excluded because it is detection/catalog-only and has no
+// prompt file of its own, and AntigravityCLI is excluded because its
+// orchestrator is deployed separately by the adapter as gentle-ai-orchestrator.md.
 func orchestratorRuntimes(t *testing.T) []model.AgentID {
 	t.Helper()
 
@@ -37,6 +38,9 @@ func orchestratorRuntimes(t *testing.T) []model.AgentID {
 		if agent.ID == model.AgentConductor {
 			continue // Catalog-only: no standalone guidance target.
 		}
+		if agent.ID == model.AgentAntigravityCLI {
+			continue // Orchestrator deployed separately by adapter.
+		}
 		adapter, err := agents.NewAdapter(agent.ID)
 		if err != nil {
 			t.Fatalf("NewAdapter(%q) error = %v", agent.ID, err)
@@ -46,8 +50,8 @@ func orchestratorRuntimes(t *testing.T) []model.AgentID {
 		}
 		selected = append(selected, agent.ID)
 	}
-	if len(selected) != supportedAgentCount-2 {
-		t.Fatalf("selected %d orchestrator runtimes, want %d", len(selected), supportedAgentCount-2)
+	if len(selected) != supportedAgentCount-3 {
+		t.Fatalf("selected %d orchestrator runtimes, want %d", len(selected), supportedAgentCount-3)
 	}
 	return selected
 }

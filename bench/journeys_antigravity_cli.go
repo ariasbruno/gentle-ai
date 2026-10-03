@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -137,22 +138,60 @@ func assertAntigravityCLIFirstSync(sandbox *Sandbox, observation Observation) er
 	sandbox.Scratch["j4500-rules-first-sync"] = rulesStr
 
 	// agy drops plugin rule files without a valid trigger on every turn, so
-	// the ODD routing rule and the orchestrator rule must carry always_on
+	// the ODD routing rule parts and the orchestrator rule must carry always_on
 	// frontmatter, and the orchestrator rule must arrive with the review
 	// execution contract already rendered in place of its insert marker.
-	routingPath := filepath.Join(pluginDir, "rules", "gentle-ai-routing.md")
-	routingBytes, err := os.ReadFile(routingPath)
+	// agy 1.2.16 truncates any rule file at 24,000 bytes on line boundaries;
+	// the ratified split decision (odd/tasks/agy-routing-split.md) delivers
+	// the full routing canon across N parts: gentle-ai-routing.md,
+	// gentle-ai-routing-2.md, ...
+	rulesDir := filepath.Join(pluginDir, "rules")
+	entries, err := os.ReadDir(rulesDir)
 	if err != nil {
-		return fmt.Errorf("missing routing rule %s: %w", routingPath, err)
+		return fmt.Errorf("ReadDir(rulesDir) error = %v", err)
 	}
-	routingStr := string(routingBytes)
-	if !strings.HasPrefix(routingStr, "---\ntrigger: always_on\n") {
-		return fmt.Errorf("routing rule missing always_on frontmatter: %.120q", routingStr)
+	var routingParts []string
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "gentle-ai-routing") && strings.HasSuffix(entry.Name(), ".md") {
+			routingParts = append(routingParts, entry.Name())
+		}
 	}
-	if !strings.Contains(routingStr, "<!-- gentle-ai:agent-routing -->") {
-		return fmt.Errorf("routing rule missing agent-routing marker")
+	if len(routingParts) == 0 {
+		return fmt.Errorf("no gentle-ai-routing*.md files found in %s", rulesDir)
 	}
-	sandbox.Scratch["j4500-routing-first-sync"] = routingStr
+	slices.Sort(routingParts)
+
+	// Part 1 must be the canonical name
+	if routingParts[0] != "gentle-ai-routing.md" {
+		return fmt.Errorf("first routing part must be gentle-ai-routing.md, got %q", routingParts[0])
+	}
+	// Parts 2..N must follow the naming pattern
+	for i := 1; i < len(routingParts); i++ {
+		expected := fmt.Sprintf("gentle-ai-routing-%d.md", i+1)
+		if routingParts[i] != expected {
+			return fmt.Errorf("routing part %d must be %q, got %q", i+1, expected, routingParts[i])
+		}
+	}
+
+	// Verify every routing part
+	for _, partName := range routingParts {
+		partPath := filepath.Join(rulesDir, partName)
+		partBytes, err := os.ReadFile(partPath)
+		if err != nil {
+			return fmt.Errorf("missing routing part %s: %w", partPath, err)
+		}
+		partStr := string(partBytes)
+		if !strings.HasPrefix(partStr, "---\ntrigger: always_on\n") {
+			return fmt.Errorf("routing part %q missing always_on frontmatter: %.120q", partPath, partStr)
+		}
+		if !strings.Contains(partStr, "<!-- gentle-ai:agent-routing -->") {
+			return fmt.Errorf("routing part %q missing agent-routing marker", partPath)
+		}
+		if len(partBytes) >= 24000 {
+			return fmt.Errorf("routing part %q exceeds rule cap of 24000 bytes: %d bytes", partPath, len(partBytes))
+		}
+		sandbox.Scratch["j4500-routing-first-sync-"+partName] = partStr
+	}
 
 	orchestratorPath := filepath.Join(pluginDir, "rules", "gentle-ai-orchestrator.md")
 	orchestratorBytes, err := os.ReadFile(orchestratorPath)
@@ -253,12 +292,31 @@ func assertAntigravityCLISecondSync(sandbox *Sandbox, observation Observation) e
 	if string(rulesBytes) != sandbox.Scratch["j4500-rules-first-sync"] {
 		return fmt.Errorf("second sync modified rules file (idempotency violated)")
 	}
-	routingBytes, err := os.ReadFile(filepath.Join(sandbox.Home, ".gemini", "config", "plugins", "gentle-ai", "rules", "gentle-ai-routing.md"))
+	// Verify idempotency for all routing parts
+	rulesDir := filepath.Join(sandbox.Home, ".gemini", "config", "plugins", "gentle-ai", "rules")
+	entries, err := os.ReadDir(rulesDir)
 	if err != nil {
-		return fmt.Errorf("missing routing rule after second sync: %w", err)
+		return fmt.Errorf("ReadDir(rulesDir) error = %v", err)
 	}
-	if string(routingBytes) != sandbox.Scratch["j4500-routing-first-sync"] {
-		return fmt.Errorf("second sync modified routing rule (idempotency violated)")
+	var routingParts []string
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "gentle-ai-routing") && strings.HasSuffix(entry.Name(), ".md") {
+			routingParts = append(routingParts, entry.Name())
+		}
+	}
+	if len(routingParts) == 0 {
+		return fmt.Errorf("no gentle-ai-routing*.md files found after second sync")
+	}
+	slices.Sort(routingParts)
+	for _, partName := range routingParts {
+		partBytes, err := os.ReadFile(filepath.Join(rulesDir, partName))
+		if err != nil {
+			return fmt.Errorf("missing routing part %s after second sync: %w", partName, err)
+		}
+		scratchKey := "j4500-routing-first-sync-" + partName
+		if string(partBytes) != sandbox.Scratch[scratchKey] {
+			return fmt.Errorf("second sync modified routing part %s (idempotency violated)", partName)
+		}
 	}
 	orchestratorBytes, err := os.ReadFile(filepath.Join(sandbox.Home, ".gemini", "config", "plugins", "gentle-ai", "rules", "gentle-ai-orchestrator.md"))
 	if err != nil {
@@ -316,11 +374,22 @@ func assertAntigravityCLIUninstall(sandbox *Sandbox, observation Observation) er
 			return fmt.Errorf("satellite %s was not uninstalled", sat)
 		}
 	}
-	for _, rule := range []string{"gentle-ai-routing.md", "gentle-ai-orchestrator.md"} {
-		ruleFile := filepath.Join(pluginDir, "rules", rule)
-		if _, err := os.Stat(ruleFile); !os.IsNotExist(err) {
-			return fmt.Errorf("rule file %s was not uninstalled", ruleFile)
+	// Verify all routing parts are removed
+	rulesDir := filepath.Join(pluginDir, "rules")
+	entries, err := os.ReadDir(rulesDir)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("ReadDir(rulesDir) error = %v", err)
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, "gentle-ai-routing") && strings.HasSuffix(name, ".md") {
+			return fmt.Errorf("routing part %s was not uninstalled", name)
 		}
+	}
+	// Verify orchestrator rule is removed
+	orchestratorRule := filepath.Join(pluginDir, "rules", "gentle-ai-orchestrator.md")
+	if _, err := os.Stat(orchestratorRule); !os.IsNotExist(err) {
+		return fmt.Errorf("rule file %s was not uninstalled", orchestratorRule)
 	}
 	if _, err := os.Stat(filepath.Join(pluginDir, "orchestrator.md")); !os.IsNotExist(err) {
 		return fmt.Errorf("legacy root orchestrator.md was not uninstalled")

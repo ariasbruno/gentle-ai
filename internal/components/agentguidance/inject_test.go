@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"unicode"
@@ -987,47 +989,214 @@ func readFile(t *testing.T, path string) string {
 
 const antigravityCLIRoutingFrontmatter = "---\ntrigger: always_on\ndescription: Gentle AI ODD workflow, delegation routing, test-first policy, and RDD review boundaries\n---"
 
-func TestInjectRoutingAntigravityCLIRuleFileCarriesAlwaysOnFrontmatter(t *testing.T) {
+// TestInjectRoutingAntigravityCLISplitContract verifies the split delivery:
+// - Part 1 is the canonical gentle-ai-routing.md
+// - Parts 2..N are gentle-ai-routing-2.md, -3.md, ...
+// - Every part carries the same frontmatter and ownership marker
+// - Every part is < antigravityCLIRuleCap bytes
+// - Parts are split at H3 (### ) boundaries with greedy in-order packing
+func TestInjectRoutingAntigravityCLISplitContract(t *testing.T) {
 	t.Parallel()
 
 	targetDir := t.TempDir()
-	result, err := InjectRoutingWithOptions(targetDir, model.AgentAntigravityCLI, RoutingOptions{})
-	if err != nil {
+	if _, err := InjectRoutingWithOptions(targetDir, model.AgentAntigravityCLI, RoutingOptions{}); err != nil {
 		t.Fatalf("InjectRouting(antigravity-cli) error = %v", err)
 	}
-	wantPath := filepath.Join(targetDir, ".gemini", "config", "plugins", "gentle-ai", "rules", "gentle-ai-routing.md")
-	if len(result.Files) != 1 || result.Files[0] != wantPath {
-		t.Fatalf("InjectRouting(antigravity-cli) wrote %v, want %q", result.Files, wantPath)
-	}
-	data, err := os.ReadFile(wantPath)
+
+	rulesDir := filepath.Join(targetDir, ".gemini", "config", "plugins", "gentle-ai", "rules")
+	entries, err := os.ReadDir(rulesDir)
 	if err != nil {
-		t.Fatalf("read %q: %v", wantPath, err)
-	}
-	content := string(data)
-	if !strings.HasPrefix(content, antigravityCLIRoutingFrontmatter+"\n") {
-		t.Fatalf("antigravity-cli routing file must start with always_on frontmatter, got prefix:\n%.200q", content)
-	}
-	if !strings.Contains(content, "<!-- gentle-ai:agent-routing -->") {
-		t.Fatalf("antigravity-cli routing file missing agent-routing marker")
-	}
-	if strings.Count(content, "trigger: always_on") != 1 {
-		t.Fatalf("antigravity-cli routing file has duplicated frontmatter blocks")
-	}
-	if len(data) >= 24000 {
-		t.Fatalf("antigravity-cli routing file exceeds rule cap of 24000 bytes: %d bytes", len(data))
+		t.Fatalf("ReadDir(rulesDir) error = %v", err)
 	}
 
-	// A second sync must be idempotent: exactly one frontmatter block survives.
+	// Collect all gentle-ai-routing*.md files
+	var partPaths []string
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "gentle-ai-routing") && strings.HasSuffix(entry.Name(), ".md") {
+			partPaths = append(partPaths, filepath.Join(rulesDir, entry.Name()))
+		}
+	}
+	if len(partPaths) == 0 {
+		t.Fatalf("no gentle-ai-routing*.md files found in %s", rulesDir)
+	}
+	slices.Sort(partPaths)
+
+	// Part 1 must be the canonical name
+	if filepath.Base(partPaths[0]) != "gentle-ai-routing.md" {
+		t.Fatalf("first part must be gentle-ai-routing.md, got %q", filepath.Base(partPaths[0]))
+	}
+	// Parts 2..N must follow the naming pattern
+	for i := 1; i < len(partPaths); i++ {
+		expected := fmt.Sprintf("gentle-ai-routing-%d.md", i+1)
+		if filepath.Base(partPaths[i]) != expected {
+			t.Fatalf("part %d must be %q, got %q", i+1, expected, filepath.Base(partPaths[i]))
+		}
+	}
+
+	// Verify every part
+	for _, partPath := range partPaths {
+		data, err := os.ReadFile(partPath)
+		if err != nil {
+			t.Fatalf("read %q: %v", partPath, err)
+		}
+		content := string(data)
+
+		// Every part must start with the same frontmatter
+		if !strings.HasPrefix(content, antigravityCLIRoutingFrontmatter+"\n") {
+			t.Errorf("%q must start with always_on frontmatter", partPath)
+		}
+		// Every part must carry the ownership marker
+		if !strings.Contains(content, "<!-- gentle-ai:agent-routing -->") {
+			t.Errorf("%q missing agent-routing marker", partPath)
+		}
+		// Exactly one frontmatter block per part
+		if strings.Count(content, "trigger: always_on") != 1 {
+			t.Errorf("%q has duplicated frontmatter blocks", partPath)
+		}
+		// Every part must be under the cap
+		if len(data) >= antigravityCLIRuleCap {
+			t.Errorf("%q exceeds rule cap of %d bytes: %d bytes", partPath, antigravityCLIRuleCap, len(data))
+		}
+	}
+
+	// Second sync must be idempotent for all parts
 	if _, err := InjectRoutingWithOptions(targetDir, model.AgentAntigravityCLI, RoutingOptions{}); err != nil {
 		t.Fatalf("second InjectRouting(antigravity-cli) error = %v", err)
 	}
-	data, err = os.ReadFile(wantPath)
-	if err != nil {
-		t.Fatalf("re-read %q: %v", wantPath, err)
+	for _, partPath := range partPaths {
+		data, err := os.ReadFile(partPath)
+		if err != nil {
+			t.Fatalf("re-read %q: %v", partPath, err)
+		}
+		content := string(data)
+		if !strings.HasPrefix(content, antigravityCLIRoutingFrontmatter+"\n") || strings.Count(content, "trigger: always_on") != 1 {
+			t.Errorf("second inject duplicated or dropped frontmatter in %q", partPath)
+		}
 	}
-	content = string(data)
-	if !strings.HasPrefix(content, antigravityCLIRoutingFrontmatter+"\n") || strings.Count(content, "trigger: always_on") != 1 {
-		t.Fatalf("second inject duplicated or dropped frontmatter:\n%.200q", content)
+}
+
+// TestInjectRoutingAntigravityCLIUnionIntegrity verifies that concatenating
+// all part bodies (frontmatter and marker stripped) equals the canonical
+// single render from RenderRouting(AgentAntigravityCLI).
+func TestInjectRoutingAntigravityCLIUnionIntegrity(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	if _, err := InjectRoutingWithOptions(targetDir, model.AgentAntigravityCLI, RoutingOptions{}); err != nil {
+		t.Fatalf("InjectRouting(antigravity-cli) error = %v", err)
+	}
+
+	rulesDir := filepath.Join(targetDir, ".gemini", "config", "plugins", "gentle-ai", "rules")
+	entries, err := os.ReadDir(rulesDir)
+	if err != nil {
+		t.Fatalf("ReadDir(rulesDir) error = %v", err)
+	}
+
+	var partPaths []string
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "gentle-ai-routing") && strings.HasSuffix(entry.Name(), ".md") {
+			partPaths = append(partPaths, filepath.Join(rulesDir, entry.Name()))
+		}
+	}
+	if len(partPaths) == 0 {
+		t.Fatalf("no gentle-ai-routing*.md files found")
+	}
+	slices.Sort(partPaths)
+
+	// Extract body from each part (strip frontmatter and marker)
+	var combinedBody strings.Builder
+	for _, partPath := range partPaths {
+		data, err := os.ReadFile(partPath)
+		if err != nil {
+			t.Fatalf("read %q: %v", partPath, err)
+		}
+		content := string(data)
+
+		// Strip frontmatter (everything up to and including the second ---\n)
+		body := content
+		if idx := strings.Index(body, "---\n"); idx >= 0 {
+			body = body[idx+4:] // skip first "---\n"
+			if idx2 := strings.Index(body, "---\n"); idx2 >= 0 {
+				body = body[idx2+4:]
+			}
+		}
+		// Strip the ownership marker
+		body = strings.Replace(body, "<!-- gentle-ai:agent-routing -->\n", "", 1)
+		body = strings.Replace(body, "\n<!-- /gentle-ai:agent-routing -->", "", 1)
+
+		combinedBody.WriteString(body)
+	}
+
+	// Compare against canonical routing render + what inject adds (remote-authorization)
+	canonical, err := RenderRouting(model.AgentAntigravityCLI)
+	canonical = InjectRemoteAuthorization(canonical)
+	if err != nil {
+		t.Fatalf("RenderRouting error = %v", err)
+	}
+	// InjectMarkdownSection adds a leading newline before content and ensures trailing newline
+	// The combined body should match the canonical render exactly
+	if combinedBody.String() != canonical {
+		t.Fatalf("union integrity failed: combined body (%d bytes) != canonical render (%d bytes)\ncombined:\n%s\n\ncanonical:\n%s",
+			combinedBody.Len(), len(canonical), combinedBody.String(), canonical)
+	}
+}
+
+// TestInjectRoutingAntigravityCLIStalePartCleanup verifies that after writing
+// the current part set, files matching gentle-ai-routing*.md that contain the
+// ownership marker but are NOT in the written set are removed.
+func TestInjectRoutingAntigravityCLIStalePartCleanup(t *testing.T) {
+	t.Parallel()
+
+	targetDir := t.TempDir()
+	rulesDir := filepath.Join(targetDir, ".gemini", "config", "plugins", "gentle-ai", "rules")
+	if err := os.MkdirAll(rulesDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll error = %v", err)
+	}
+
+	// Create a stale part that would not be in the new part set (e.g., part 5)
+	stalePath := filepath.Join(rulesDir, "gentle-ai-routing-5.md")
+	staleContent := antigravityCLIRoutingFrontmatter + "\n<!-- gentle-ai:agent-routing -->\nstale content\n<!-- /gentle-ai:agent-routing -->\n"
+	if err := os.WriteFile(stalePath, []byte(staleContent), 0o644); err != nil {
+		t.Fatalf("write stale part: %v", err)
+	}
+
+	// Create a non-marker file that should NOT be deleted
+	otherPath := filepath.Join(rulesDir, "gentle-ai-routing-notes.md")
+	if err := os.WriteFile(otherPath, []byte("# Notes\nUser content\n"), 0o644); err != nil {
+		t.Fatalf("write other file: %v", err)
+	}
+
+	// Run injection
+	if _, err := InjectRoutingWithOptions(targetDir, model.AgentAntigravityCLI, RoutingOptions{}); err != nil {
+		t.Fatalf("InjectRouting(antigravity-cli) error = %v", err)
+	}
+
+	// Stale marked part must be removed
+	if _, err := os.Stat(stalePath); !os.IsNotExist(err) {
+		t.Fatalf("stale marked part %q was not removed", stalePath)
+	}
+
+	// Non-marker file must survive
+	if _, err := os.Stat(otherPath); err != nil {
+		t.Fatalf("non-marker file %q was incorrectly removed: %v", otherPath, err)
+	}
+
+	// Current parts must exist
+	entries, err := os.ReadDir(rulesDir)
+	if err != nil {
+		t.Fatalf("ReadDir error = %v", err)
+	}
+	var currentParts []string
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "gentle-ai-routing") && strings.HasSuffix(entry.Name(), ".md") {
+			currentParts = append(currentParts, entry.Name())
+		}
+	}
+	if len(currentParts) == 0 {
+		t.Fatalf("no current parts written")
+	}
+	if !slices.Contains(currentParts, "gentle-ai-routing.md") {
+		t.Fatalf("canonical part missing")
 	}
 }
 
@@ -1063,26 +1232,5 @@ func TestInjectRoutingNeverFrontmattersNonAntigravityPromptCarriers(t *testing.T
 				t.Fatalf("%q prompt carrier must never gain YAML frontmatter", agent)
 			}
 		})
-	}
-}
-
-func TestInjectRoutingAntigravityCLIUsesDedicatedRuleFile(t *testing.T) {
-	t.Parallel()
-
-	targetDir := t.TempDir()
-	result, err := InjectRoutingWithOptions(targetDir, model.AgentAntigravityCLI, RoutingOptions{})
-	if err != nil {
-		t.Fatalf("InjectRouting(antigravity-cli) error = %v", err)
-	}
-	wantPath := filepath.Join(targetDir, ".gemini", "config", "plugins", "gentle-ai", "rules", "gentle-ai-routing.md")
-	if len(result.Files) != 1 || result.Files[0] != wantPath {
-		t.Fatalf("InjectRouting(antigravity-cli) wrote %v, want %q", result.Files, wantPath)
-	}
-	data, err := os.ReadFile(wantPath)
-	if err != nil {
-		t.Fatalf("read %q: %v", wantPath, err)
-	}
-	if len(data) >= 24000 {
-		t.Fatalf("antigravity-cli routing file exceeds rule cap of 24000 bytes: %d bytes", len(data))
 	}
 }
