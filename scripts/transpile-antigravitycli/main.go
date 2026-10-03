@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -19,7 +20,15 @@ const (
 
 	antigravityCLIReviewContractHeading = "#### Review Execution Contract"
 	antigravityCLIReviewContractNext    = "Cost and Context Balance"
+
+	provenanceFileName = "PROVENANCE.json"
 )
+
+// Provenance records the exact source reference used for transpilation.
+type Provenance struct {
+	SourceRepo   string `json:"source_repo"`
+	SourceCommit string `json:"source_commit"`
+}
 
 // UnmappedToolWarning records a Pi tool that lacked a native Antigravity CLI translation.
 type UnmappedToolWarning struct {
@@ -82,9 +91,19 @@ func main() {
 	sourceRepo := flag.String("source-repo", defaultRemoteRepo, "Remote git URL for gentle-pi")
 	outputDir := flag.String("output-dir", defaultOutputDir, "Destination directory for generated assets")
 	strict := flag.Bool("strict", false, "Fail with exit code 1 if any unmapped tools or frontmatter discrepancies are detected")
+	check := flag.Bool("check", false, "Verify the committed bundle matches a fresh transpilation from the pinned provenance (drift gate)")
 	flag.Parse()
 
-	piRoot, cleanup, err := resolveSourceRoot(*sourceDir, *sourceRepo)
+	if *check {
+		if err := runCheckGate(*outputDir, *sourceDir, *sourceRepo); err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Drift check passed: committed bundle matches provenance-pinned transpilation.")
+		return
+	}
+
+	piRoot, cleanup, provenance, err := resolveSourceRootWithProvenance(*sourceDir, *sourceRepo)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error resolving source repository: %v\n", err)
 		os.Exit(1)
@@ -93,6 +112,11 @@ func main() {
 
 	if err := transpileAll(piRoot, *outputDir); err != nil {
 		fmt.Fprintf(os.Stderr, "Transpilation failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := writeProvenance(*outputDir, provenance); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to write provenance: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -111,19 +135,32 @@ func main() {
 	fmt.Println("Successfully transpiled Antigravity CLI assets from Gentle Pi.")
 }
 
-func resolveSourceRoot(localDir, remoteRepo string) (string, func(), error) {
+func resolveSourceRootWithProvenance(localDir, remoteRepo string) (string, func(), Provenance, error) {
+	var provenance Provenance
+	provenance.SourceRepo = remoteRepo
+
 	if localDir != "" {
 		if info, err := os.Stat(localDir); err == nil && info.IsDir() {
-			return localDir, func() {}, nil
+			sha, err := getGitHEAD(localDir)
+			if err != nil {
+				return "", func() {}, provenance, fmt.Errorf("get git HEAD for %s: %w", localDir, err)
+			}
+			provenance.SourceCommit = sha
+			return localDir, func() {}, provenance, nil
 		}
-		return "", func() {}, fmt.Errorf("specified --source-dir %q does not exist or is not a directory", localDir)
+		return "", func() {}, provenance, fmt.Errorf("specified --source-dir %q does not exist or is not a directory", localDir)
 	}
 
 	// Check environment variables
 	for _, envKey := range []string{"GENTLE_SHELL_DIR", "GENTLE_PI_DIR"} {
 		if val := os.Getenv(envKey); val != "" {
 			if info, err := os.Stat(val); err == nil && info.IsDir() {
-				return val, func() {}, nil
+				sha, err := getGitHEAD(val)
+				if err != nil {
+					return "", func() {}, provenance, fmt.Errorf("get git HEAD for %s: %w", val, err)
+				}
+				provenance.SourceCommit = sha
+				return val, func() {}, provenance, nil
 			}
 		}
 	}
@@ -137,14 +174,19 @@ func resolveSourceRoot(localDir, remoteRepo string) (string, func(), error) {
 	}
 	for _, candidate := range candidates {
 		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
-			return candidate, func() {}, nil
+			sha, err := getGitHEAD(candidate)
+			if err != nil {
+				return "", func() {}, provenance, fmt.Errorf("get git HEAD for %s: %w", candidate, err)
+			}
+			provenance.SourceCommit = sha
+			return candidate, func() {}, provenance, nil
 		}
 	}
 
 	// Clone from remote into a temporary directory
 	tempDir, err := os.MkdirTemp("", "gentle-pi-source-*")
 	if err != nil {
-		return "", func() {}, fmt.Errorf("create temp dir: %w", err)
+		return "", func() {}, provenance, fmt.Errorf("create temp dir: %w", err)
 	}
 	cleanup := func() { _ = os.RemoveAll(tempDir) }
 
@@ -153,10 +195,27 @@ func resolveSourceRoot(localDir, remoteRepo string) (string, func(), error) {
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		cleanup()
-		return "", func() {}, fmt.Errorf("git clone %s: %w", remoteRepo, err)
+		return "", func() {}, provenance, fmt.Errorf("git clone %s: %w", remoteRepo, err)
 	}
 
-	return tempDir, cleanup, nil
+	sha, err := getGitHEAD(tempDir)
+	if err != nil {
+		cleanup()
+		return "", func() {}, provenance, fmt.Errorf("get git HEAD for cloned repo: %w", err)
+	}
+	provenance.SourceCommit = sha
+
+	return tempDir, cleanup, provenance, nil
+}
+
+func getGitHEAD(dir string) (string, error) {
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = dir
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("git rev-parse HEAD: %w", err)
+	}
+	return strings.TrimSpace(string(output)), nil
 }
 
 func transpileAll(piRoot, outputDir string) error {
@@ -208,6 +267,27 @@ func writePluginManifest(outputDir string) error {
 		return fmt.Errorf("marshal plugin.json: %w", err)
 	}
 	return writeDeterministicFile(filepath.Join(outputDir, "plugin.json"), string(bytes))
+}
+
+func writeProvenance(outputDir string, provenance Provenance) error {
+	bytes, err := json.MarshalIndent(provenance, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal provenance: %w", err)
+	}
+	return writeDeterministicFile(filepath.Join(outputDir, provenanceFileName), string(bytes))
+}
+
+func readProvenance(outputDir string) (Provenance, error) {
+	var prov Provenance
+	path := filepath.Join(outputDir, provenanceFileName)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return prov, fmt.Errorf("read provenance: %w", err)
+	}
+	if err := json.Unmarshal(data, &prov); err != nil {
+		return prov, fmt.Errorf("parse provenance: %w", err)
+	}
+	return prov, nil
 }
 
 type plannedSubagent struct {
@@ -1010,4 +1090,186 @@ func writeDeterministicFile(path, content string) error {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 	return nil
+}
+
+func runCheckGate(outputDir, sourceDir, sourceRepo string) error {
+	// Read committed provenance
+	committedProv, err := readProvenance(outputDir)
+	if err != nil {
+		return fmt.Errorf("read committed provenance: %w", err)
+	}
+
+	// Resolve source at the pinned commit
+	var sourceRoot string
+	var cleanup func()
+
+	if sourceDir != "" {
+		// Check if local source HEAD matches the pinned commit
+		localSHA, err := getGitHEAD(sourceDir)
+		if err != nil {
+			return fmt.Errorf("get local source HEAD: %w", err)
+		}
+		if localSHA == committedProv.SourceCommit {
+			sourceRoot = sourceDir
+			cleanup = func() {}
+		} else {
+			// Local source doesn't match pin; fall through to clone
+			sourceDir = ""
+		}
+	}
+
+	if sourceRoot == "" {
+		// Clone remote and checkout pinned commit
+		tempDir, err := os.MkdirTemp("", "gentle-pi-check-*")
+		if err != nil {
+			return fmt.Errorf("create temp dir for check: %w", err)
+		}
+		cleanup = func() { _ = os.RemoveAll(tempDir) }
+
+		// Clone with full history to allow checkout of any commit
+		cmd := exec.Command("git", "clone", sourceRepo, tempDir)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			cleanup()
+			return fmt.Errorf("git clone %s: %w", sourceRepo, err)
+		}
+
+		// Checkout the pinned commit
+		cmd = exec.Command("git", "checkout", committedProv.SourceCommit)
+		cmd.Dir = tempDir
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			cleanup()
+			return fmt.Errorf("git checkout %s: %w", committedProv.SourceCommit, err)
+		}
+		sourceRoot = tempDir
+	}
+	defer cleanup()
+
+	// Transpile to a temp directory
+	tempOutDir, err := os.MkdirTemp("", "agy-check-*")
+	if err != nil {
+		return fmt.Errorf("create temp output dir: %w", err)
+	}
+	defer os.RemoveAll(tempOutDir)
+
+	if err := transpileAll(sourceRoot, tempOutDir); err != nil {
+		return fmt.Errorf("transpile for check: %w", err)
+	}
+
+	// Write provenance to temp output (deterministic, so it should match)
+	if err := writeProvenance(tempOutDir, committedProv); err != nil {
+		return fmt.Errorf("write provenance for check: %w", err)
+	}
+
+	// Compare the two trees
+	diffs, err := compareTrees(outputDir, tempOutDir)
+	if err != nil {
+		return fmt.Errorf("compare trees: %w", err)
+	}
+
+	if len(diffs) > 0 {
+		var msg strings.Builder
+		msg.WriteString("Drift detected:\n")
+		for _, d := range diffs {
+			msg.WriteString("  " + d + "\n")
+		}
+		return errors.New(msg.String())
+	}
+
+	return nil
+}
+
+func compareTrees(committedDir, tempDir string) ([]string, error) {
+	var diffs []string
+
+	// Walk committed dir
+	committedFiles := make(map[string]bool)
+	err := filepath.WalkDir(committedDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(committedDir, path)
+		if err != nil {
+			return err
+		}
+		committedFiles[rel] = true
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Walk temp dir
+	tempFiles := make(map[string]bool)
+	err = filepath.WalkDir(tempDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(tempDir, path)
+		if err != nil {
+			return err
+		}
+		tempFiles[rel] = true
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Check for missing files (in committed but not in temp)
+	for rel := range committedFiles {
+		if !tempFiles[rel] {
+			diffs = append(diffs, fmt.Sprintf("missing in regenerated: %s", rel))
+		}
+	}
+
+	// Check for extra files (in temp but not in committed)
+	for rel := range tempFiles {
+		if !committedFiles[rel] {
+			diffs = append(diffs, fmt.Sprintf("extra in regenerated: %s", rel))
+		}
+	}
+
+	// Compare content for common files
+	for rel := range committedFiles {
+		if tempFiles[rel] {
+			committedPath := filepath.Join(committedDir, rel)
+			tempPath := filepath.Join(tempDir, rel)
+			committedContent, err := os.ReadFile(committedPath)
+			if err != nil {
+				return nil, fmt.Errorf("read committed %s: %w", rel, err)
+			}
+			tempContent, err := os.ReadFile(tempPath)
+			if err != nil {
+				return nil, fmt.Errorf("read temp %s: %w", rel, err)
+			}
+			if !bytesEqual(committedContent, tempContent) {
+				diffs = append(diffs, fmt.Sprintf("content differs: %s", rel))
+			}
+		}
+	}
+
+	sort.Strings(diffs)
+	return diffs, nil
+}
+
+func bytesEqual(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

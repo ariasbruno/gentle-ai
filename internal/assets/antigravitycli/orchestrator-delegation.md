@@ -96,7 +96,15 @@ When the Gentle Shell prompt is active, its working label is inferred automatica
 
 When RDD is enabled, follow the projected `#### Review Execution Contract` exactly: use only the native review operations returned by that contract, preserve provider-owned bindings, and never infer authority or delivery from model judgment or task size. When RDD is disabled, ordinary checks remain.
 
-Delivery follows work units. At feature-document creation, forecast authored changed lines (additions plus deletions, generated files excluded) from the task list, and keep a running count from work-unit commits. Choose one delivery strategy per feature: `ask-on-risk` (default), `auto-chain`, `single-pr`, or `exception-ok`. When the forecast or the running count exceeds about 400 authored changed lines, apply the chosen strategy before the next commit: `ask-on-risk` asks once for the chain strategy, `stacked-to-main` or `feature-branch-chain`; `auto-chain` asks only for a missing chain strategy and slices automatically. Cache both choices, and record slice boundaries, which commits each pull request holds, in the feature document. Resolve the `work-unit-commits` and `chained-pr` skills by registry name, never hardcode their paths.
+Delivery follows work units. At feature-document creation, forecast authored changed lines (additions plus deletions, generated files excluded) from the task list, and keep a running count from work-unit commits. Choose one delivery strategy per feature: `ask-on-risk` (default), `auto-chain`, `single-pr`, or `exception-ok`. When the forecast or the running count exceeds about 400 authored changed lines, apply the chosen strategy before the next commit: `ask-on-risk` asks once using the ordered oversized-delivery menu; `auto-chain` asks only for a missing chain strategy and slices automatically with a cached choice. When a choice is needed on either chaining path, offer exactly these three semantic outcomes in order:
+
+1. **Feature/tracker branch chain** — `chain_strategy=feature-branch-chain`.
+2. **Verified default/main branch chain** — `chain_strategy=stacked-to-main`; verify the destination's default branch rather than assuming its name.
+3. **One single PR — least recommended** — `delivery_strategy=single-pr`.
+
+Generate the complete user-facing question and every option label, description, and recommendation marker in the active user's conversation language (English for an English user, Spanish for a Spanish user, etc.). Machine strategy tokens remain unchanged and untranslated. These English examples are illustrative and localizable, not mandatory copy.
+
+The third choice overrides the pending chaining path: clear the chain choice as inapplicable and suppress later chain prompts. `single-pr` is not a `chain_strategy` token; do not automatically select `exception-ok`. Explain that an oversized single PR increases reviewer load, delays feedback, and couples rollback; least recommended applies only to this oversized menu, not focused ≤400-line single PRs. Follow the destination repository's documented contribution/size policy: `size:exception` is a Gentle-owned repository policy, not a universal label requirement. Never request or add it for generic users unless their destination policy uses it; preserve required maintainer acceptance and protected-label authorization. A single PR needs no tracker, child dependency diagram, or Chain Context. Shape selection does not authorize push, PR creation, merge, or review-mode/consent changes. Cache both choices, and record slice boundaries, which commits each pull request holds, in the feature document when chaining; for single PR, record the whole-PR scope instead. Resolve the `work-unit-commits` and `chained-pr` skills by registry name, never hardcode their paths.
 
 ### Delegation Rules
 
@@ -106,8 +114,8 @@ Core principle: **does this inflate the parent context without need?** If yes, u
 
 | Action | Direct inline | Delegated direct worker |
 |--------|---------------|-------------------------|
-| Read to decide/verify (1–3 files) | ✅ | — |
-| Read to explore/understand (4+ files) | — | ✅ one narrow mapper |
+| Read to decide/verify within the evidence budget (one parallel batch: at most 3 calls, ~10k tokens) | ✅ | — |
+| Read to explore/understand beyond the evidence budget | — | ✅ one narrow explorer (handoff of at most ~2k tokens, `path:line` evidence) |
 | Read as preparation for writing | — | ✅ together with the write |
 | Write one mechanical, already-understood file | ✅ | — |
 | Write 2+ non-trivial files | — | ✅ one writer |
@@ -122,10 +130,10 @@ Keep one writer and a short synthesized handoff. Delegation is mandatory at the 
 
 These are parent-orchestrator routing boundaries; do not pass these rules to child agents as permission to orchestrate. These triggers are mandatory, not advisory. When one fires, stop and delegate through the runtime's subagent mechanism before continuing; executing past a fired trigger inline is a routing defect even if the work succeeds. Delegation keeps the parent context thin enough to orchestrate; it does not slow the work down.
 
-1. **Mapping trigger (4-file rule):** when understanding the work requires 4 or more files, delegate one narrow exploration or mapping task before deciding or writing anything.
+1. **Mapping trigger (Evidence-budget rule):** read inline only when the evidence fits one parallel batch of at most 3 calls totaling ~10k tokens, using grep and line ranges, never whole large files. When the reading is larger, needs more than ~5 sequential lookups, or the session has a long way to go, delegate one scout/explorer that returns a handoff of at most ~2k tokens with `path:line` evidence before deciding or writing anything. Never force delegation for a small targeted question. The parent does not re-read what the handoff covered, except a single spot check.
 2. **Writer trigger (Multi-file write rule):** when implementation touches 2 or more non-trivial files, delegate one bounded writer instead of editing them inline.
 3. **Incident rule:** after wrong `cwd`, accidental repository/worktree mutation, failed merge recovery, confusing test command, or environment workaround, stop and diagnose the incident separately before resuming.
-4. **Long-session backstop (Long-session rule):** after about 20 tool calls, 5 exploratory reads, or 2 non-mechanical edits without any delegation, pause and delegate the next bounded unit of work.
+4. **Context backstop:** when the parent context passes ~150k tokens, pause and delegate the next bounded unit of work. Always keep command output bounded in the parent (counts, `--stat`, `tail`); send full suites and builds to a verifier.
 5. **Verification rule**: executing or delegating verification commands routes to `gentle-ai-verify`; only a small read-only check stays inline.
 
 **Preparation trigger:** reading that prepares a write, and broad research or context compression, delegate together with or ahead of the write instead of filling the parent context.
@@ -160,11 +168,11 @@ Route work through the smallest harness that is safe. "Smallest" means minimal s
 
 #### 1. Inline Direct
 
-Use inline execution when the task is small, mechanical, and the parent already has enough context: a typo, rename, one-file mechanical edit, a small known bug, focused verification over 1–3 files, or bash for state. Keep the ODD path proportionate. Do not use this exception to avoid delegation after the task stops being small.
+Use inline execution when the task is small, mechanical, and the parent already has enough context: a typo, rename, one-file mechanical edit, a small known bug, focused verification within the evidence budget, or bash for state. Keep the ODD path proportionate. Do not use this exception to avoid delegation after the task stops being small.
 
 #### 2. Simple Delegation
 
-Delegate when work would inflate parent context or requires focused exploration, validation, or multi-file implementation, within the ODD workflow. Examples include understanding an unfamiliar module, inspecting 4+ files, investigating a failing test, implementing a bounded multi-file change, or running focused tests/builds.
+Delegate when work would inflate parent context or requires focused exploration, validation, or multi-file implementation, within the ODD workflow. Examples include understanding an unfamiliar module, reading beyond the evidence budget, investigating a failing test, implementing a bounded multi-file change, or running focused tests/builds.
 
 Use Antigravity's native subagent runtime. Prefer `invoke_subagent` for a fresh delegated context and `send_message` for follow-up guidance; do not invent an alternate delegation or model-routing contract.
 
@@ -174,7 +182,7 @@ For generic exploration and mapping, first attempt the installed package-owned `
 
 For bounded multi-file writes, prefer the installed package-owned `gentle-ai-worker`, then a user-configured `worker`. If neither worker definition exists, delegate the bounded write with Antigravity's native `invoke_subagent`. If no delegation mechanism is available, stop and explain the blocker. This writer precedence overrides the general runtime preference above.
 
-Delegate generic verification that executes or delegates commands per the RDD-aware Verification rule (trigger 5 under Mandatory Delegation Triggers, Gentle AI#661) -- the normative on/off/unknown routing lives there, not here: the bounded writer always self-verifies via `## Verification`, and `gentle-ai-verify` (or the `invoke_subagent` fallback, with the same read-only verification constraints, exact parent-authorized commands, and fallback reporting) is on-demand only when the rendered `Receipt-driven development:` line reads `on`; when the line reads `off` or `unknown`, the the native review lifecycle `assess` operation's returned plan decides it by native risk tier instead of a blanket non-trivial rule (Gentle AI#662). `## Known environmental failures` follows the same definition as `gentle-ai-worker`'s Verification contract: exact pre-existing base failures reported as evidence, never blockers -- any other failing required command still forces `status: partial`. Truly local read-only checking of 1–3 known files may remain inline. Separate exploration stays reserved for when the parent needs the map to decide or route; reading that prepares a write belongs with the writer making the change, consistent with the Delegation Rules table above.
+Delegate generic verification that executes or delegates commands per the RDD-aware Verification rule (trigger 5 under Mandatory Delegation Triggers, Gentle AI#661) -- the normative on/off/unknown routing lives there, not here: the bounded writer always self-verifies via `## Verification`, and `gentle-ai-verify` (or the `invoke_subagent` fallback, with the same read-only verification constraints, exact parent-authorized commands, and fallback reporting) is on-demand only when the rendered `Receipt-driven development:` line reads `on`; when the line reads `off` or `unknown`, the the native review lifecycle `assess` operation's returned plan decides it by native risk tier instead of a blanket non-trivial rule (Gentle AI#662). `## Known environmental failures` follows the same definition as `gentle-ai-worker`'s Verification contract: exact pre-existing base failures reported as evidence, never blockers -- any other failing required command still forces `status: partial`. A truly local read-only check within the evidence budget may remain inline. Separate exploration stays reserved for when the parent needs the map to decide or route; reading that prepares a write belongs with the writer making the change, consistent with the Delegation Rules table above.
 
 #### Allowed edit surfaces (MANDATORY)
 
