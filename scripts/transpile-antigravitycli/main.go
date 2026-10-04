@@ -642,6 +642,22 @@ func transpileSkills(piRoot, skillsDestDir string) error {
 			continue
 		}
 		skillName := entry.Name()
+
+		// The review-ledger-contract.md shared fragment describes Pi's runtime
+		// review transport (host relay, SessionManager, globalThis[Symbol.for]
+		// registry, print-mode pi subprocess) — concepts that do not exist in
+		// Antigravity CLI. agy receives its review protocol from the
+		// orchestrator rule's review contract fill (the internal catalog's
+		// review-ledger-contract.md, adapted per transport), so shipping this
+		// Pi-specific fragment in the plugin is actively misleading.
+		if skillName == "_shared" {
+			// Still transpile _shared, but skip the Pi-runtime review ledger.
+			if err := transpileSharedDirExcludingReviewLedger(filepath.Join(piSkillsDir, skillName), filepath.Join(skillsDestDir, skillName)); err != nil {
+				return fmt.Errorf("transpile skill %s: %w", skillName, err)
+			}
+			continue
+		}
+
 		srcSkillDir := filepath.Join(piSkillsDir, skillName)
 		destSkillDir := filepath.Join(skillsDestDir, skillName)
 
@@ -651,6 +667,49 @@ func transpileSkills(piRoot, skillsDestDir string) error {
 	}
 
 	return nil
+}
+
+// transpileSharedDirExcludingReviewLedger copies the _shared directory minus
+// the Pi-runtime review-ledger-contract.md, which describes Pi's extension
+// system (host relay, SessionManager, globalThis[Symbol.for]) and has no
+// meaning for Antigravity CLI.
+func transpileSharedDirExcludingReviewLedger(srcDir, destDir string) error {
+	return filepath.WalkDir(srcDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		relPath, err := filepath.Rel(srcDir, path)
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		// Skip the Pi-runtime review ledger — its content is Pi's extension
+		// protocol, not agy's. agy gets its review protocol from the
+		// orchestrator rule fill (internal catalog).
+		if d.Name() == "review-ledger-contract.md" {
+			return nil
+		}
+		return copyAndTransformFile(path, filepath.Join(destDir, relPath))
+	})
+}
+
+// copyAndTransformFile copies one file, applying the skill transformation
+// pipeline to markdown files and copying everything else verbatim.
+func copyAndTransformFile(srcPath, destPath string) error {
+	content, err := os.ReadFile(srcPath)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", srcPath, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
+		return err
+	}
+	if strings.HasSuffix(strings.ToLower(filepath.Base(srcPath)), ".md") {
+		transformed := transformSkillContent(string(content), "")
+		return writeDeterministicFile(destPath, transformed)
+	}
+	return writeDeterministicFile(destPath, string(content))
 }
 
 // copyAndTransformSkillDir recursively copies a skill directory, applying transformations to markdown files.
@@ -1101,6 +1160,7 @@ func applyAntigravityCLIParentMutations(content string) string {
 	content = replaceAntigravityCLILineContaining(content, "5. **Verification rule**", "5. **Verification rule**: executing or delegating verification commands routes to `gentle-ai-verify`; only a small read-only check stays inline.")
 	content = replaceAntigravityCLILineContaining(content, "{{GENTLE_PI_BACKGROUND_POLICY}}", "Use Antigravity's native `invoke_subagent` and keep delegated work foreground until the result returns")
 	content = replaceAntigravityCLILineContaining(content, "| Native `nextRecommended` | Pi executor |", "| Native `nextRecommended` | Antigravity executor |")
+	content = replaceAntigravityCLILineContaining(content, "the provider host-relay capture path never loads this chain", "> Manual/compat-lane only: this chain exists solely for explicit manual 4R invocation; native review lifecycle captures do not load it.")
 	content = strings.ReplaceAll(content, "`fetch_content`", "`read_url_content`")
 	content = strings.ReplaceAll(content, "`web_search`", "`search_web`")
 	content = strings.ReplaceAll(content, "`source_check`", "`read_url_content`")

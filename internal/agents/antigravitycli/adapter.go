@@ -603,6 +603,10 @@ func (a *Adapter) DeployPluginTree(homeDir string) error {
 		// agy never reads the plugin root; this was the pre-rule-cap deploy
 		// location for the orchestrator and is dead weight on existing installs.
 		filepath.Join(pluginDir, "orchestrator.md"),
+		// The Pi-runtime review ledger shipped in _shared before the canon-first
+		// split; its content describes Pi's extension system (SessionManager,
+		// globalThis[Symbol.for], host relay) and is removed from the bundle.
+		filepath.Join(pluginDir, "skills", "_shared", "review-ledger-contract.md"),
 	}
 	for _, path := range legacyFiles {
 		_ = os.Remove(path)

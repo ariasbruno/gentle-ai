@@ -786,14 +786,20 @@ func TestDeployPluginTreePrunesStaleSkills(t *testing.T) {
 			t.Errorf("missing or empty deployed bundle skill %s at %s", name, skillPath)
 		}
 	}
-	// Verify the _shared fragments directory is deployed with its canon contents.
-	sharedRefs := []string{
-		"review-ledger-contract.md",
-	}
-	for _, name := range sharedRefs {
-		sharedPath := filepath.Join(skillsDir, "_shared", name)
-		if info, err := os.Stat(sharedPath); err != nil || info.Size() == 0 {
-			t.Errorf("missing or empty _shared fragment %s at %s", name, sharedPath)
+	// Verify the Pi-runtime review ledger is NOT deployed — it was stripped
+	// from the bundle (describes Pi's extension system, not agy's runtime).
+	// _shared may be absent entirely (empty in the bundle = nothing to deploy).
+	sharedDir := filepath.Join(skillsDir, "_shared")
+	if _, err := os.Stat(sharedDir); err == nil {
+		// _shared exists — verify the review ledger is NOT in it
+		if _, err := os.Stat(filepath.Join(sharedDir, "review-ledger-contract.md")); !os.IsNotExist(err) {
+			t.Errorf("_shared/review-ledger-contract.md should be pruned (Pi-runtime content removed from the bundle)")
 		}
+	} else if !os.IsNotExist(err) {
+		t.Errorf("unexpected stat error for _shared: %v", err)
+	}
+	// The Pi-runtime review ledger must NEVER exist in the plugin, regardless.
+	if _, err := os.Stat(filepath.Join(skillsDir, "_shared", "review-ledger-contract.md")); !os.IsNotExist(err) {
+		t.Errorf("_shared/review-ledger-contract.md was deployed despite the transpiler strip")
 	}
 }
