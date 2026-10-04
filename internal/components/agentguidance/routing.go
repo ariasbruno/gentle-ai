@@ -21,16 +21,12 @@ import (
 // Receipt-driven development clauses (native review, its assessment, and its
 // user-owned switch) reach only runtimes in model.SupportsReceiptDrivenDevelopment;
 // every other runtime receives the same ODD protocol with ordinary verification.
-func RenderRouting(agent model.AgentID) (string, error) {
-	manifest, err := capabilitymanifest.ForAgent(agent)
-	if err != nil {
-		return "", fmt.Errorf("render routing guidance for %q: %w", agent, err)
-	}
-
-	routing := manifest.ImplementationRouting
-	rdd := model.SupportsReceiptDrivenDevelopment(agent)
-	var output strings.Builder
-	output.WriteString("## Implementation Routing\n\n")
+// writeODDWorkflowProtocol emits the mandatory ODD workflow paragraph, the
+// seven-step protocol, and the interrupted-feature recovery line. It is the
+// one routing piece the transpiled canon files do not carry (gentle-shell
+// delivers it to Pi as runtime code); the full render and Antigravity CLI's
+// protocol-only rule share this single source.
+func writeODDWorkflowProtocol(output *strings.Builder, rdd bool) {
 	output.WriteString("Organic Driven Development (ODD) is the predefined workflow of this orchestrator. Every request enters it, on every runtime, without the user asking for a workflow, a plan, or task tracking. Never describe this workflow only when asked about it: run it.\n\n")
 	output.WriteString("### ODD protocol (MANDATORY, in this order, on every request)\n\n")
 	output.WriteString("1. **Authorize.** First establish whether the requested outcome explicitly authorizes a change. Investigation, explanation, review, audit, comparison, and solution-proposal or planning-only requests are read-only unless the user explicitly requests implementation or another mutation.\n")
@@ -47,6 +43,34 @@ func RenderRouting(agent model.AgentID) (string, error) {
 		output.WriteString("7. **Close.** Report the verified outcome, every failed, skipped, or pending check, and the next step. Verification covers a work-unit commit or a PR slice, never a TODO checkbox and never the accumulated feature branch.\n\n")
 	}
 	output.WriteString("Resume an interrupted feature with `mem_context`, then project- and feature-scoped `mem_search`, then `mem_get_observation` for the full document, then the task file itself; reconcile before continuing the next unfinished task.\n\n")
+}
+
+func RenderRouting(agent model.AgentID) (string, error) {
+	manifest, err := capabilitymanifest.ForAgent(agent)
+	if err != nil {
+		return "", fmt.Errorf("render routing guidance for %q: %w", agent, err)
+	}
+
+	routing := manifest.ImplementationRouting
+	rdd := model.SupportsReceiptDrivenDevelopment(agent)
+
+	// Antigravity CLI is canon-first for routing doctrine: the transpiled
+	// canon (orchestrator rule plus the delegation/memory/skills satellites)
+	// is the single source for the routing ladder, delegation triggers, TDD
+	// policy, RDD boundaries, and feature-doc discipline. The canon files do
+	// not carry the mandatory ODD workflow protocol — gentle-shell delivers
+	// it to Pi as runtime code — so agy's dedicated rule keeps exactly that
+	// protocol (odd/tasks/agy-canon-first-routing.md).
+	if agent == model.AgentAntigravityCLI {
+		var output strings.Builder
+		output.WriteString("## Implementation Routing\n\n")
+		writeODDWorkflowProtocol(&output, rdd)
+		return output.String(), nil
+	}
+
+	var output strings.Builder
+	output.WriteString("## Implementation Routing\n\n")
+	writeODDWorkflowProtocol(&output, rdd)
 	output.WriteString("After explicit change intent is established, route work for the requested outcome with the smallest useful topology. Every authorized change takes exactly one implementation route: direct inline or delegated direct.\n\n")
 
 	_, _ = fmt.Fprintf(

@@ -191,12 +191,14 @@ func TestInstallAndSyncDeliverOrchestratorOnceForEveryRuntime(t *testing.T) {
 	}
 }
 
-// Antigravity CLI's guidance file must stay routing-only: the orchestrator
-// arrives exactly once through the plugin bundle rule (gentle-ai-orchestrator.md,
-// review contract filled), pinned end-to-end by the driven j4500 journey.
-// Merging the canonical orchestrator render into the routing file duplicated
-// the bundle rule and pushed the file past agy's 24,000-byte per-file rule
-// cap, where agy truncates on line boundaries (odd/tasks/agy-routing-split.md).
+// Antigravity CLI's guidance file must stay routing-only AND protocol-only:
+// the orchestrator arrives exactly once through the plugin bundle rule
+// (gentle-ai-orchestrator.md, review contract filled), pinned end-to-end by
+// the driven j4500 journey, and the routing rule carries ONLY the mandatory
+// ODD workflow protocol — the one canon piece the transpiled satellites do
+// not carry. Canon-covered doctrine (delegation triggers, TDD policy, RDD
+// boundaries) arrives via the transpiled canon, not this rule
+// (odd/tasks/agy-canon-first-routing.md).
 func TestInstallAndSyncKeepAntigravityCLIRoutingGuidanceRoutingOnly(t *testing.T) {
 	home := t.TempDir()
 	selection := model.Selection{
@@ -225,9 +227,18 @@ func TestInstallAndSyncKeepAntigravityCLIRoutingGuidanceRoutingOnly(t *testing.T
 	if !strings.Contains(prompt, routingOpenMarker) {
 		t.Fatal("routing rule must carry the routing marker")
 	}
-	// Routing still carries the RDD boundaries canon (kill-switch guidance).
-	if !strings.Contains(prompt, "gentle-ai review mode") {
-		t.Fatal("routing rule lost the RDD kill-switch guidance")
+	if !strings.Contains(prompt, "1. **Authorize.**") {
+		t.Fatal("routing rule lost the ODD protocol steps")
+	}
+	// Canon-first: doctrine the transpiled canon carries stays OUT of the
+	// routing rule and arrives via the orchestrator rule and satellites.
+	for _, canonCovered := range []string{
+		"Mandatory Delegation Triggers",
+		"gentle-ai review mode enable|disable|status",
+	} {
+		if strings.Contains(prompt, canonCovered) {
+			t.Fatalf("routing rule carries canon-covered doctrine: %q", canonCovered)
+		}
 	}
 
 	runInstallInjectionSteps(t, newTestInstallRuntime(t, home, selection))

@@ -94,6 +94,12 @@ func TestRenderRoutingSucceedsForEverySupportedAgent(t *testing.T) {
 	routing := capabilitymanifest.CanonicalImplementationRouting()
 
 	for _, agent := range all {
+		if agent.ID == model.AgentAntigravityCLI {
+			// Canon-first: agy's routing rule renders the ODD workflow protocol
+			// only; the ladder, delegation triggers, TDD and RDD doctrine arrive
+			// via the transpiled canon (odd/tasks/agy-canon-first-routing.md).
+			continue
+		}
 		t.Run(string(agent.ID), func(t *testing.T) {
 			t.Parallel()
 
@@ -287,6 +293,12 @@ func TestRenderRoutingOrganicTaskContinuity(t *testing.T) {
 		}},
 	}
 	for _, agent := range catalog.AllAgents() {
+		if agent.ID == model.AgentAntigravityCLI {
+			// Canon-first: agy's routing rule renders the ODD workflow protocol
+			// only; the ladder, delegation triggers, TDD and RDD doctrine arrive
+			// via the transpiled canon (odd/tasks/agy-canon-first-routing.md).
+			continue
+		}
 		t.Run(string(agent.ID), func(t *testing.T) {
 			t.Parallel()
 			rendered, err := RenderRouting(agent.ID)
@@ -399,6 +411,12 @@ func TestRenderRoutingClosesEachTaskWithAWorkUnitCommitAndReviewsIt(t *testing.T
 	}
 
 	for _, agent := range catalog.AllAgents() {
+		if agent.ID == model.AgentAntigravityCLI {
+			// Canon-first: agy's routing rule renders the ODD workflow protocol
+			// only; the ladder, delegation triggers, TDD and RDD doctrine arrive
+			// via the transpiled canon (odd/tasks/agy-canon-first-routing.md).
+			continue
+		}
 		t.Run(string(agent.ID), func(t *testing.T) {
 			t.Parallel()
 
@@ -429,6 +447,12 @@ func TestRenderRoutingAuthorizesOutcomesBeforeSelectingTopology(t *testing.T) {
 	t.Parallel()
 
 	for _, agent := range catalog.AllAgents() {
+		if agent.ID == model.AgentAntigravityCLI {
+			// Canon-first: agy's routing rule renders the ODD workflow protocol
+			// only; the ladder, delegation triggers, TDD and RDD doctrine arrive
+			// via the transpiled canon (odd/tasks/agy-canon-first-routing.md).
+			continue
+		}
 		t.Run(string(agent.ID), func(t *testing.T) {
 			t.Parallel()
 
@@ -473,6 +497,12 @@ func TestRenderRoutingMakesTheReviewKillSwitchDiscoverable(t *testing.T) {
 	}
 
 	for _, agent := range all {
+		if agent.ID == model.AgentAntigravityCLI {
+			// Canon-first: agy's routing rule renders the ODD workflow protocol
+			// only; the ladder, delegation triggers, TDD and RDD doctrine arrive
+			// via the transpiled canon (odd/tasks/agy-canon-first-routing.md).
+			continue
+		}
 		t.Run(string(agent.ID), func(t *testing.T) {
 			t.Parallel()
 
@@ -568,6 +598,12 @@ func TestRenderRoutingIsSemanticallyEqualAcrossAgents(t *testing.T) {
 	references := map[bool][]string{}
 
 	for _, agent := range catalog.AllAgents() {
+		if agent.ID == model.AgentAntigravityCLI {
+			// Canon-first: agy's routing rule renders the ODD workflow protocol
+			// only; the ladder, delegation triggers, TDD and RDD doctrine arrive
+			// via the transpiled canon (odd/tasks/agy-canon-first-routing.md).
+			continue
+		}
 		rendered, err := RenderRouting(agent.ID)
 		if err != nil {
 			t.Fatalf("RenderRouting(%q) error = %v", agent.ID, err)
@@ -625,6 +661,12 @@ func TestRenderRoutingOpensWithTheODDProtocol(t *testing.T) {
 	t.Parallel()
 
 	for _, agent := range catalog.AllAgents() {
+		if agent.ID == model.AgentAntigravityCLI {
+			// Canon-first: agy's routing rule renders the ODD workflow protocol
+			// only; the ladder, delegation triggers, TDD and RDD doctrine arrive
+			// via the transpiled canon (odd/tasks/agy-canon-first-routing.md).
+			continue
+		}
 		t.Run(string(agent.ID), func(t *testing.T) {
 			t.Parallel()
 
@@ -691,6 +733,12 @@ func TestRenderRoutingMakesDelegationMandatory(t *testing.T) {
 	routing := capabilitymanifest.CanonicalImplementationRouting()
 
 	for _, agent := range catalog.AllAgents() {
+		if agent.ID == model.AgentAntigravityCLI {
+			// Canon-first: agy's routing rule renders the ODD workflow protocol
+			// only; the ladder, delegation triggers, TDD and RDD doctrine arrive
+			// via the transpiled canon (odd/tasks/agy-canon-first-routing.md).
+			continue
+		}
 		t.Run(string(agent.ID), func(t *testing.T) {
 			t.Parallel()
 

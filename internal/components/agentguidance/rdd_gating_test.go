@@ -131,6 +131,12 @@ func TestRenderRoutingGatesRDDByRuntime(t *testing.T) {
 	t.Parallel()
 
 	for _, agent := range catalog.AllAgents() {
+		if agent.ID == model.AgentAntigravityCLI {
+			// Canon-first: agy's routing rule renders the ODD workflow protocol
+			// only; the reference detail and RDD switch vocabulary arrive via the
+			// transpiled canon (odd/tasks/agy-canon-first-routing.md).
+			continue
+		}
 		t.Run(string(agent.ID), func(t *testing.T) {
 			t.Parallel()
 

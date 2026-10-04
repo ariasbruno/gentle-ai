@@ -138,13 +138,13 @@ func assertAntigravityCLIFirstSync(sandbox *Sandbox, observation Observation) er
 	sandbox.Scratch["j4500-rules-first-sync"] = rulesStr
 
 	// agy drops plugin rule files without a valid trigger on every turn, so
-	// the ODD routing rule parts and the orchestrator rule must carry always_on
+	// the ODD routing rule and the orchestrator rule must carry always_on
 	// frontmatter, and the orchestrator rule must arrive with the review
 	// execution contract already rendered in place of its insert marker.
-	// agy 1.2.16 truncates any rule file at 24,000 bytes on line boundaries;
-	// the ratified split decision (odd/tasks/agy-routing-split.md) delivers
-	// the full routing canon across N parts: gentle-ai-routing.md,
-	// gentle-ai-routing-2.md, ...
+	// Canon-first (odd/tasks/agy-canon-first-routing.md): the routing rule
+	// carries ONLY the mandatory ODD workflow protocol — the canon files lack
+	// it — while the ladder, delegation triggers, TDD and RDD doctrine arrive
+	// via the transpiled orchestrator rule and satellites.
 	rulesDir := filepath.Join(pluginDir, "rules")
 	entries, err := os.ReadDir(rulesDir)
 	if err != nil {
@@ -186,6 +186,9 @@ func assertAntigravityCLIFirstSync(sandbox *Sandbox, observation Observation) er
 		}
 		if !strings.Contains(partStr, "<!-- gentle-ai:agent-routing -->") {
 			return fmt.Errorf("routing part %q missing agent-routing marker", partPath)
+		}
+		if !strings.Contains(partStr, "### ODD protocol (MANDATORY, in this order, on every request)") {
+			return fmt.Errorf("routing rule %q missing the ODD workflow protocol", partPath)
 		}
 		if len(partBytes) >= 24000 {
 			return fmt.Errorf("routing part %q exceeds rule cap of 24000 bytes: %d bytes", partPath, len(partBytes))
