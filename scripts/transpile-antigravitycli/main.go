@@ -297,6 +297,105 @@ func readProvenance(outputDir string) (Provenance, error) {
 	return prov, nil
 }
 
+// getCommittedTree resolves the tree the drift gate must compare against:
+// the version of outputDir COMMITTED at git HEAD, extracted via git archive.
+// A dirty worktree must not make the local --check pass trivially — in CI
+// the checkout is clean so HEAD and disk coincide. When outputDir is not
+// inside a usable git repository (or extraction fails), it falls back to the
+// on-disk tree with a warning so non-repo invocations keep working.
+func getCommittedTree(outputDir string) (string, Provenance, func(), error) {
+	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	cmd.Dir = outputDir
+	output, err := cmd.Output()
+	if err != nil {
+		prov, provErr := readProvenance(outputDir)
+		if provErr != nil {
+			return "", Provenance{}, nil, provErr
+		}
+		fmt.Fprintf(os.Stderr, "[WARN] --check: output dir not in a git repo; comparing against on-disk tree\n")
+		return outputDir, prov, func() {}, nil
+	}
+	gitRoot := strings.TrimSpace(string(output))
+
+	absOutputDir, err := filepath.Abs(outputDir)
+	if err != nil {
+		prov, _ := readProvenance(outputDir)
+		fmt.Fprintf(os.Stderr, "[WARN] --check: cannot resolve absolute path (%v); comparing against on-disk tree\n", err)
+		return outputDir, prov, func() {}, nil
+	}
+	absGitRoot, err := filepath.Abs(gitRoot)
+	if err != nil {
+		prov, _ := readProvenance(outputDir)
+		fmt.Fprintf(os.Stderr, "[WARN] --check: cannot resolve git root (%v); comparing against on-disk tree\n", err)
+		return outputDir, prov, func() {}, nil
+	}
+	relPath, err := filepath.Rel(absGitRoot, absOutputDir)
+	if err != nil || strings.HasPrefix(relPath, "..") {
+		prov, _ := readProvenance(outputDir)
+		fmt.Fprintf(os.Stderr, "[WARN] --check: output dir not inside git repo (%v); comparing against on-disk tree\n", err)
+		return outputDir, prov, func() {}, nil
+	}
+
+	tempDir, err := os.MkdirTemp("", "agy-committed-*")
+	if err != nil {
+		prov, _ := readProvenance(outputDir)
+		fmt.Fprintf(os.Stderr, "[WARN] --check: cannot create temp dir for git archive (%v); comparing against on-disk tree\n", err)
+		return outputDir, prov, func() {}, nil
+	}
+
+	// git archive HEAD -- <relPath> | tar -x -C <tempDir>
+	archiveCmd := exec.Command("git", "archive", "HEAD", "--", relPath)
+	archiveCmd.Dir = gitRoot
+	extractCmd := exec.Command("tar", "-x", "-C", tempDir)
+	extractCmd.Stdin, _ = archiveCmd.StdoutPipe()
+	extractCmd.Stdout = os.Stdout
+	extractCmd.Stderr = os.Stderr
+	if err := extractCmd.Start(); err != nil {
+		os.RemoveAll(tempDir)
+		prov, _ := readProvenance(outputDir)
+		fmt.Fprintf(os.Stderr, "[WARN] --check: git archive pipe failed (%v); comparing against on-disk tree\n", err)
+		return outputDir, prov, func() {}, nil
+	}
+	if err := archiveCmd.Run(); err != nil {
+		extractCmd.Wait()
+		os.RemoveAll(tempDir)
+		prov, _ := readProvenance(outputDir)
+		fmt.Fprintf(os.Stderr, "[WARN] --check: git archive failed for path %q (%v); comparing against on-disk tree\n", relPath, err)
+		return outputDir, prov, func() {}, nil
+	}
+	if err := extractCmd.Wait(); err != nil {
+		os.RemoveAll(tempDir)
+		prov, _ := readProvenance(outputDir)
+		fmt.Fprintf(os.Stderr, "[WARN] --check: tar extract failed (%v); comparing against on-disk tree\n", err)
+		return outputDir, prov, func() {}, nil
+	}
+
+	// The extracted tree nests under the repo-relative path.
+	committedExtractedDir := filepath.Join(tempDir, relPath)
+	if _, err := os.Stat(committedExtractedDir); err != nil {
+		os.RemoveAll(tempDir)
+		prov, _ := readProvenance(outputDir)
+		fmt.Fprintf(os.Stderr, "[WARN] --check: extracted path %q not found (%v); comparing against on-disk tree\n", relPath, err)
+		return outputDir, prov, func() {}, nil
+	}
+
+	// The pin being verified is HEAD's, so provenance comes from the
+	// committed tree, not from the worktree.
+	prov, err := readProvenance(committedExtractedDir)
+	if err != nil {
+		os.RemoveAll(tempDir)
+		prov, provErr := readProvenance(outputDir)
+		if provErr != nil {
+			return "", Provenance{}, nil, provErr
+		}
+		fmt.Fprintf(os.Stderr, "[WARN] --check: cannot read provenance from committed tree (%v); comparing against on-disk tree\n", err)
+		return outputDir, prov, func() {}, nil
+	}
+
+	cleanup := func() { _ = os.RemoveAll(tempDir) }
+	return committedExtractedDir, prov, cleanup, nil
+}
+
 type plannedSubagent struct {
 	outputName string
 	sourcePath string
@@ -1172,11 +1271,14 @@ func writeDeterministicFile(path, content string) error {
 }
 
 func runCheckGate(outputDir, sourceDir, sourceRepo string) error {
-	// Read committed provenance
-	committedProv, err := readProvenance(outputDir)
+	// The drift gate compares against the tree COMMITTED at HEAD, not the
+	// on-disk output: a dirty worktree must not make the local gate pass
+	// trivially. In CI the checkout is clean, so HEAD and disk coincide.
+	committedDir, committedProv, cleanupCommitted, err := getCommittedTree(outputDir)
 	if err != nil {
-		return fmt.Errorf("read committed provenance: %w", err)
+		return fmt.Errorf("get committed tree: %w", err)
 	}
+	defer cleanupCommitted()
 
 	// Resolve source at the pinned commit
 	var sourceRoot string
@@ -1243,8 +1345,8 @@ func runCheckGate(outputDir, sourceDir, sourceRepo string) error {
 		return fmt.Errorf("write provenance for check: %w", err)
 	}
 
-	// Compare the two trees
-	diffs, err := compareTrees(outputDir, tempOutDir)
+	// Compare the regenerated tree against the COMMITTED tree
+	diffs, err := compareTrees(committedDir, tempOutDir)
 	if err != nil {
 		return fmt.Errorf("compare trees: %w", err)
 	}

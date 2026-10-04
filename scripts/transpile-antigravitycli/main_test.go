@@ -520,6 +520,73 @@ func TestCheckGateIdenticalTreesPass(t *testing.T) {
 	}
 }
 
+// TestCheckGateComparesAgainstCommittedTree pins the git-path contract: the
+// drift gate compares against the tree COMMITTED at HEAD, not the on-disk
+// output. A dirty worktree must not make the gate pass or fail differently
+// (the regression this exists for), while a COMMITTED hand edit must fail.
+func TestCheckGateComparesAgainstCommittedTree(t *testing.T) {
+	sourceRoot := t.TempDir()
+	writeMinimalSourceTree(t, sourceRoot)
+	if err := initGitRepo(t, sourceRoot); err != nil {
+		t.Fatalf("init source git: %v", err)
+	}
+	sha, err := getGitHEAD(sourceRoot)
+	if err != nil {
+		t.Fatalf("get source HEAD: %v", err)
+	}
+
+	// A git repository whose COMMITTED tree holds the bundle under a nested path.
+	repoRoot := t.TempDir()
+	outputDir := filepath.Join(repoRoot, "bundle")
+	if err := transpileAll(sourceRoot, outputDir); err != nil {
+		t.Fatalf("transpile bundle: %v", err)
+	}
+	if err := writeProvenance(outputDir, Provenance{SourceRepo: defaultRemoteRepo, SourceCommit: sha}); err != nil {
+		t.Fatalf("write provenance: %v", err)
+	}
+	if err := initGitRepo(t, repoRoot); err != nil {
+		t.Fatalf("init bundle repo: %v", err)
+	}
+
+	// 1. Clean worktree: HEAD comparison passes.
+	if err := runCheckGate(outputDir, sourceRoot, defaultRemoteRepo); err != nil {
+		t.Fatalf("check gate failed on clean committed tree: %v", err)
+	}
+
+	// 2. Dirty worktree: the gate still passes because it reads HEAD, not disk.
+	dirtyPath := filepath.Join(outputDir, "plugin.json")
+	original, err := os.ReadFile(dirtyPath)
+	if err != nil {
+		t.Fatalf("read plugin.json: %v", err)
+	}
+	if err := os.WriteFile(dirtyPath, append(original, []byte("<!-- dirty worktree -->")...), 0o644); err != nil {
+		t.Fatalf("dirty plugin.json: %v", err)
+	}
+	if err := runCheckGate(outputDir, sourceRoot, defaultRemoteRepo); err != nil {
+		t.Fatalf("check gate must ignore a dirty worktree (it compares HEAD): %v", err)
+	}
+	if err := os.WriteFile(dirtyPath, original, 0o644); err != nil {
+		t.Fatalf("restore plugin.json: %v", err)
+	}
+
+	// 3. Committed drift: a hand edit that is committed must fail the gate.
+	if err := os.WriteFile(dirtyPath, append(original, []byte("<!-- committed drift -->")...), 0o644); err != nil {
+		t.Fatalf("drift plugin.json: %v", err)
+	}
+	cmd := exec.Command("git", "commit", "-am", "deliberate drift")
+	cmd.Dir = repoRoot
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("commit drift: %v: %s", err, out)
+	}
+	err = runCheckGate(outputDir, sourceRoot, defaultRemoteRepo)
+	if err == nil {
+		t.Fatal("check gate must fail on committed drift")
+	}
+	if !strings.Contains(err.Error(), "Drift detected") {
+		t.Errorf("drift error = %q, want it to name the drift", err.Error())
+	}
+}
+
 func TestCheckGateContentDriftFails(t *testing.T) {
 	sourceRoot := t.TempDir()
 	writeMinimalSourceTree(t, sourceRoot)
