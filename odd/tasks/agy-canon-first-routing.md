@@ -35,17 +35,16 @@ the canon files do not carry: the mandatory ODD workflow protocol (7 steps + rec
 5. Expectation side: no surgery — the file path is unchanged; only its content shrinks.
 
 ## Tasks
-- [ ] T1: RED — reshape agentguidance tests: protocol-only contract (steps present, triggers/
-      TDD/RDD text absent, frontmatter+marker, <cap), stale-part cleanup, idempotency. Observe
-      the intended failures (current delivery still writes the full routing).
-- [ ] T2: GREEN — RenderRouting slim branch + shared ODD emission; replace split delivery with
+- [x] T1: RED — reshape agentguidance tests: protocol-only contract (steps present, triggers/
+      TDD/RDD text absent, frontmatter+marker, <cap), stale-part cleanup, idempotency.
+- [x] T2: GREEN — RenderRouting slim branch + shared ODD emission; replace split delivery with
       the single-file writer; remove dead split code. Focused package green.
-- [ ] T3: internal/cli orchestrator_install_test update (agy routing = protocol-only) + any
+- [x] T3: internal/cli orchestrator_install_test update (agy routing = protocol-only) + any
       CLI assertions touching routing content for agy.
-- [ ] T4: j4500 journey routing pins → single slim-file contract + idempotency + uninstall.
-- [ ] T5: verification — focused packages + driven j4500 (exact CI commands) + full suite vs
+- [x] T4: j4500 journey routing pins → single slim-file contract + idempotency + uninstall.
+- [x] T5: verification — focused packages + driven j4500 (exact CI commands) + full suite vs
       the standing contract (exactly 1 environmental failure).
-- [ ] T6: work-unit commit + close. Push remains the user's decision.
+- [x] T6: work-unit commit + close. Push remains the user's decision.
 
 ## Evidence
 - 2026-10-04: start. Verified: ODD protocol absent from canon files (grep 0 in both source and
