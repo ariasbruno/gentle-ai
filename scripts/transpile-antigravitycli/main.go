@@ -1174,6 +1174,8 @@ func applyAntigravityCLIParentMutations(content string) string {
 	content = strings.ReplaceAll(content, "`get_search_content`", "`read_url_content`")
 	content = strings.ReplaceAll(content, "Do not use `~/.gemini/config/plugins/gentle-ai/support/...` as a runtime path; that is only the package source path before installation.", "Do not use a package source path as a runtime path.")
 
+	content = stripAntigravityCLISectionUntil(content, "#### Signaling the ODD phase to the Gentle prompt", "When RDD is enabled")
+	content = replaceAntigravityCLILineContaining(content, "stall watchdog uses", "- A long foreground command is live work, not silence: a verification command announced under `## Verification` is not an idle timeout to be killed mid-run; it is live work whose observed result the task needs.")
 	content = strings.ReplaceAll(content, "Pi-specific coding-agent harness", "coding-agent harness")
 	content = strings.ReplaceAll(content, "Pi never mints delivery authority", "The runtime never mints delivery authority")
 	content = strings.ReplaceAll(content, "no Pi delivery authority", "no runtime delivery authority")
