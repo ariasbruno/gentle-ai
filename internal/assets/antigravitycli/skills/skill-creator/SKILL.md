@@ -9,7 +9,7 @@ metadata:
 
 ## Activation Contract
 
-Use this skill when creating or updating a reusable AI skill for Pi or another agent runtime.
+Use this skill when creating or updating a reusable AI skill for your agent runtime.
 
 Create a skill when:
 - a workflow or convention is reused across sessions;

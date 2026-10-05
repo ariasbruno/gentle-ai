@@ -15,7 +15,7 @@ This skill guides public collaboration. It does not grant issue approval, label,
 
 ## Hard Rules
 
-- Review and Judgment Day evidence is review-only. Pi never mints delivery authority: ordinary commit, push, PR, and release always follow repository policy, regardless of RDD mode.
+- Review and Judgment Day evidence is review-only. The runtime never mints delivery authority: ordinary commit, push, PR, and release always follow repository policy, regardless of RDD mode.
 - Require an approved issue (`status:approved`) and clean current `main` reproduction before implementation. Audit existing PRs for supersession or conflict; stop or narrow stale claims.
 - Group by causal authority invariant. Use one issue and one PR or explicit chain per independent invariant and rollback boundary. Split independent causes; never merge a superseded or conflicting authority line.
 - Inventory every operator flow claimed by the issue or PR, including entry, mode, environment, expectation, and negative controls. Require one truthful black-box bench journey per CLI or lifecycle flow, or actual runtime E2E proof when the core bench cannot represent it. Synthetic proxy coverage never proves another runtime.
@@ -29,7 +29,7 @@ This skill guides public collaboration. It does not grant issue approval, label,
 
 | Condition | Action |
 | --- | --- |
-| Any RDD mode | Review evidence remains review-only; ordinary commit, push, PR, and release follow repository policy with no Pi delivery authority. |
+| Any RDD mode | Review evidence remains review-only; ordinary commit, push, PR, and release follow repository policy with no runtime delivery authority. |
 | Issue gate or reproduction fails | Wait, stop, or narrow with evidence. |
 | Invariant or rollback is independent | Separate issue and authoritative PR line. |
 | Core bench fits / does not fit | Bench journey / actual runtime E2E; never proxy. |

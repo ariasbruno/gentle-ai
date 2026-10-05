@@ -1174,6 +1174,11 @@ func applyAntigravityCLIParentMutations(content string) string {
 	content = strings.ReplaceAll(content, "`get_search_content`", "`read_url_content`")
 	content = strings.ReplaceAll(content, "Do not use `~/.gemini/config/plugins/gentle-ai/support/...` as a runtime path; that is only the package source path before installation.", "Do not use a package source path as a runtime path.")
 
+	content = strings.ReplaceAll(content, "Pi-specific coding-agent harness", "coding-agent harness")
+	content = strings.ReplaceAll(content, "Pi never mints delivery authority", "The runtime never mints delivery authority")
+	content = strings.ReplaceAll(content, "no Pi delivery authority", "no runtime delivery authority")
+	content = strings.ReplaceAll(content, "for Pi or another agent runtime", "for your agent runtime")
+	content = strings.ReplaceAll(content, "for Pi work", "for ODD work")
 	content = strings.ReplaceAll(content, "parent Pi session", "parent Antigravity session")
 	content = strings.ReplaceAll(content, "Pi session", "Antigravity session")
 	content = strings.ReplaceAll(content, "Within one Pi runner", "Within one Antigravity session")
