@@ -115,26 +115,6 @@ When delegating to a generic Explore/general worker (`gentle-ai-explore`, `gentl
 
 For delegation other than a large task's bounded writes, use the generic fallback: if `invoke_subagent` or `send_message` tools are unavailable, use `invoke_subagent` tool or another available delegation mechanism. The delegation trigger remains mandatory; the fallback changes the runtime, not the requirement to delegate. If no delegation mechanism is available, stop the complex work and explain the blocker instead of silently continuing inline.
 
-#### Pi Subagent Model Routing
-
-For generic Antigravity subagents (`delegate`, `worker`, `scout`, `context-builder`, `oracle`, `planner`, `researcher`, or other general agents), do not pass the `model` parameter by default. Antigravity resolves model and thinking from the subagent's inherited session defaults and runtime configuration.
-
-Only pass `model` for generic subagents when the user explicitly requests a model override for that launch.
-
-Small task pattern:
-
-```text
-parent clarifies and checks git → parent edits inline → focused test and suite inline → parent reports
-```
-
-Large task pattern (with a Writer rule reason, one bounded worker per unit writes instead):
-
-```text
-parent clarifies and checks git → parent edits inline following the logbook → focused test and suite inline → parent reports
-```
-
-Add agents only where a mechanism's own trigger fires.
-
 ### Canonical Lightweight Workflows
 
 Bugfix with unfamiliar flow (understanding exceeds the evidence budget):

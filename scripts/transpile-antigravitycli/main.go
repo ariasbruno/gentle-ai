@@ -1155,7 +1155,7 @@ func applyAntigravityCLIParentMutations(content string) string {
 	content = stripSection(content, "## Pi Runtime Overlays")
 	content = stripAntigravityCLIMarkedSection(content, "<!-- gentle-pi:background-subagents -->", "<!-- /gentle-pi:background-subagents -->")
 	content = stripAntigravityCLISectionUntil(content, "#### Pi Trigger Runtime Bindings", "### Work Routing Ladder")
-	content = stripAntigravityCLISectionUntil(content, "#### Pi Subagent Model Routing", "Default balanced pattern for bounded implementation:")
+	content = stripAntigravityCLISectionUntil(content, "#### Pi Subagent Model Routing", "## Pi Delegation Bindings")
 	content = stripAntigravityCLISectionUntil(content, "## Pi Delegation Bindings", "### Canonical Lightweight Workflows")
 	content = stripAntigravityCLISectionUntil(content, "## Model Assignments", "## Judgment Day fix routing")
 
