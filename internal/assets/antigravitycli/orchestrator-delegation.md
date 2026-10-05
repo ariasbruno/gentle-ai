@@ -117,7 +117,7 @@ For delegation other than a large task's bounded writes, use the generic fallbac
 
 #### Pi Subagent Model Routing
 
-For generic Antigravity subagents (`delegate`, `worker`, `scout`, `context-builder`, `oracle`, `planner`, `researcher`, or other general agents), do not pass the `model` parameter by default. Let `pi-subagents` resolve model and thinking from `~/.gemini/settings.json`, `~/.gemini/subagents.json`, global subagent config, and runtime defaults.
+For generic Antigravity subagents (`delegate`, `worker`, `scout`, `context-builder`, `oracle`, `planner`, `researcher`, or other general agents), do not pass the `model` parameter by default. Antigravity resolves model and thinking from the subagent's inherited session defaults and runtime configuration.
 
 Only pass `model` for generic subagents when the user explicitly requests a model override for that launch.
 
