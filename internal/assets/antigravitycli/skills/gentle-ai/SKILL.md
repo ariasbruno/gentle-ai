@@ -1,6 +1,6 @@
 ---
 name: gentle-ai
-description: "Use Gentle AI harness discipline for Pi work: clarify first, track ODD work, use applicable test-first development by default, delegate when useful, and protect review workload."
+description: "Use Gentle AI harness discipline for ODD work: clarify first, track ODD work, use applicable test-first development by default, delegate when useful, and protect review workload."
 ---
 
 # el Gentleman Harness
