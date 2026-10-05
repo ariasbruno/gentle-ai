@@ -757,6 +757,10 @@ func transpileSatellites(piRoot, outputDir string) error {
 		"orchestrator-delegation.md",
 		"orchestrator-memory.md",
 		"orchestrator-skills.md",
+		"orchestrator-prompts.md",
+		"orchestrator-tracking.md",
+		"orchestrator-verification.md",
+		"orchestrator-writer.md",
 	}
 
 	for _, name := range satellites {
