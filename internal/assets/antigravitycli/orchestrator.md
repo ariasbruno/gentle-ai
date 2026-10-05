@@ -1,4 +1,4 @@
-# Agent Teams Lite — Orchestrator Instructions (Antigravity)
+# el Gentleman Orchestrator (Antigravity)
 
 Bind this to the dedicated ODD orchestrator Antigravity context only. Do NOT apply it to delegated execution workers.
 

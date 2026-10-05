@@ -579,7 +579,7 @@ func transpileTopLevelOrchestrator(piRoot, outputDir string) error {
 		return fmt.Errorf("prepare Antigravity review contract section: %w", err)
 	}
 
-	header := `# Agent Teams Lite — Orchestrator Instructions (Antigravity)
+	header := `# el Gentleman Orchestrator (Antigravity)
 
 Bind this to the dedicated ODD orchestrator Antigravity context only. Do NOT apply it to delegated execution workers.
 
@@ -772,7 +772,14 @@ func transpileSatellites(piRoot, outputDir string) error {
 		content = applyAntigravityCLIParentMutations(content)
 
 		if name == "orchestrator-skills.md" {
-			content = strings.ReplaceAll(content, ".pi/skills", "~/.gemini/config/skills")
+			// The fallback skill-dir list in Pi includes `.pi/skills` as a
+			// project-level path. agy's project-level equivalent is
+			// `.agents/skills/` (already in the list). The correct agy global
+			// skill root is `~/.gemini/config/skills/`, listed alongside the
+			// other agents' global roots — not in the project-level position.
+			content = replaceAntigravityCLILineContaining(content,
+				"search common project/user skill dirs such as",
+				"3. If the expected skill is absent from the registry but the request clearly names a known workflow, search common project/user skill dirs such as `./skills`, `.agents/skills`, `~/.gemini/config/skills`, `~/.config/opencode/skills`, `~/.claude/skills`, and other configured skill roots.")
 		}
 
 		destPath := filepath.Join(outputDir, name)
@@ -1192,7 +1199,6 @@ func applyAntigravityCLIParentMutations(content string) string {
 	gentleReviewRe := regexp.MustCompile(`\bgentle_review\b`)
 	content = gentleReviewRe.ReplaceAllString(content, "the native review lifecycle")
 	content = strings.ReplaceAll(content, "{{GENTLE_PI_BACKGROUND_POLICY}}", "Use Antigravity's native `invoke_subagent` and keep delegated work foreground until the result returns")
-	content = strings.ReplaceAll(content, ".pi/skills", "~/.gemini/config/skills")
 	content = strings.ReplaceAll(content, "~/.pi/agent/gentle-ai/", "~/.gemini/config/plugins/gentle-ai/")
 	content = strings.ReplaceAll(content, "~/.pi/agent/", "~/.gemini/config/plugins/gentle-ai/")
 	content = strings.ReplaceAll(content, ".pi/gentle-ai/", ".gemini/gentle-ai/")
