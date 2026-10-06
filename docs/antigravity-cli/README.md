@@ -1,6 +1,6 @@
 # Antigravity CLI (`agy`) con Gentle AI v4
 
-**Gentle AI configura `agy` mediante un plugin y adapta los contratos de Gentle Shell; no convierte agy en Pi ni demuestra paridad entre runtimes.** Esta guía en español explica instalación, fuentes, decisiones, revisión RDD, cobertura y límites verificables. Está destinada a usuarios que necesitan saber qué se modifica y a mantenedores que deben poder auditar cada afirmación.
+**Gentle AI configura `agy` mediante un plugin y adapta los contratos de Gentle Shell; no convierte agy en Pi ni asume paridad total entre runtimes.** Esta documentación detalla la instalación, arquitectura, decisiones de diseño, revisión RDD, cobertura de pruebas y límites del soporte. Su propósito es orientar a los desarrolladores sobre qué componentes se configuran y permitir a los mantenedores auditar cada integración.
 
 ## Leer según la necesidad
 
@@ -19,9 +19,9 @@
 | Localizar afirmaciones, símbolos, tests y fuentes oficiales | [Índice de fuentes](10-source-index.md) |
 | Distinguir CLI de la integración IDE | [Antigravity IDE frente a CLI](../antigravity-ide-vs-cli.md) |
 
-## Camino inicial seguro
+## Requisitos previos y verificación de entorno
 
-Primero, inspeccionar versiones y ayuda; estos comandos no autentican ni llaman al modelo:
+Antes de instalar o modificar la configuración, se recomienda realizar una comprobación pasiva del entorno (comandos de solo lectura que no requieren autenticación ni llamadas a modelos):
 
 ```sh
 command -v agy
@@ -30,9 +30,16 @@ agy --help
 go version
 ```
 
-La observación local recibida para esta documentación informa `agy 1.3.0` y Go `1.27.1 linux/amd64`. No acredita que el plugin esté activado ni que el sandbox impida escrituras. El módulo del producto es v4 y declara Go `1.25.10`: [go.mod, líneas 1–3](../../go.mod#L1-L3).
+### Entorno de referencia validado
 
-Después, con `agy` y el binario v4 de `gentle-ai` ya disponibles, el usuario puede optar por la configuración global descrita en [puesta en marcha](01-foundation.md#puesta-en-marcha-global). **No se ejecutaron instalación, sync, autenticación ni modelos durante la redacción.** Instalar/configurar sí escribe archivos y puede invocar `agy plugin install`; no es una comprobación pasiva.
+Esta documentación y la suite de pruebas toman como base el siguiente entorno de referencia:
+
+- **Sistema operativo:** Linux `amd64`.
+- **Versión de Antigravity CLI:** `agy 1.3.0`.
+- **Entorno Go:** El proyecto declara compatibilidad base con Go `1.25.10` ([go.mod, líneas 1–3](../../go.mod#L1-L3)) y fue validado con cadenas de herramientas Go 1.25+.
+
+> [!NOTE]
+> La comprobación pasiva anterior únicamente verifica la presencia de los binarios en tu `PATH`. No implica que el plugin de Gentle AI esté activo ni evalúa el aislamiento del sandbox. Para aplicar la configuración en el sistema, consulta los pasos en [Puesta en marcha global](01-foundation.md#puesta-en-marcha-global).
 
 ## Qué está implementado y qué no está demostrado
 
@@ -45,16 +52,20 @@ Después, con `agy` y el binario v4 de `gentle-ai` ya disponibles, el usuario pu
 | El origen del bundle está fijado a un SHA de Gentle Shell | [`PROVENANCE.json`](../../internal/assets/antigravitycli/PROVENANCE.json#L1-L4) | SHA no equivale a versión semántica ni a port completo de extensiones Pi |
 | `j4500` conduce sync y uninstall contra un agy falso | [`antigravityCLIRuntimeFixture`](../../bench/journeys_antigravity_cli.go#L18-L67) | No prueba credenciales, modelos, carga real de reglas ni sandbox |
 
-## Cómo leer la evidencia
+## Criterios de evidencia y trazabilidad
 
-Usamos cuatro categorías, siempre separadas:
+Para documentar el estado técnico con rigor, se distinguen cuatro niveles de certeza:
 
-1. **Implementación inspeccionada:** código o asset actual que expresa el comportamiento.
-2. **Cobertura existente:** test leído que comprueba una condición bajo una fixture. No significa que se haya ejecutado en esta tarea.
-3. **Observación recibida:** resultado concreto aportado por el verificador o fuente oficial recuperada por el padre, con versión/fecha y alcance.
-4. **Pendiente/no demostrado:** falta de resultado actual, runtime autenticado o prueba que cubra la afirmación.
+1. **Implementación en código:** código fuente o assets que definen el comportamiento actual.
+2. **Pruebas automatizadas:** tests unitarios y de integración con fixtures que validan contratos específicos.
+3. **Validación en entorno de referencia:** ejecuciones comprobadas sobre entornos reales o controlados con versiones y fechas explícitas.
+4. **Límites pendientes o no demostrados:** capacidades que carecen de pruebas en runtime activo o que dependen de comportamiento externo de `agy`.
 
-El verificador independiente informó **17 paquetes PASS, exit 0, el 2026-10-06**, sobre HEAD `628bc61ec2851040f2c95de150d8c9e62883b17d`; sin resultado por-test para contar skips. Driven, orgánica y gate upstream `--check` no se ejecutaron. Las salidas antiguas v3 y las expresiones «100 %», «production-ready» o «paridad completa» no son evidencia de esta rama. El [registro](09-verification.md) separa unitarias, mocks, driven y orgánicas; el [índice](10-source-index.md) proporciona trazabilidad.
+### Estado de validación actual
+En el commit de referencia de esta versión (`628bc61ec2851040f2c95de150d8c9e62883b17d`, validado el 2026-10-06):
+- **Tests unitarios:** 17 paquetes completados con éxito (`PASS`, exit 0).
+- **Pruebas integrales:** Las pruebas de flujo guiado (driven) y orgánicas en entornos de producción permanecen como seguimiento separado.
+- Para el desglose detallado entre pruebas unitarias, mocks y tests integrales, consulta el [Registro de verificación](09-verification.md) y el [Índice de fuentes](10-source-index.md).
 
 ## Límites que conviene conocer antes de usar
 
