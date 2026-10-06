@@ -2,6 +2,66 @@
 
 **Gentle AI configura `agy` mediante un plugin y adapta los contratos de Gentle Shell; no convierte agy en Pi ni asume paridad total entre runtimes.** Esta documentación detalla la instalación, arquitectura, decisiones de diseño, revisión RDD, cobertura de pruebas y límites del soporte. Su propósito es orientar a los desarrolladores sobre qué componentes se configuran y permitir a los mantenedores auditar cada integración.
 
+## Inicio Rápido (Quick Start)
+
+Si solo quieres instalar y empezar a usar Gentle AI con `agy`:
+
+### 1. Prerrequisitos
+Asegúrate de tener instalados `agy` (con login interactivo realizado previamente) y `gentle-ai`:
+```sh
+command -v agy && command -v gentle-ai
+```
+
+### 2. Instalación
+
+Elige el alcance según tu preferencia:
+
+- **Para todas tus sesiones de usuario (Global):**
+  ```sh
+  gentle-ai install --agent antigravity-cli --scope global
+  gentle-ai sync --agents antigravity-cli --scope global
+  ```
+
+- **Solo para tu proyecto actual (Workspace / Aislado):**
+  ```sh
+  gentle-ai install --agent antigravity-cli --scope workspace
+  gentle-ai sync --agents antigravity-cli --scope workspace
+  ```
+
+### 3. ¿Qué se instala y dónde?
+
+Dependiendo del alcance seleccionado, Gentle AI despliega el bundle completo del plugin en:
+- **Global:** `~/.gemini/config/plugins/gentle-ai/` (más el registro en `import_manifest.json` y el overlay de permisos en `~/.gemini/antigravity-cli/settings.json`).
+- **Workspace:** `<tu-proyecto>/.agents/plugins/gentle-ai/` (aislado al repositorio, sin tocar `$HOME`).
+
+**Árbol completo de archivos desplegados:**
+```text
+├── plugin.json                                                                      # Manifiesto del plugin para agy
+├── mcp_config.json                                                                 # Configuración de MCP (Context7, Engram, CodeGraph)
+├── hooks.json                                                                      # Definición de hooks de eventos para agy
+├── hooks/                                                                          # Scripts ejecutables de hooks (hook.sh / hook.cmd)
+├── rules/
+│   ├── AGENTS.md                                                                   # Reglas y persona base
+│   ├── gentle-ai-orchestrator.md                                                   # Regla principal de orquestación
+│   └── gentle-ai-routing.md                                                        # Protocolo de enrutamiento ODD
+├── agents/                                                                         # 10 subagentes nativos (.md)
+│   ├── gentle-ai-explore, gentle-ai-worker, gentle-ai-verify                       # Subagentes de ciclo ODD
+│   ├── jd-judge-a, jd-judge-b, jd-fix-agent                                        # Subagentes de Judgment Day
+│   └── review-risk, review-resilience, review-readability, review-reliability       # Subagentes de revisión 4R
+├── skills/                                                                         # Colección completa de skills de Gentle AI
+├── orchestrator-{delegation,memory,skills,prompts,tracking,verification,writer}.md # Satélites de soporte del orquestador
+├── support/                                                                        # Reglas de soporte (strict-tdd.md, strict-tdd-verify.md)
+└── chains/                                                                         # Cadenas de flujos compuestos (4r-review.chain.md)
+```
+
+### 4. Verificar en agy
+Inicia una sesión de `agy`. La herramienta detectará automáticamente el plugin y sus capacidades:
+```sh
+agy
+```
+
+---
+
 ## Leer según la necesidad
 
 | Necesidad | Lectura |

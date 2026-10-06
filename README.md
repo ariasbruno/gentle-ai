@@ -18,15 +18,18 @@
 </p>
 
 <p>
-<a href="docs/antigravity-cli/README.md"><strong>Guía de Antigravity CLI (español)</strong></a> &bull;
+<a href="docs/antigravity-cli/README.md"><strong>Guía Antigravity CLI (`agy`)</strong></a> &bull;
 <a href="docs/quickstart.md"><strong>Quickstart</strong></a> &bull;
-<a href="docs/intended-usage.md"><strong>Docs</strong></a> &bull;
+<a href="https://github.com/Gentleman-Programming/gentle-ai"><strong>Repo Original (Upstream)</strong></a> &bull;
 <a href="https://gentlemanprogramming.com/"><strong>Website</strong></a>
 </p>
 
-> [!NOTE]
-> **Google Antigravity CLI (`agy`) integration — Gentle AI v4**
-> This fork configures an existing `agy` through a managed plugin, adapts Gentle Shell assets, and provides a Go-owned RDD review transport. Capabilities differ by runtime: hooks can deny calls, and requesting `--sandbox` is not proof of OS-level enforcement. See the detailed [**Spanish integration guide: architecture, comparisons, decisions, verification and limitations**](docs/antigravity-cli/README.md).
+> [!IMPORTANT]
+> **Fork de desarrollo: Integración para Google Antigravity CLI (`agy`)**
+> - **Propósito:** Este repositorio extiende Gentle AI v4 para dar soporte nativo a `agy` mediante un plugin gestionado, transpilación de assets desde Gentle Shell, soporte de instalación tanto a nivel global como workspace (`.agents/`), y transporte de revisión RDD en Go.
+> - **Rama activa:** Todo el desarrollo y las integraciones vigentes se encuentran en la rama [`antigravity-cli-v4`](https://github.com/ariasbruno/gentle-ai/tree/antigravity-cli-v4).
+> - **Documentación en profundidad:** Consulta la [**Guía completa de Antigravity CLI**](docs/antigravity-cli/README.md) para ver arquitectura, decisiones de diseño, verificación y auditoría de código.
+> - **Versión original:** Si buscas la versión upstream general de Gentle AI, visita [Gentleman-Programming/gentle-ai](https://github.com/Gentleman-Programming/gentle-ai).
 
 <br/>
 
