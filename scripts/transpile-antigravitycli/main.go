@@ -537,6 +537,12 @@ func transpileSubagentMarkdown(agentName, raw string) (string, error) {
 	if isolatedAgents[agentName] {
 		extraFrontmatter += "excludeDefaultComponents: true\n"
 	}
+	// Agents whose Pi source includes the codegraph tool need MCP access
+	// to reach the gentle-ai_codegraph MCP server in agy (agy 1.2.3 fix:
+	// subagents inherit MCP servers only with enable_mcp_tools: true).
+	if strings.Contains(raw, "codegraph") {
+		extraFrontmatter += "enable_mcp_tools: true\n"
+	}
 	frontmatter := fmt.Sprintf("---\nname: %s\ndescription: %s\ntools: %s\n%s---\n", agentName, description, toolsStr, extraFrontmatter)
 
 	body := strings.TrimLeft(raw[4+endIdx+5:], "\n")
@@ -1124,7 +1130,7 @@ func mutateAgentRuntimeInstructions(content string) string {
 		},
 		{
 			"use the cwd-scoped `codegraph` tool before broad filesystem searches. Initialize the workspace index with `operation: \"init\"` when it is absent, then use `query` or `explore`; never ask it to target another path.",
-			"use CodeGraph before broad filesystem searches. Reach it through your MCP bridge with `call_mcp_tool` (server `gentle-ai_codegraph`, tool `codegraph_explore`) passing a natural-language question or the relevant symbol and file names; never ask it to target another path.",
+			"use the `gentle-ai_codegraph` MCP tool `codegraph_explore` before broad filesystem searches. Pass a natural-language question or the relevant symbol and file names; never ask it to target another path.",
 		},
 		{
 			"`codegraph` may create or update only the current workspace `.codegraph/` index.",
