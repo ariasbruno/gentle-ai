@@ -103,7 +103,7 @@ Use Antigravity's native subagent runtime. Prefer `invoke_subagent` for a fresh 
 
 For bounded writes, follow the canonical Writer rule under Mandatory Delegation Triggers.
 
-For generic mapping, follow the Evidence-budget rule under Pi Trigger Runtime Bindings.
+For generic mapping, follow the Evidence-budget rule under Mandatory Delegation Triggers.
 
 The canonical Writer rule under Mandatory Delegation Triggers overrides the general runtime preference above.
 

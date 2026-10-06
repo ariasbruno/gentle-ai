@@ -1194,6 +1194,8 @@ func applyAntigravityCLIParentMutations(content string) string {
 	content = strings.ReplaceAll(content, "for Pi or another agent runtime", "for your agent runtime")
 	content = strings.ReplaceAll(content, "for Pi work", "for agent work")
 	content = strings.ReplaceAll(content, "When a code-execution tool such as `codemode` is available", "When a shell command runner is available")
+	content = strings.ReplaceAll(content, "follow the Evidence-budget rule under Pi Trigger Runtime Bindings", "follow the Evidence-budget rule under Mandatory Delegation Triggers")
+	content = strings.ReplaceAll(content, "follow the Evidence-budget rule under Pi Trigger Runtime Bindings", "follow the Evidence-budget rule under Mandatory Delegation Triggers")
 	content = replaceAntigravityCLILineContaining(content, "Let `pi-subagents` resolve", "For generic Antigravity subagents (`delegate`, `worker`, `scout`, `context-builder`, `oracle`, `planner`, `researcher`, or other general agents), do not pass the `model` parameter by default. Antigravity resolves model and thinking from the subagent's inherited session defaults and runtime configuration.")
 	content = strings.ReplaceAll(content, "parent Pi session", "parent Antigravity session")
 	content = strings.ReplaceAll(content, "Pi session", "Antigravity session")
