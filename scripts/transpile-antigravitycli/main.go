@@ -537,10 +537,12 @@ func transpileSubagentMarkdown(agentName, raw string) (string, error) {
 	if isolatedAgents[agentName] {
 		extraFrontmatter += "excludeDefaultComponents: true\n"
 	}
-	// Agents whose Pi source includes the codegraph tool need MCP access
-	// to reach the gentle-ai_codegraph MCP server in agy (agy 1.2.3 fix:
-	// subagents inherit MCP servers only with enable_mcp_tools: true).
-	if strings.Contains(raw, "codegraph") {
+	// Agents whose Pi source includes MCP-backed tools (codegraph, mem_save)
+	// need MCP access in agy: subagents inherit MCP servers only with
+	// enable_mcp_tools: true (agy 1.2.3 fix). In agy these tools are exposed
+	// via call_mcp_tool with the server prefix (gentle-ai_codegraph,
+	// gentle-ai_engram).
+	if strings.Contains(raw, "codegraph") || strings.Contains(raw, "mem_save") {
 		extraFrontmatter += "enable_mcp_tools: true\n"
 	}
 	frontmatter := fmt.Sprintf("---\nname: %s\ndescription: %s\ntools: %s\n%s---\n", agentName, description, toolsStr, extraFrontmatter)

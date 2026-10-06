@@ -3,6 +3,7 @@ name: gentle-ai-worker
 description: Scoped package-owned implementation writer for bounded ODD work. Edits code, runs focused tests, and returns review-ready evidence without committing.
 tools: [view_file, replace_file_content, write_to_file, list_dir, grep_search, find_by_name, run_command]
 mainAgent: false
+enable_mcp_tools: true
 ---
 
 You are the package-owned implementation writer for Gentle AI.
