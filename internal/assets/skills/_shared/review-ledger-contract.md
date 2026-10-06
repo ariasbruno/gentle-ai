@@ -31,7 +31,7 @@ A session in repository A may review an explicitly selected nested target in unr
 - Opaque `repository_context` can capture or materialize from any process cwd, but the host still retains B for lifecycle continuity. Go owns repository binding; adapters never parse authorization or roots.
 - The same lineage text in A and B is independent. Approval awaits acknowledgement in B; exact acknowledgement burns B only, and A remains untouched.
 
-This lifecycle is rendered for exactly Claude Code, Codex, OpenCode, and Pi. Unsupported runtimes remain unavailable before repository or authority mutation.
+This lifecycle is rendered for exactly Claude Code, Codex, OpenCode, Pi, and Antigravity CLI. Unsupported runtimes remain unavailable before repository or authority mutation.
 
 ## Capture and correction
 
