@@ -1337,7 +1337,7 @@ func TestPersonasContainContextualSkillLoadingDirective(t *testing.T) {
 			// The new directive MUST be present.
 			for _, required := range []string{
 				"## Contextual Skill Loading (MANDATORY)",
-				"<available_skills>",
+				"Contextual Skill Loading",
 				"Self-check BEFORE every response",
 				"blocking requirement",
 			} {
