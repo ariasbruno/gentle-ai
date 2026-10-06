@@ -1,97 +1,69 @@
-# Antigravity IDE vs Antigravity CLI — Integration Comparison
+# Antigravity IDE frente a Antigravity CLI en Gentle AI v4
 
-This document explains how gentle-ai integrates the two Antigravity surfaces:
-the IDE (desktop app, `model.AgentAntigravity`) and the CLI (terminal,
-`model.AgentAntigravityCLI`, "agy"). They share a name and a vendor but are
-two completely different integrations in gentle-ai.
+**Son adaptadores distintos, pero no se puede afirmar aislamiento universal de rutas.** El CLI configura un plugin agy y admite transporte RDD; el IDE usa paths/estrategias propios con fallback legacy que puede coincidir con el root de aplicación CLI.
 
-## Who owns what
+Esta comparación describe código vigente. No atribuye ownership organizativo («upstream» frente a «fork») sin prueba histórica ni traslada resultados v3 al árbol v4. [Guía completa agy en español](antigravity-cli/README.md) · [Comparación de los cinco runtimes RDD](antigravity-cli/07-comparison.md).
 
-| | IDE (`AgentAntigravity`) | CLI (`AgentAntigravityCLI`) |
+## Identidad y rutas
+
+| Dimensión | IDE: `model.AgentAntigravity` | CLI: `model.AgentAntigravityCLI` | Fuente |
+|---|---|---|---|
+| Detección | Evidencia de directorios/marker; no binario agy | `LookPath("agy")` y configDir separado | [IDE Detect](../internal/agents/antigravity/adapter.go#L58-L71), [CLI Detect](../internal/agents/antigravitycli/adapter.go#L82-L95) |
+| GlobalConfigDir | `.gemini/config` si migrated; `.gemini/antigravity` si existe; variante si existe; root como default | `.gemini/antigravity-cli` fijo | [IDE](../internal/agents/antigravity/adapter.go#L85-L97), [CLI](../internal/agents/antigravitycli/adapter.go#L112-L114) |
+| Variante para settings/skills/MCP | `.gemini/antigravity-desktop` si existe; si no `.gemini/antigravity-cli` | Settings en app root; skills/MCP en plugin | [IDE variant](../internal/agents/antigravity/adapter.go#L29-L35), [CLI paths](../internal/agents/antigravitycli/adapter.go#L116-L158) |
+| Prompt | `.gemini/GEMINI.md`, append | Plugin `rules/AGENTS.md`, append más reglas independientes | [IDE](../internal/agents/antigravity/adapter.go#L99-L123), [CLI](../internal/agents/antigravitycli/adapter.go#L128-L158) |
+| Skills | `<variant>/skills` | Plugin `skills`, bundle-owned | [IDE](../internal/agents/antigravity/adapter.go#L107-L113), [CLI](../internal/agents/antigravitycli/adapter.go#L136-L138), [skip catálogo](../internal/components/skills/inject.go#L28-L46) |
+| SubAgentsDir | Vacío | Plugin `agents/<nombre>/agent.md` | [IDE](../internal/agents/antigravity/adapter.go#L146-L156), [CLI](../internal/agents/antigravitycli/adapter.go#L178-L188) |
+| MCP | `<variant>/mcp_config.json` en adapter; CodeGraph contempla config/root | Plugin `mcp_config.json` | [IDE MCP](../internal/agents/antigravity/adapter.go#L124-L126), [CodeGraph paths](../internal/components/communitytool/codegraph_contract.go#L94-L106) |
+
+### Riesgo concreto de coexistencia
+
+El catálogo expone `~/.gemini/antigravity-cli` para ambas entradas: [agents.go, líneas 27–28](../internal/catalog/agents.go#L27-L28). El adapter IDE conserva ese fallback para su variante. Por eso no basta el nombre «IDE/CLI» para inferir superficies disjuntas.
+
+El benchmark CLI crea un canario en `~/.config/antigravity/settings.json` y comprueba sus bytes: [fixture](../bench/journeys_antigravity_cli.go#L78-L86), [assert uninstall](../bench/journeys_antigravity_cli.go#L418-L424). Es una protección de **esa ruta**, no evidencia exhaustiva de que todos los settings/skills de `.gemini` estén aislados. La ejecución driven actual no fue realizada; [registro](antigravity-cli/09-verification.md).
+
+## Capabilities y ownership
+
+| Capacidad | IDE | CLI | Fuente y límite |
+|---|---|---|---|
+| Skills/SystemPrompt/MCP | Declaradas | Declaradas | [featureClaimsByAgent](../internal/agents/capabilitymanifest/manifest.go#L320-L335) |
+| FileSubAgents | No declarado | Sí, diez assets actuales | [manifest](../internal/agents/capabilitymanifest/manifest.go#L320-L335), [census](../internal/assets/antigravitycli_assets_test.go#L38-L96); no prueba runtime discovery |
+| Immutable review transport | No en boundary compilada | `antigravitycli_in_process` | [runtime policy](../internal/cli/review_transport_capability.go#L83-L154) |
+| Captura Go de reviewer | No adapter en este conjunto | Subprocess agy nuevo, stdin/scratch | [CapturesInProcess](../internal/reviewerprovider/capture_runtimes.go#L50-L60), [adapter](../internal/reviewerprovider/antigravitycli_adapter.go#L33-L78) |
+| Permisos inyectados | Overlay nil | Listas allow/deny en settings.json | [agentOverlay](../internal/components/permissions/inject.go#L173-L178); schema/matching del cliente no medido |
+| Context7 | Overlay HTTP `serverUrl` | Overlay default stdio npx | [dispatch MCP](../internal/components/mcp/inject.go#L380-L404), [overlays](../internal/components/mcp/context7.go#L9-L31) |
+| CodeGraph | Native compatibility | Reconciled plugin wiring | [tabla](../internal/components/communitytool/codegraph_contract.go#L35-L50) |
+| Orchestrator | Routing compartido con renderer, carrier prompt | Canon transpilado, contrato Go filled y regla protocol-only | [branch de render](../internal/components/agentguidance/inject.go#L124-L132), [agy rule](../internal/components/agentguidance/inject.go#L260-L273), [fill](../internal/cli/antigravity_orchestrator_rule.go#L28-L52) |
+
+El IDE no gana capacidad RDD por ser `TierFull` o por compartir un directorio con el CLI. Del mismo modo, instalar el plugin agy no transforma el IDE en `AgentAntigravityCLI`.
+
+## Rules, hooks y ejecución
+
+Para el CLI, `DeployPluginTree` entrega assets/hook definitions; el paso final completa el contrato y hace import si falta registro: [run.go, líneas 921–940](../internal/cli/run.go#L921-L940). Hay siete satélites, dos soportes strict-TDD y una cadena manual 4R: [BundleAssets](../internal/agents/antigravitycli/adapter.go#L192-L207).
+
+Los hooks CLI no son uniformemente fail-open: `PreToolUse` malformed/delegación inválida/repetición puede denegar; post hooks son no-op y Stop es recordatorio condicionado a idle/model. [Detalle](antigravity-cli/03-orchestration-and-hooks.md).
+
+El reviewer CLI solicita `--sandbox`, no entrega su worktree como cwd y conserva HOME. No hay prueba actual de sandbox SO, supresión total de plugins/rules o tools read-only. [Frontera](antigravity-cli/05-review-transport.md#aislamiento-solicitado-no-cleanroom-demostrado).
+
+Esta página no describe hooks/mecanismos internos del IDE externo que no fueron inspeccionados como parte de la integración Gentle AI. «No hay adapter equivalente aquí» no significa que el producto IDE no tenga su propio lifecycle.
+
+## Import, retirada y datos del cliente
+
+| Superficie | Qué cubre Gentle AI | Qué no queda demostrado |
 |---|---|---|
-| Integrated by | Upstream (Gentle-Programming) | The fork (ariasbruno) |
-| Fork touches it | No — standing rule | Yes — entire integration |
+| Plugin CLI administrado | Assets enumerados, agents/skills bundle, markers y primer import | Cada copia/cache que agy genere |
+| Manifest import | Merge de root/entries ajenos; rollback de snapshot en fallos | Rollback total de efectos externos |
+| Uninstall CLI | Operaciones own paths y registro, dirs si vacíos | Borrado universal de plugin_data, MCP cwd, conversaciones o auth |
+| Settings IDE/CLI legacy | Paths elegidos por adapter/operación | Disjunción automática al seleccionar ambos |
 
-## Adapter paths
+Fuentes: [import](../internal/agents/antigravitycli/adapter.go#L645-L732), [uninstall](../internal/components/uninstall/service.go#L1408-L1460). No afirmar una convención de nombres runtime MCP o versión «landed in 1.2.2» sin evidencia cliente fijada; esos datos externos deben verificarse por separado.
 
-| Path | IDE | CLI |
-|---|---|---|
-| ConfigPath (catalog) | `~/.gemini/antigravity-cli` (COLLISION — open flag) | `~/.gemini/antigravity-cli` |
-| GlobalConfigDir | `~/.gemini/config` (if migrated) → `~/.gemini/antigravity` → variant dir | `~/.gemini/antigravity-cli` (fixed) |
-| VariantDir | `~/.gemini/antigravity-desktop` or `~/.gemini/antigravity-cli` | N/A |
-| SystemPromptFile | `~/.gemini/GEMINI.md` (StrategyAppendToFile) | Plugin `rules/AGENTS.md` |
-| SkillsDir | `<variantDir>/skills/` | Plugin `skills/` |
-| SubAgentsDir | `""` (none — FileSubAgents: false) | Plugin `agents/` |
-| MCPConfigPath | `<variantDir>/mcp_config.json` | Plugin `mcp_config.json` |
+## Recomendación operativa
 
-## Capability manifest
+1. Seleccionar explícitamente `antigravity-cli` para el plugin agy; no el identificador IDE.
+2. Revisar paths legacy antes de configurar ambas integraciones.
+3. Usar el alcance global documentado; workspace tiene destinos mixtos y no es aislamiento local garantizado.
+4. Mantener personalizaciones fuera de agents/skills del plugin administrado.
+5. Verificar configuración, activation y modelo como capas distintas, con permiso para cualquier ensayo real.
 
-| Feature | IDE | CLI |
-|---|---|---|
-| FileSubAgents | **false** | **true** (10 native agents) |
-| Skills | true | true |
-| SystemPrompt | true | true |
-| MCP | true | true |
-| RDD runtime | **No** (not in closed set) | **Yes** (in closed set) |
-| Review transport | **None** (unsupported) | `antigravitycli_in_process` |
-
-## RDD (the biggest behavioral difference)
-
-The IDE is **not** in the closed RDD set (`internal/model/rdd.go`):
-- Its routing render uses the **non-RDD** Close step (no native review, no kill
-  switch, no refuter vocabulary).
-- Its orchestrator carries **no** Review Execution Contract, no Provider Defect
-  Handoff, no Delegated Verification Gate RDD variant.
-- It has **no review transport** — no adapter in `review_transport_capability.go`.
-
-The CLI **is** in the closed RDD set:
-- Full RDD vocabulary in its guidance.
-- In-process review transport: fresh `agy --sandbox` subprocess per reviewer.
-- Review models resolved via `~/.gemini/antigravity-cli/gentle-ai/review-models.json`.
-
-## Guidance delivery
-
-| | IDE | CLI |
-|---|---|---|
-| Routing | Full RenderRouting (ladder + triggers + TDD, non-RDD variant) merged with the orchestrator → append to `GEMINI.md` | ODD protocol only (~4.8KB) as dedicated always_on rule |
-| Orchestrator | Merged into the routing (the v4-canonical delivery for every non-Pi, non-CLI agent) | Transpiled from gentle-shell canon → plugin rule with review contract filled |
-| Satellites | Not received (no transpiled canon) | 3 files at plugin root (delegation ~36.6KB, memory, skills) — read on-demand |
-| Frontmatter | N/A (no trigger-based rules) | `trigger: always_on` required on every rule file |
-| Doctrine source | One: gentle-ai repo (RenderRouting + RenderOrchestratorWithSource) | Two: gentle-shell canon (transpiled) + ODD protocol from gentle-ai |
-
-## Components
-
-| Component | IDE | CLI |
-|---|---|---|
-| Skills | From internal catalog (selection-driven) | From gentle-shell canon (transpiled, bundle-owned, 13 entries) |
-| Engram | Plugin-owned registration with cooperative transfer lock (#797, #1635) | MCP server in plugin mcp_config.json + PreInvocation hook forcing 14 tools |
-| Permissions | NIL — IDE manages via UI (Artifact Review Policy) | Deny/allow overlay in settings.json |
-| Context7 | Global variantDir mcp_config.json (serverUrl HTTP remote) | **Plugin mcp_config.json** (npx stdio, junto con engram y codegraph) |
-| CodeGraph | Standard flow (codegraph install --target) | Reconciled in plugin mcp_config.json |
-| Hooks | None — IDE has its own lifecycle | 5 events (hooks.json + hook.sh/cmd, fail-open) |
-| Plugin tree | None | Full tree via DeployPluginTree + agy plugin install |
-| Subagents | None (FileSubAgents: false) | 10 native (explore, verify, worker, jd-fix, judges, 4R lenses) |
-| Chains | None | 4r-review.chain.md |
-| Support contracts | None | strict-tdd.md + strict-tdd-verify.md |
-| Provenance | N/A | PROVENANCE.json + drift gate + CI |
-
-## Uninstall
-
-The IDE uninstall removes context7 from the global mcp_config.json and cleans
-managed catalog skills and GEMINI.md sections. The CLI uninstall removes the
-entire plugin tree (rules, agents, skills, chains, hooks, mcp_config, manifest
-entry, routing parts).
-
-## agy runtime artifacts (not managed by gentle-ai)
-
-When agy loads a plugin, it generates runtime data outside the plugin tree:
-- `~/.gemini/antigravity-cli/plugin_data/` — agy's per-plugin runtime state.
-- `~/.gemini/antigravity-cli/mcp/<plugin>_<mcp>/` — namespaced MCP server
-  working directories (the `<plugin>_<server>` convention landed in agy 1.2.2
-  to prevent collisions). For our plugin: `gentle-ai_engram/` and
-  `gentle-ai_codegraph/`.
-
-These are agy runtime artifacts — gentle-ai does not write or manage them.
-They appear after `agy plugin install` and persist across sessions. The
-uninstall removes the plugin tree but may leave these runtime dirs; agy's own
-`/plugin` uninstall command handles them.
+[Fundamentos y ruta segura](antigravity-cli/01-foundation.md) · [Propiedad/import](antigravity-cli/06-asset-ownership-and-drift.md) · [Evidencia y límites](antigravity-cli/09-verification.md).

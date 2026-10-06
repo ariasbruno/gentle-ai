@@ -1,114 +1,67 @@
-# Gentle AI™ — Google Antigravity CLI Integration
+# Antigravity CLI (`agy`) con Gentle AI v4
 
-Welcome to the documentation for the **Google Antigravity CLI (`agy`)** integration in Gentle AI.
+**Gentle AI configura `agy` mediante un plugin y adapta los contratos de Gentle Shell; no convierte agy en Pi ni demuestra paridad entre runtimes.** Esta guía en español explica instalación, fuentes, decisiones, revisión RDD, cobertura y límites verificables. Está destinada a usuarios que necesitan saber qué se modifica y a mantenedores que deben poder auditar cada afirmación.
 
-This fork introduces Google Antigravity CLI as a first-tier supported agent alongside Claude Code, Codex, OpenCode, and Pi. It implements full architectural parity across prompt injection, nested subagents, satellite contracts, lifecycle hooks, CodeGraph tool reconciliation, benchmark parity, and in-process Receipt-Driven Development (RDD) review transport.
+## Leer según la necesidad
 
----
+| Necesidad | Lectura |
+|---|---|
+| Configurar por primera vez, conocer rutas y precauciones | [Fundamentos y puesta en marcha](01-foundation.md) |
+| Entender el sistema de extremo a extremo | [Mapa de arquitectura](SUMMARY.md) |
+| Saber qué se adapta de Gentle Shell y qué no | [Transpilador y contratos](02-asset-transpiler.md) |
+| Entender reglas, delegación y hooks | [Orquestación y hooks](03-orchestration-and-hooks.md) |
+| Evaluar MCP y la evidencia de `j4500` | [CodeGraph y benchmarks](04-codegraph-and-benchmarks.md) |
+| Auditar subprocess, modelos, admisión y autoridad | [Transporte RDD](05-review-transport.md) |
+| Mantener o retirar el plugin sin confundir propietarios | [Propiedad y deriva](06-asset-ownership-and-drift.md) |
+| Comparar Claude Code, Codex, OpenCode, Pi y agy | [Matriz por capacidad](07-comparison.md) |
+| Revisar motivos y alternativas sin inventar historia | [Decisiones](08-decisions.md) |
+| Reproducir controles o conocer resultados pendientes | [Registro de verificación](09-verification.md) |
+| Localizar afirmaciones, símbolos, tests y fuentes oficiales | [Índice de fuentes](10-source-index.md) |
+| Distinguir CLI de la integración IDE | [Antigravity IDE frente a CLI](../antigravity-ide-vs-cli.md) |
 
-## 1. Documentation Index
+## Camino inicial seguro
 
-The integration was designed and implemented across 5 disciplined architectural phases, each backed by authentic technical documentation and empirical test evidence:
+Primero, inspeccionar versiones y ayuda; estos comandos no autentican ni llaman al modelo:
 
-| Phase | Topic | Key Deliverables | Document |
-|---|---|---|---|
-| **Phase 1** | **Foundation & Registration** | Catalog registration, model detection, security overlay, union array merge, plugin MCP configuration | [`01-foundation.md`](01-foundation.md) |
-| **Phase 2** | **Asset Transpiler & Guardrails** | Deterministic asset transpiler, 10 native ODD subagents, 4R review chain, satellite contracts, strict invariant validation | [`02-asset-transpiler.md`](02-asset-transpiler.md) |
-| **Phase 3** | **Orchestration & Lifecycle Hooks** | `pluginBundleProvider` interface, bundle asset injection, nested subagents, fail-open PreInvocation, PreToolUse, and Stop hooks | [`03-orchestration-and-hooks.md`](03-orchestration-and-hooks.md) |
-| **Phase 4** | **CodeGraph & Bench Parity** | Atomic CodeGraph reconciliation, sync/install wiring, journey `j4500` lifecycle parity benchmark | [`04-codegraph-and-benchmarks.md`](04-codegraph-and-benchmarks.md) |
-| **Phase 5** | **Review Transport & Capabilities** | In-process review adapter (`agy`), role routing (`review-models.json`), curated presets, interactive TUI model picker | [`05-review-transport.md`](05-review-transport.md) |
-| **Phase 6** | **Asset Ownership & Drift Policy** | Skill mirroring with provenance manifest, CI drift test, sync preset-exclusion transparency | [`06-asset-ownership-and-drift.md`](06-asset-ownership-and-drift.md) |
-| **Phase 7** | **24 KB Cap Fix & Dynamic Sync** | Split routing rules into `rules/gentle-ai-routing.md` to beat AGY 24 KB rule cap, and dynamic subagent reconciliation via `assets.FS` | [`SUMMARY.md`](SUMMARY.md) |
-| **Summary** | **Master Technical Summary & References** | End-to-end architecture, parity matrix, CLI specs, lifecycle hooks, official sources, and cross-references | [`SUMMARY.md`](SUMMARY.md) |
-
----
-
-## 2. Architectural Highlights
-
-### 2.1 Complete Filesystem & Security Boundaries
-- **Directory Layout**: Antigravity CLI global configuration lives under `~/.gemini/antigravity-cli/` (`settings.json`; `gentle-ai/review-models.json` is created lazily by the review model picker — an absent file means every review role inherits the CLI session default), while Gentle AI's system prompt, subagents, chains, and contracts are encapsulated inside the plugin bundle under `~/.gemini/config/plugins/gentle-ai/` (`rules/AGENTS.md`, `rules/gentle-ai-routing.md`, `rules/gentle-ai-orchestrator.md`, `agents/`, `chains/`, `mcp_config.json`). The plugin's `mcp_config.json` carries the codegraph, context7, and engram MCP servers; context7 is spawned through `npx`, so the first agy session on a machine with a cold npx cache may not expose context7 tools until the one-time package download completes — subsequent sessions connect in seconds.
-- **Zero Cross-Contamination**: Antigravity Desktop IDE settings (`~/.config/antigravity/`) are completely isolated and untouched by CLI operations.
-- **Security Policy**: Denies destructive host commands, sensitive directories (`.ssh`, `.gnupg`, `.aws`, `.gemini`), and protects repository integrity.
-
-### 2.2 In-Process Receipt-Driven Development (RDD)
-- Unlike host-mediated runtimes that rely on plugin relays, Antigravity CLI captures review evidence via **in-process subprocess execution** (`agy --sandbox --output-format text`).
-- Go retains full ownership of prompt materialization, token budgeting, JSON schema validation, and cryptographic receipt admission.
-- Review roles (`review-risk`, `review-resilience`, `review-readability`, `review-reliability`, `review-refuter`, `review-validator`) can be mapped individually to specialized models, curated presets, or set to inherit CLI session defaults.
-
-### 2.3 Modular Rules, Always-On Frontmatter, and the 24,000-Byte Cap
-- Antigravity CLI auto-loads only a plugin's `rules/AGENTS.md`; every other rule file is parsed for a YAML frontmatter `trigger` and files without a valid trigger are silently dropped on every turn (`CORTEX_MEMORY_TRIGGER_UNSPECIFIED`). Gentle AI therefore ships every non-AGENTS rule file with `trigger: always_on` frontmatter:
-  - `rules/AGENTS.md` (Persona, CodeGraph guidance, and Engram memory protocol — plain markdown, no frontmatter, loaded unconditionally by agy).
-  - `rules/gentle-ai-routing.md` (ODD workflow, delegation routing, TDD policy, RDD boundaries, remote authorization — written by sync with always-on frontmatter).
-  - `rules/gentle-ai-orchestrator.md` (coordinator harness, delegation ladder, memory and skill registry pointers, and the runtime-rendered Review Execution Contract filled in place of the deterministic insert marker at deploy time).
-- **Per-file limit**: Antigravity CLI truncates rule files above 24,000 bytes. All three rule files stay under the cap (the orchestrator rule embeds the ~15 KB rendered review contract inside its ~7 KB body).
-- **Aggregate budget**: always-on rules share a 20,000-token rules budget; the three files total well under it.
-- The `orchestrator-delegation.md`, `orchestrator-memory.md`, and `orchestrator-skills.md` satellites stay at the plugin root as on-demand reads referenced by the orchestrator rule (the delegation satellite alone exceeds the per-file cap, so it cannot be an always-on rule file).
-
-### 2.4 Dynamic Self-Reconciling Subagent Tree
-- `DeployPluginTree` dynamically discovers embedded subagents via `assets.FS.ReadDir` and reconciles `~/.gemini/config/plugins/gentle-ai/agents/`.
-- Obsolete or renamed subagents (e.g. legacy SDD agents) are automatically pruned on `gentle-ai sync` without requiring manual file deletion.
-
-### 2.5 Resilient Fail-Open Lifecycle Hooks
-- Dispatched via `hooks.json` to `gentle-ai hook run --agent antigravity-cli --event <event>`; five events are registered with fail-open handlers: `PreInvocation`, `PreToolUse`, `PostToolUse`, `PostInvocation`, and `Stop`.
-- Implements a 3x identical-call tool loop circuit breaker in `PreToolUse` and candidate change gating in `Stop`.
-- Any unhandled event or syntax error yields `{}` and exit code 0, guaranteeing zero workflow lockouts.
-
----
-
-## 3. Quick Start & Usage
-
-### 3.1 Building and Installing from the Fork
-
-```bash
-# Clone the fork
-git clone https://github.com/ariasbruno/gentle-ai.git
-cd gentle-ai
-
-# Checkout the integration branch
-git checkout antigravity-cli-integration
-
-# Build and install the gentle-ai binary
-go install ./cmd/gentle-ai
+```sh
+command -v agy
+agy --version
+agy --help
+go version
 ```
 
-### 3.2 Setting up Antigravity CLI
+La observación local recibida para esta documentación informa `agy 1.3.0` y Go `1.27.1 linux/amd64`. No acredita que el plugin esté activado ni que el sandbox impida escrituras. El módulo del producto es v4 y declara Go `1.25.10`: [go.mod, líneas 1–3](../../go.mod#L1-L3).
 
-```bash
-# Install and register the Antigravity CLI plugin
-gentle-ai install --agent antigravity-cli
+Después, con `agy` y el binario v4 de `gentle-ai` ya disponibles, el usuario puede optar por la configuración global descrita en [puesta en marcha](01-foundation.md#puesta-en-marcha-global). **No se ejecutaron instalación, sync, autenticación ni modelos durante la redacción.** Instalar/configurar sí escribe archivos y puede invocar `agy plugin install`; no es una comprobación pasiva.
 
-# Run sync to reconcile all managed assets and rules
-gentle-ai sync
+## Qué está implementado y qué no está demostrado
 
-# Verify system health
-gentle-ai doctor
-```
+| Afirmación acotada | Base | Límite |
+|---|---|---|
+| `antigravity-cli` está registrado y su adaptador declara `TierFull` | [`catalog.allAgents`](../../internal/catalog/agents.go#L19-L34), [`Adapter.Tier`](../../internal/agents/antigravitycli/adapter.go#L76-L78) | El nivel no promete igualdad de capacidades |
+| El bundle contiene diez definiciones de subagentes ODD/JD/4R | [`expectedSubagentNames`, `Invariant1`](../../internal/assets/antigravitycli_assets_test.go#L38-L96) | Archivos presentes no prueban ejecución ni enforcement del frontmatter por agy |
+| La captura RDD ejecuta un subprocess nuevo con stdin y `--sandbox` | [`AntigravityCLIAdapter.Review`](../../internal/reviewerprovider/antigravitycli_adapter.go#L33-L78) | Solicitud de sandbox, no medición de confinamiento del SO |
+| Hay cinco hooks y respuestas distintas por evento | [Definición](../../internal/agents/antigravitycli/adapter.go#L407-L470), [handler](../../internal/cli/antigravity_hook.go#L88-L148) | No son todos fail-open; `PreToolUse` puede denegar |
+| El origen del bundle está fijado a un SHA de Gentle Shell | [`PROVENANCE.json`](../../internal/assets/antigravitycli/PROVENANCE.json#L1-L4) | SHA no equivale a versión semántica ni a port completo de extensiones Pi |
+| `j4500` conduce sync y uninstall contra un agy falso | [`antigravityCLIRuntimeFixture`](../../bench/journeys_antigravity_cli.go#L18-L67) | No prueba credenciales, modelos, carga real de reglas ni sandbox |
 
----
+## Cómo leer la evidencia
 
-## 4. Upstream Synchronization Strategy
+Usamos cuatro categorías, siempre separadas:
 
-To keep this fork up to date with future updates and releases of upstream `Gentleman-Programming/gentle-ai`:
+1. **Implementación inspeccionada:** código o asset actual que expresa el comportamiento.
+2. **Cobertura existente:** test leído que comprueba una condición bajo una fixture. No significa que se haya ejecutado en esta tarea.
+3. **Observación recibida:** resultado concreto aportado por el verificador o fuente oficial recuperada por el padre, con versión/fecha y alcance.
+4. **Pendiente/no demostrado:** falta de resultado actual, runtime autenticado o prueba que cubra la afirmación.
 
-1. **Remote Configuration**:
-   ```bash
-   git remote add upstream https://github.com/Gentleman-Programming/gentle-ai.git
-   git remote -v
-   ```
+El verificador independiente informó **17 paquetes PASS, exit 0, el 2026-10-06**, sobre HEAD `628bc61ec2851040f2c95de150d8c9e62883b17d`; sin resultado por-test para contar skips. Driven, orgánica y gate upstream `--check` no se ejecutaron. Las salidas antiguas v3 y las expresiones «100 %», «production-ready» o «paridad completa» no son evidencia de esta rama. El [registro](09-verification.md) separa unitarias, mocks, driven y orgánicas; el [índice](10-source-index.md) proporciona trazabilidad.
 
-2. **Fetching Upstream**:
-   ```bash
-   git fetch upstream main --tags
-   ```
+## Límites que conviene conocer antes de usar
 
-3. **Rebasing the Clean Integration**:
-   Because all Antigravity CLI commits are organized as clean, isolated architectural work units on `antigravity-cli-integration`, rebasing on top of new upstream releases is straightforward:
-   ```bash
-   git checkout antigravity-cli-integration
-   git rebase upstream/main
-   ```
-   *Note: Always verify test suites after rebase:*
-   ```bash
-   go test ./...
-   cd bench && go test ./...
-   ```
+- Usar alcance global como ruta documentada. El alcance workspace tiene una discrepancia entre componentes y despliegue/import global: [análisis de rutas](01-foundation.md#alcance-workspace-no-es-un-camino-garantizado).
+- No guardar personalizaciones dentro de `agents/` o `skills/` del plugin: el reconciliador poda directorios ajenos al bundle: [`DeployPluginTree`](../../internal/agents/antigravitycli/adapter.go#L589-L625).
+- La revisión conserva `HOME` para resolver configuración/credenciales y no desactiva explícitamente toda discovery de plugins o herramientas: [frontera de aislamiento](05-review-transport.md#aislamiento-solicitado-no-cleanroom-demostrado).
+- Un exit 0 de headless no garantiza éxito de todas las herramientas: la documentación oficial describe denegaciones blandas. Véase [fuentes oficiales](10-source-index.md#fuentes-oficiales-y-observaciones-locales).
+- La separación CLI/IDE tiene un canario limitado, no una demostración universal de rutas disjuntas: [comparación IDE](../antigravity-ide-vs-cli.md).
+
+**Siguiente paso:** [leer qué cambia la configuración global](01-foundation.md), antes de autorizar escrituras.

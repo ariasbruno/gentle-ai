@@ -18,15 +18,15 @@
 </p>
 
 <p>
-<a href="docs/antigravity-cli/README.md"><strong>Antigravity CLI Guide</strong></a> &bull;
+<a href="docs/antigravity-cli/README.md"><strong>Guía de Antigravity CLI (español)</strong></a> &bull;
 <a href="docs/quickstart.md"><strong>Quickstart</strong></a> &bull;
 <a href="docs/intended-usage.md"><strong>Docs</strong></a> &bull;
 <a href="https://gentlemanprogramming.com/"><strong>Website</strong></a>
 </p>
 
 > [!NOTE]
-> **Dedicated Google Antigravity CLI (`agy`) Edition**
-> This repository is a specialized production fork of Gentle AI providing full-tier, native support for **Google Antigravity CLI (`agy`)**. It implements the complete ODD workflow, 10 native subagents, fail-open lifecycle hooks, in-process RDD reviewer execution, 24 KB rule truncation mitigation, and dynamic self-reconciling plugin deployment. See the [**Google Antigravity CLI Architecture & User Guide**](docs/antigravity-cli/README.md).
+> **Google Antigravity CLI (`agy`) integration — Gentle AI v4**
+> This fork configures an existing `agy` through a managed plugin, adapts Gentle Shell assets, and provides a Go-owned RDD review transport. Capabilities differ by runtime: hooks can deny calls, and requesting `--sandbox` is not proof of OS-level enforcement. See the detailed [**Spanish integration guide: architecture, comparisons, decisions, verification and limitations**](docs/antigravity-cli/README.md).
 
 <br/>
 
@@ -184,7 +184,7 @@ Gentle Shell is a separate Pi integration package. Gentle AI configures supporte
 
 Gentle-AI brings its shared workflow to Pi, OpenCode, Claude Code, Codex, **Google Antigravity CLI**, and twelve more agents. Each integration uses that agent's native capabilities, so available features such as delegation and RDD review can differ.
 
-**[Docs →](docs/agents.md)** &bull; **[Google Antigravity CLI Guide →](docs/antigravity-cli/README.md)**
+**[Docs →](docs/agents.md)** &bull; **[Guía de Antigravity CLI en español →](docs/antigravity-cli/README.md)**
 
 ---
 

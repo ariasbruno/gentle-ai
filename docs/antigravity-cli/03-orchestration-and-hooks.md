@@ -1,174 +1,168 @@
-# Antigravity CLI Integration — Phase 3: Orchestration & Lifecycle Hooks
+# 3. Orquestación, reglas y hooks
 
-This document details the architecture, implementation, bug fixes, and verification evidence for **Phase 3: Orchestration & Lifecycle Hooks** in the Google Antigravity CLI (`agy`) integration.
+**La integración combina política de prompts con guards ejecutables concretos.** El orchestrator describe cómo coordinar; `PreToolUse` valida un formato y detecta repetición; `Stop` puede recordar un preflight. Ninguna de esas piezas debe confundirse con aprobación de entrega.
 
----
+[Índice](README.md) · [Transpilación](02-asset-transpiler.md) · [RDD](05-review-transport.md)
 
-## 1. Architectural Overview & Design Philosophy
+## Reglas y carga de contexto
 
-Antigravity CLI is designed to run in a continuous interactive terminal loop with subagent spawning (`invoke_subagent`). In Gentle AI, substantial work must be coordinated rather than dumped entirely into an oversized prompt.
+| Archivo instalado | Qué lo construye | Qué contiene |
+|---|---|---|
+| `rules/AGENTS.md` | Componentes mediante secciones administradas | Carrier del system prompt, persona y guidance según selección |
+| `rules/gentle-ai-routing.md` | `injectAntigravityCLIRule` | **Solo protocolo ODD**, frontmatter y marker |
+| `rules/gentle-ai-orchestrator.md` | Bundle más finalización CLI | Coordinador transpilado y contrato de revisión renderizado |
+| Satélites en raíz | `BundleAssets` | Detalle de delegación, memoria, skills, prompts, tracking, verificación y writer; lectura bajo demanda |
 
-### 1.1 The Thin Orchestrator Pattern
-Unlike traditional monolithic IDE prompt injections that inline hundreds of lines of phase guidelines and continuation contracts into the system prompt, Antigravity CLI adopts **Gentle Pi's thin orchestrator model**:
-- The always-on rules stay lean: `rules/AGENTS.md` carries identity, persona boundaries, Engram protocol, and CodeGraph guidance, while `rules/gentle-ai-routing.md` and `rules/gentle-ai-orchestrator.md` (both `trigger: always_on`) carry the ODD/TDD/RDD routing and the coordinator harness.
-- Detailed delegation, memory, and skill-registry material is **lazy-loaded on demand** from plugin bundle assets:
-  - `orchestrator-delegation.md`, `orchestrator-memory.md`, `orchestrator-skills.md` (satellites at the plugin root, referenced by the orchestrator rule)
-  - `support/strict-tdd.md`, `support/strict-tdd-verify.md`
-  - `chains/4r-review.chain.md`
+Fuentes: [`SystemPromptFile`](../../internal/agents/antigravitycli/adapter.go#L128-L138), [delivery agy](../../internal/components/agentguidance/inject.go#L260-L273), [`BundleAssets`](../../internal/agents/antigravitycli/adapter.go#L192-L207), [`ensureAntigravityOrchestratorRule`](../../internal/cli/antigravity_orchestrator_rule.go#L28-L52).
 
-> [!NOTE]
-> The SDD-era assets (`sdd-orchestrator-workflow.md`, `support/sdd-status-contract.md`, and the `sdd-*` chains) were retired by the ODD migration and are pruned from the plugin tree on every sync.
+El contrato implementado antepone `trigger: always_on` a las reglas no-AGENTS. Los comentarios documentan que otras reglas sin trigger eran omitidas por el cliente y que `AGENTS.md` permanece plain Markdown: [inject.go, líneas 297–318](../../internal/components/agentguidance/inject.go#L297-L318). El [registro histórico](../../odd/tasks/agy-rules-always-on.md) describe un diagnóstico con agy 1.2.12. Ese relato no se presenta como ensayo nuevo de 1.3.0 ni como fuente oficial universal.
 
-### 1.2 Bundle Deployment (formerly `pluginBundleProvider`)
-The Phase-3 `pluginBundleProvider` capability and its `sdd.Inject()` copy loop were retired with the SDD component. The current mechanism is `Adapter.DeployPluginTree` in `internal/agents/antigravitycli/adapter.go`: it writes the embedded bundle assets, discovers the transpiled subagents through `assets.FS`, writes each `agents/<name>/agent.md`, installs the fail-open hooks, and prunes legacy SDD files — reconciling the installed tree on every install and sync. The `antigravityCLIPluginImportStep` in `internal/cli/run.go` then finalizes the orchestrator rule and performs the one-time native `agy plugin` import.
+### Límite de archivo versus límite aggregate
 
-```go
-type pluginBundleProvider interface {
-    PluginDir(homeDir string) string
-    BundleAssets() [][2]string
+La documentación oficial [Rules](https://antigravity.google/docs/rules/), recuperada por el padre el 2026-10-06, especifica **24 KB (24.000 bytes) tras includes** y un límite agregado de **20.000 tokens**, con democión de los archivos mayores a pointers. Contiene tabs/superficies 2.0, CLI e IDE: hay que comprobar aplicabilidad, no transferir automáticamente todo el documento al binario instalado.
+
+El producto define `antigravityCLIRuleCap = 24000` y los tests exigen tamaños estrictamente menores. Son dos medidas diferentes:
+
+- Bytes embedded/finales locales: comprobables por Go.
+- Bytes después de includes y tokens/carga efectiva del cliente: requieren observación agy.
+
+No se afirma que los tres archivos finales de cualquier selección estén siempre bajo ambos límites. `TestAntigravityCLI_RuleSizeLimit` inspecciona el orchestrator embedded; el test CLI comprueba el final con contrato. No son una medición aggregate de cada instalación: [asset test](../../internal/assets/antigravitycli_assets_test.go#L346-L357), [CLI test](../../internal/cli/antigravity_orchestrator_rule_test.go#L13-L60).
+
+### Por qué ya no hay splitting de routing
+
+El writer actual crea un solo archivo de protocolo. Limpia archivos `gentle-ai-routing*.md` fuera del set escrito **solo si contienen marker propio**. Un archivo sin marker sobrevive: [`injectAntigravityCLIRule`](../../internal/components/agentguidance/inject.go#L320-L382), [`TestInjectRoutingAntigravityCLIStalePartCleanup`](../../internal/components/agentguidance/inject_test.go#L1086-L1140).
+
+La decisión histórica «canon-first» evita repetir doctrina ya presente en satélites y conserva el protocolo que los assets no llevan: [registro](../../odd/tasks/agy-canon-first-routing.md). No describir los viejos split parts como estrategia vigente.
+
+## Orchestrator: coordinación escrita
+
+El [asset actual](../../internal/assets/antigravitycli/orchestrator.md#L11-L98) establece coordinación, tamaño por comprensión/riesgo/resumibilidad, preguntas, exploration, verificación independiente en alto riesgo y superficies derivadas por el padre. Son **instrucciones al modelo**.
+
+```text
+usuario autoriza objetivo
+  → padre deriva alcance y criterios
+  → lectura/mapeo acotado si falta comprensión
+  → implementación inline o worker por razón explícita
+  → checks y verificador cuando corresponde
+  → padre sintetiza y conserva decisiones de entrega
+```
+
+El asset usa `invoke_subagent` y prescribe foreground. La variante original Pi utiliza mecanismos propios de background/runtime; la mutación no incorpora su implementación. Un texto que diga «runtime-enforced» no basta para probar enforcing de superficies en agy. Véase [diferencias de adaptación](02-asset-transpiler.md#mutaciones-que-marcan-diferencias-con-pi).
+
+La cadena [4r-review.chain.md](../../internal/assets/antigravitycli/chains/4r-review.chain.md#L1-L38) se declara **manual/compat-lane**; native review captures no la cargan. No convertir sus cuatro secciones en una secuencia RDD autorizada por el modelo.
+
+## Finalización del contrato de revisión
+
+El bundle trae `<!-- antigravity-review-execution-contract:insert -->`. El paso CLI:
+
+1. Lee la regla desplegada.
+2. Renderiza `reviewassets.ReviewExecutionContractFor(AgentAntigravityCLI)`.
+3. Reemplaza el marker una vez, o acepta un contrato ya rellenado.
+4. Falla si no hay ninguno de ambos.
+5. Anteponer frontmatter y escribir atómicamente.
+
+[`ensureAntigravityOrchestratorRule`](../../internal/cli/antigravity_orchestrator_rule.go#L28-L52). El test comprueba marker ausente, secciones del contrato, tamaño y bytes idénticos tras segunda finalización; otro test rechaza falta de deploy: [tests, líneas 13–68](../../internal/cli/antigravity_orchestrator_rule_test.go#L13-L68).
+
+Esto prueba materialización en fixture, no cumplimiento por el modelo.
+
+## Hooks: contrato registrado
+
+El plugin registra cinco eventos. No registra `SessionStart`. La página oficial [Hooks](https://antigravity.google/docs/hooks/) recuperada el 2026-10-06 enumera esos eventos y `hooks.json`, con la misma cautela de tabs/superficies.
+
+| Evento | Timeout en hooks.json | Handler | Efecto |
+|---|---:|---|---|
+| `PreInvocation` | 30 s | `handleAntigravityPreInvocation` | Primera invocación: refresh/baseline best-effort; salida `{}` |
+| `PreToolUse` | 10 s | `handleAntigravityPreToolUse` | Formato de delegación y circuit breaker; allow/deny |
+| `PostToolUse` | 10 s | `handleAntigravityPostToolUse` | No-op portable: `{}` |
+| `PostInvocation` | 30 s | `handleAntigravityPostInvocation` | No-op portable: `{}` |
+| `Stop` | 60 s | `handleAntigravityStop` | Solo stop idle/model: evaluar recordatorio de revisión |
+
+Definición: [`antigravityCLIPluginHooksJSON`](../../internal/agents/antigravitycli/adapter.go#L407-L470); dispatch y handlers: [antigravity_hook.go, líneas 88–172](../../internal/cli/antigravity_hook.go#L88-L172), [Stop](../../internal/cli/antigravity_hook.go#L212-L282). Timeouts son configuración solicitada al cliente, no medición de ejecución.
+
+El comando registrado llama directamente `gentle-ai hook run --agent=antigravity-cli --event <evento>`. También se escriben `hook.sh` y `hook.cmd`; no afirmar que hooks.json siempre los invoca: [`DeployPluginTree`, líneas 530–556](../../internal/agents/antigravitycli/adapter.go#L530-L556).
+
+## `PreToolUse`: condiciones fail-closed
+
+### Validación del payload
+
+- JSON vacío, null, array o malformed en `PreToolUse` → `deny`.
+- `invoke_subagent` debe tener `Args.Subagents` array no vacío.
+- Cada entrada requiere strings no vacíos `TypeName`, `Role`, `Prompt`.
+- `Workspace`, si aparece, debe ser `inherit`, `branch` o `share`.
+- Una herramienta distinta no recibe esa validación especial.
+
+[`RunAntigravityCLIHook`](../../internal/cli/antigravity_hook.go#L88-L108), [`validateAntigravityCLIInvokeSubagentArgs`](../../internal/cli/antigravity_hook.go#L344-L383), [`antigravityCLIValidWorkspace`](../../internal/cli/antigravity_hook.go#L394-L401).
+
+Ejemplo de **forma esperada por el handler**, no prueba oficial de schema nativo completo:
+
+```json
+{
+  "toolCall": {
+    "name": "invoke_subagent",
+    "args": {
+      "Subagents": [{
+        "TypeName": "gentle-ai-explore",
+        "Role": "explorer",
+        "Prompt": "Mapear solo los archivos autorizados y devolver referencias.",
+        "Workspace": "inherit"
+      }]
+    }
+  }
 }
 ```
 
-Any adapter implementing this interface automatically participated in:
-1. **Atomic bundle injection**: Copying and rendering embedded satellite and contract files into the adapter's plugin directory.
-2. **Clean uninstall operations**: Pruning bundle files and empty subdirectories (`support/`, `chains/`) during `gentle-ai uninstall`.
+El handler no demuestra que `TypeName` exista, no analiza si el prompt respeta todas las superficies ni autoriza un rol RDD por recibir ese string. Tests: [`PreToolUseEdgeCases`](../../internal/cli/antigravity_hook_test.go#L341-L375), [`TestAntigravityHookPreToolUseMalformedInvokePayloadFailsClosed`](../../internal/cli/antigravity_hook_test.go#L486-L499), [`TestAntigravityHookPreToolUseInvokeSubagentValidation`](../../internal/cli/antigravity_hook_test.go#L530-L635).
 
-> [!NOTE]
-> The interface itself is retired; `BundleAssets()` and `PluginDir()` live on the adapter and still drive bundle deployment and uninstall cleanup today.
+### Circuit breaker
 
----
+Con `conversationId` y herramienta válida:
 
-## 2. Directory-Based Subagents Deployment
-
-Antigravity CLI requires subagents to reside in dedicated subdirectories containing an `agent.md` file:
-```
-~/.gemini/config/plugins/gentle-ai/agents/
-├── gentle-ai-explore/
-│   └── agent.md
-├── gentle-ai-worker/
-│   └── agent.md
-├── gentle-ai-verify/
-│   └── agent.md
-└── ... (10 ODD subagents total)
+```text
+(nombre + hash JSON canónico de args) idénticos
+  llamada 1 → allow, count 1
+  llamada 2 → allow, count 2
+  llamada 3 → deny, count 3
+  cambio de nombre/args → reinicia count 1
 ```
 
-### 2.1 Subagent Deployment & Verification (ODD era)
-The SDD-era copy loop in `internal/components/sdd/inject.go` — including its `sdd-apply`/`sdd-verify` post-injection check — was retired with the SDD component. Today `Adapter.DeployPluginTree` writes every transpiled `agents/<name>/agent.md` from `assets.FS` and prunes legacy subagents, and the coverage guarantees moved to the invariant tests and the driven bench:
-- `internal/assets/antigravitycli_assets_test.go` asserts exactly 10 subagents with valid frontmatter on every build.
-- Journey `j4500` asserts on every driven run that the deployed plugin tree contains the current worker and reviewer subagents, non-empty and loadable.
+[`handleAntigravityPreToolUse`](../../internal/cli/antigravity_hook.go#L405-L476). Se persiste bajo `.gentle-ai/circuit-breaker/v1/<sha256(conversationId)>.json`, con fallback temporal si HOME no está disponible. El orden de claves de JSON no evade identidad: [`PreToolUseKeyOrdering`](../../internal/cli/antigravity_hook_test.go#L301-L339).
 
-### 2.2 Tool Grants and the MCP Bridge
-The Phase-3 `injectCodeGraphToolGrantIntoPrompt` enhancement in `internal/components/sdd/prompts.go` was retired with the SDD component, and with it the frontmatter-level `codegraph_explore` grant: agy validates a subagent's `tools:` list against its built-in component registry, so declaring an MCP tool name there prevents the subagent from constructing at all. The `tools:` frontmatter carries built-in components only — the current read-only `gentle-ai-explore` ships `tools: [view_file, list_dir, grep_search, find_by_name]`.
+Sin conversationId, toolCall o nombre, retorna allow y no puede seguir repetición: [líneas 409–411](../../internal/cli/antigravity_hook.go#L409-L411). No es un detector de todos los loops ni de equivalencia semántica de comandos; solo repetición consecutiva de nombre/args. Persistencia fallida puede debilitar seguimiento entre invocaciones; no se trata de garantía universal anti-loop.
 
-MCP access works through a different surface: every subagent receives the injected `call_mcp_tool` bridge, through which the plugin's MCP servers are reachable. The transpiled `gentle-ai-explore` body therefore routes CodeGraph through the bridge (`call_mcp_tool`, server `gentle-ai_codegraph`, tool `codegraph_explore`), and the transpiler's `mutateAgentRuntimeInstructions` maps the Pi-runtime instructions — the cwd-scoped `codegraph` tool with init/query/explore operations and the `read`/`grep`/`find` fallback names — to that bridge and to agy's `view_file`/`grep_search`/`find_by_name`. The mapping is pinned by `TestAntigravityCLI_ExploreAgentUsesMCPBridgeForCodeGraph` in the assets invariant tests, and the runtime permission is covered by the settings.json allow entry for `mcp(gentle-ai_codegraph/codegraph_explore)`.
+## `PreInvocation`: no siempre es pasivo
 
----
+Cuando `InvocationNum == 0`, el código intenta refrescar skill registry, asegurar ignore de `.atl` y registrar baseline RDD si puede resolver target. Emite `{}` aun cuando esas operaciones best-effort fallen: [líneas 151–172](../../internal/cli/antigravity_hook.go#L151-L172).
 
-## 3. Lifecycle Hooks & Receipt-Driven Development (RDD)
+Por tanto, no ejecutar un hook manual de inicio como si fuera un read-only probe. `TestAntigravityHookPreInvocationBaselineAndSilent` utiliza HOME/repositorio fixture y comprueba baseline y silencio: [test, líneas 12–58](../../internal/cli/antigravity_hook_test.go#L12-L58).
 
-Antigravity CLI executes lifecycle hooks defined in `~/.gemini/config/plugins/gentle-ai/hooks.json`. Gentle AI injects automated hooks to guarantee session integrity.
+## `Stop`: recordatorio condicionado, no gate de entrega
 
-### 3.1 Hook Definitions and Execution Shims
-During injection (`ensureAntigravityCLIHooks`), Gentle AI deploys:
-1. `hooks.json`:
-   ```json
-   {
-     "gentle-ai": {
-       "PreInvocation": [
-         {
-           "type": "command",
-           "command": "gentle-ai hook run --agent antigravity-cli --event PreInvocation",
-           "timeout": 30
-         }
-       ],
-       "Stop": [
-         {
-           "type": "command",
-           "command": "gentle-ai hook run --agent antigravity-cli --event Stop",
-           "timeout": 60
-         }
-       ]
-     }
-   }
-   ```
-2. Cross-platform scripts:
-   - `hooks/hook.sh`: POSIX shell script with mode `0755` (`exec gentle-ai hook run --agent antigravity-cli --event "$1"`).
-   - `hooks/hook.cmd`: Windows command batch script with mode `0644` (`@echo off\r\ngentle-ai.exe hook run --agent antigravity-cli --event %1\r\n`).
+Solo entra en evaluación si `terminationReason == "model_stop"` **y** `fullyIdle == true`. Además debe resolverse repo/modo RDD y status con target no vacío y `Action=start`. Baseline/reminder previo del mismo target suprimen repetición; ciertos errores y ausencia de modo retornan `{}`: [`handleAntigravityStop`](../../internal/cli/antigravity_hook.go#L212-L282).
 
-### 3.2 Event Handlers (`internal/cli/antigravity_hook.go`)
-- **`PreInvocation` (Turn Start)**:
-  - When `invocationNum == 0` (first turn of the session):
-    - Triggers silent refresh of `.atl/skill-registry.md` if repository skills changed.
-    - Records the initial git repository baseline target identity in `~/.gentle-ai/review-stop-hook/v1/<conversationId>.json`.
-  - Emits `{}` so execution proceeds without pause.
-- **`Stop` (Turn End & Model Completion)**:
-  - If `terminationReason != "model_stop"`, returns `{}`.
-  - If `terminationReason == "model_stop"`, evaluates whether unreviewed tracked git changes exist in the workspace since session baseline.
-  - If unreviewed candidates are detected, returns a continuation payload:
-    ```json
-    {
-      "decision": "continue",
-      "reason": "Receipt-Driven Development: unreviewed candidate changes detected since session baseline. Please run gentle-ai review status preflight before completing."
-    }
-    ```
-  - Records that a reminder was issued to prevent spamming the user on subsequent stops for the same unchanged candidate identity.
+Salida posible:
 
----
-
-## 4. Key Gotchas & Bug Fixes
-
-### 4.1 Upstream v3.3.0 OpenCode Compatibility Guard
-Upstream `main` received `v3.3.0` which added OpenCode v2 features (`opencode_v2.go`, `opencode_runtime.go`, and `RefreshInstalledOpenCodePlugins` in `internal/components/sdd/inject.go`).
-- **Gotcha**: A naive branch merge or file-level checkout (`git checkout feat/antigravity-cli-integration -- internal/components/sdd/`) would have obliterated these upstream v3.3.0 files.
-- **Resolution**: Ported strictly the `Antigravity CLI` injection diffs (step 1c, step 3d, subagents directory handling, and hooks deployment), preserving all v3.3.0 OpenCode v2 logic untouched.
-
-### 4.2 Empty `--agent` Flag in `reviewStopHookResolveTargetIdentity`
-- **Root Cause**: In `internal/cli/review_stop_hook.go`, `reviewStopHookResolveTargetIdentity` unconditionally constructed arguments as `[]string{"--cwd", root, "--contract", ReviewIntegrationContractV2, "--agent", runtimeAgent, "--next-transition"}`.
-- **Impact**: When invoked from `RunAntigravityCLIHook`, `runtimeAgent` is `""`. Passing `--agent ""` caused `runReviewStatus` to fail with an argument parsing error. As a result, `ok` was `false` and baseline identity was never recorded.
-- **Fix**:
-  ```go
-  statusArgs := []string{
-      "--cwd", root, "--contract", ReviewIntegrationContractV2,
-      "--next-transition",
-  }
-  if runtimeAgent != "" {
-      statusArgs = append(statusArgs, "--agent", runtimeAgent)
-  }
-  ```
-
-### 4.3 Mise Environment Isolation in `TestEngramPathGuidanceDefault`
-- **Root Cause**: `TestEngramPathGuidanceDefault` asserted that the default guidance contains `go/bin`. In environments using `mise` (or custom `GOBIN`/`GOPATH`), the helper dynamically prints the active Mise shims path instead of the hardcoded fallback.
-- **Fix**: Added `t.Setenv("GOBIN", "")` and `t.Setenv("GOPATH", "")` at test initialization.
-
----
-
-## 5. Empirical Verification Evidence
-
-All tests pass cleanly across affected packages:
-
-```bash
-$ go test -v ./internal/cli -run "TestAntigravityHook"
-=== RUN   TestAntigravityHookPreInvocationBaselineAndSilent
---- PASS: TestAntigravityHookPreInvocationBaselineAndSilent (0.12s)
-=== RUN   TestAntigravityHookStopModelStopUnreviewedCandidate
---- PASS: TestAntigravityHookStopModelStopUnreviewedCandidate (0.26s)
-PASS
-ok      github.com/gentleman-programming/gentle-ai/v3/internal/cli      0.401s
-
-$ go test ./internal/components/sdd/... ./internal/components/uninstall/... ./internal/cli/... -run "Antigravity|Hook"
-ok      github.com/gentleman-programming/gentle-ai/v3/internal/components/sdd          0.196s
-ok      github.com/gentleman-programming/gentle-ai/v3/internal/components/uninstall   0.114s
-ok      github.com/gentleman-programming/gentle-ai/v3/internal/cli                     2.687s
+```json
+{
+  "decision": "continue",
+  "reason": "Receipt-Driven Development: unreviewed candidate changes detected since session baseline. Please run gentle-ai review status preflight before completing."
+}
 ```
 
-All 10 ODD subagents, bundle assets, lifecycle hooks, and uninstall plans are fully verified and ready for production use.
+No inicia por sí mismo reviewers ni crea aprobación. El test `TestAntigravityHookStopOutcomes` comprueba idle/model positivo, no-idle/no-model neutros y segundo recordatorio suprimido: [líneas 60–137](../../internal/cli/antigravity_hook_test.go#L60-L137).
 
----
+## Por qué «todos fail-open» es incorrecto
 
-## 6. Associated Work Units & Commits
+| Caso | Salida del producto |
+|---|---|
+| Lectura stdin falla | `{}` |
+| `PreToolUse` malformed | `deny` |
+| Delegación malformed | `deny` |
+| Tercera llamada idéntica | `deny` |
+| Post hooks | `{}` |
+| Stop no calificante/error de resolución | `{}` |
+| Stop calificante con candidato nuevo | `continue` |
+| CLI invocada con agente/subcomando incorrecto | Error de parsing/validación |
 
-This phase was implemented and verified across the following atomic conventional commits:
-1. `feat(sdd,uninstall): support Antigravity CLI bundle assets, nested subagents, and cleanup` — `pluginBundleProvider` interface, directory-based subagents injection, and clean uninstallation.
-2. `feat(cli): add antigravity-cli lifecycle hook handler and rdd candidate guard` — `PreInvocation` and `Stop` hooks implementation, platform shims, and RDD candidate detection.
-3. `docs(antigravity-cli): document orchestration architecture, lifecycle hooks, and cleanup protocol` — orchestration patterns, hook lifecycle specifications, and test evidence.
+Fuente completa: [`RunHook`, `runHookCommand`, `RunAntigravityCLIHook`](../../internal/cli/antigravity_hook.go#L52-L137), [circuit breaker](../../internal/cli/antigravity_hook.go#L440-L476). Un proceso que sale exitosamente puede emitir deny. «Exit 0» y «permitido» son preguntas distintas.
 
+**Siguiente paso:** [MCP y la prueba limitada del benchmark](04-codegraph-and-benchmarks.md).
