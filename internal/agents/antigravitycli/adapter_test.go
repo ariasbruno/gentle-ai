@@ -170,6 +170,49 @@ func TestConfigPaths(t *testing.T) {
 	}
 }
 
+func TestWorkspaceConfigPaths(t *testing.T) {
+	a := NewAdapter()
+	workspaceDir := t.TempDir()
+
+	wantWorkspacePlugin := filepath.Join(workspaceDir, ".agents", "plugins", "gentle-ai")
+	if got := a.WorkspacePluginDir(workspaceDir); got != wantWorkspacePlugin {
+		t.Fatalf("WorkspacePluginDir() = %q, want %q", got, wantWorkspacePlugin)
+	}
+
+	// When .agents directory exists in workspace
+	if err := os.MkdirAll(filepath.Join(workspaceDir, ".agents"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := a.PluginDir(workspaceDir); got != wantWorkspacePlugin {
+		t.Fatalf("PluginDir() with .agents = %q, want %q", got, wantWorkspacePlugin)
+	}
+	if got := a.SystemPromptDir(workspaceDir); got != filepath.Join(wantWorkspacePlugin, "rules") {
+		t.Fatalf("SystemPromptDir() with .agents = %q, want %q", got, filepath.Join(wantWorkspacePlugin, "rules"))
+	}
+	if got := a.SystemPromptFile(workspaceDir); got != filepath.Join(wantWorkspacePlugin, "rules", "AGENTS.md") {
+		t.Fatalf("SystemPromptFile() with .agents = %q, want %q", got, filepath.Join(wantWorkspacePlugin, "rules", "AGENTS.md"))
+	}
+	if got := a.SkillsDir(workspaceDir); got != filepath.Join(wantWorkspacePlugin, "skills") {
+		t.Fatalf("SkillsDir() with .agents = %q, want %q", got, filepath.Join(wantWorkspacePlugin, "skills"))
+	}
+	if got := a.SubAgentsDir(workspaceDir); got != filepath.Join(wantWorkspacePlugin, "agents") {
+		t.Fatalf("SubAgentsDir() with .agents = %q, want %q", got, filepath.Join(wantWorkspacePlugin, "agents"))
+	}
+	if got := a.MCPConfigPath(workspaceDir, "context7"); got != filepath.Join(wantWorkspacePlugin, "mcp_config.json") {
+		t.Fatalf("MCPConfigPath() with .agents = %q, want %q", got, filepath.Join(wantWorkspacePlugin, "mcp_config.json"))
+	}
+
+	// When .git directory exists in workspace (even without .agents yet)
+	workspaceWithGit := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(workspaceWithGit, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	wantGitPlugin := filepath.Join(workspaceWithGit, ".agents", "plugins", "gentle-ai")
+	if got := a.PluginDir(workspaceWithGit); got != wantGitPlugin {
+		t.Fatalf("PluginDir() with .git = %q, want %q", got, wantGitPlugin)
+	}
+}
+
 func TestCapabilities(t *testing.T) {
 	a := NewAdapter()
 

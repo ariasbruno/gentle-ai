@@ -475,6 +475,9 @@ func newSyncRuntimeWithScope(homeDir string, selection model.Selection, scope In
 	backupRoot := filepath.Join(homeDir, ".gentle-ai", "backups")
 	state := &runtimeState{}
 	if scope == ScopeWorkspace {
+		if strings.TrimSpace(workspaceDir) != "" && containsAgent(selection.Agents, model.AgentAntigravityCLI) {
+			_ = os.MkdirAll(filepath.Join(workspaceDir, ".agents"), 0o755)
+		}
 		snapshotDir, err := os.MkdirTemp("", "gentle-ai-rollback-*")
 		if err != nil {
 			return nil, fmt.Errorf("create workspace sync snapshot directory: %w", err)
@@ -660,7 +663,12 @@ func (r *syncRuntime) stagePlan() pipeline.StagePlan {
 		apply = append(apply, piCodeGraphSyncStep{id: "sync:community-tool:pi-codegraph", homeDir: r.homeDir, workspaceDir: r.workspaceDir, changedFiles: &r.changedFiles})
 	}
 	if containsAgent(r.agentIDs, model.AgentAntigravityCLI) {
-		apply = append(apply, antigravityCLIPluginImportStep{id: "sync:antigravity-cli:plugin-import", homeDir: r.homeDir})
+		apply = append(apply, antigravityCLIPluginImportStep{
+			id:           "sync:antigravity-cli:plugin-import",
+			homeDir:      r.homeDir,
+			workspaceDir: r.workspaceDir,
+			scope:        r.scope,
+		})
 	}
 
 	return pipeline.StagePlan{Prepare: prepare, Apply: apply}
@@ -680,6 +688,14 @@ func (r *syncRuntime) stagePlan() pipeline.StagePlan {
 // workspace sync never snapshots — or rolls back — global state (issue #1074).
 func syncBackupTargetsScoped(homeDir, workspaceDir string, scope InstallScope, selection model.Selection, adapters []agents.Adapter) ([]string, error) {
 	workspace := scope == ScopeWorkspace
+	if workspace && strings.TrimSpace(workspaceDir) != "" {
+		for _, adapter := range adapters {
+			if adapter.Agent() == model.AgentAntigravityCLI {
+				_ = os.MkdirAll(filepath.Join(workspaceDir, ".agents"), 0o755)
+				break
+			}
+		}
+	}
 	paths := map[string]struct{}{}
 	for _, component := range selection.Components {
 		if component == model.ComponentSDD {

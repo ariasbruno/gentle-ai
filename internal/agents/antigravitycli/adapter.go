@@ -113,8 +113,39 @@ func (a *Adapter) GlobalConfigDir(homeDir string) string {
 	return filepath.Join(homeDir, ".gemini", "antigravity-cli")
 }
 
-func (a *Adapter) PluginDir(homeDir string) string {
-	return filepath.Join(homeDir, ".gemini", "config", "plugins", "gentle-ai")
+// GlobalPluginDir returns the machine-level plugin directory: ~/.gemini/config/plugins/gentle-ai
+func (a *Adapter) GlobalPluginDir(homeDir string) string {
+	return filepath.Join(homeDir, ".gemini", "config", "plugins", gentleAIPluginName)
+}
+
+// WorkspacePluginDir returns the project-scoped plugin directory: <workspaceDir>/.agents/plugins/gentle-ai
+func (a *Adapter) WorkspacePluginDir(workspaceDir string) string {
+	return filepath.Join(workspaceDir, ".agents", "plugins", gentleAIPluginName)
+}
+
+// isWorkspaceDir reports whether dir is recognized as a workspace root
+// (e.g., containing an .agents/ directory or a .git repository marker).
+func (a *Adapter) isWorkspaceDir(dir string) bool {
+	if strings.TrimSpace(dir) == "" {
+		return false
+	}
+	if stat, err := os.Stat(filepath.Join(dir, ".agents")); err == nil && stat.IsDir() {
+		return true
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+		return true
+	}
+	return false
+}
+
+// PluginDir resolves the plugin directory for the given base directory.
+// When dir is detected as a workspace root, it resolves to <dir>/.agents/plugins/gentle-ai.
+// Otherwise, it defaults to the global directory <dir>/.gemini/config/plugins/gentle-ai.
+func (a *Adapter) PluginDir(dir string) string {
+	if a.isWorkspaceDir(dir) {
+		return a.WorkspacePluginDir(dir)
+	}
+	return a.GlobalPluginDir(dir)
 }
 
 func (a *Adapter) PluginManifestPath(homeDir string) string {

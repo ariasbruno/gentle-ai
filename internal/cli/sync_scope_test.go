@@ -709,3 +709,82 @@ func TestRunSyncWorkspaceScopeWritesProjectOpenCodeSettings(t *testing.T) {
 		})
 	}
 }
+
+func TestRunSyncWorkspaceScopeAntigravityCLIUpdatesWorkspaceWithoutGlobalMutation(t *testing.T) {
+	t.Setenv(scopeEnvVar, "")
+	home := t.TempDir()
+	globalWorkspace := t.TempDir()
+	workspace := t.TempDir()
+
+	restoreHome := osUserHomeDir
+	restoreBackupHome := backup.UserHomeDirFn
+	restoreCommand := runCommand
+	restoreLookPath := cmdLookPath
+	t.Cleanup(func() {
+		osUserHomeDir = restoreHome
+		backup.UserHomeDirFn = restoreBackupHome
+		runCommand = restoreCommand
+		cmdLookPath = restoreLookPath
+	})
+
+	osUserHomeDir = func() (string, error) { return home, nil }
+	backup.UserHomeDirFn = func() (string, error) { return home, nil }
+	runCommand = func(string, ...string) error { return nil }
+	cmdLookPath = func(name string) (string, error) { return "/usr/local/bin/" + name, nil }
+
+	// Phase 1: establish the global baseline with a default (global) sync.
+	t.Chdir(globalWorkspace)
+	globalResult, err := RunSync([]string{"--agents", "antigravity-cli"})
+	if err != nil {
+		t.Fatalf("global sync error = %v", err)
+	}
+	if !globalResult.Verify.Ready {
+		t.Fatalf("global sync verification not ready: %#v", globalResult.Verify)
+	}
+	globalPluginManifest := filepath.Join(home, ".gemini", "config", "plugins", "gentle-ai", "plugin.json")
+	if _, err := os.Stat(globalPluginManifest); err != nil {
+		t.Fatalf("global sync did not create global plugin manifest: %v", err)
+	}
+
+	before := snapshotTree(t, home)
+
+	// Phase 2: workspace-scoped refresh in a different project.
+	t.Chdir(workspace)
+	result, err := RunSync([]string{"--agents", "antigravity-cli", "--scope", "workspace"})
+	if err != nil {
+		t.Fatalf("workspace sync error = %v", err)
+	}
+	if result.FilesChanged == 0 {
+		t.Fatalf("workspace sync changed nothing: filesChanged = 0, changedFiles = %v", result.ChangedFiles)
+	}
+	for _, path := range result.ChangedFiles {
+		if !pathUnder(path, workspace) {
+			t.Errorf("workspace sync reported a change outside the workspace: %q", path)
+		}
+	}
+	workspacePluginManifest := filepath.Join(workspace, ".agents", "plugins", "gentle-ai", "plugin.json")
+	if _, err := os.Stat(workspacePluginManifest); err != nil {
+		t.Errorf("workspace sync did not materialize workspace plugin.json: %v", err)
+	}
+	workspaceOrchestrator := filepath.Join(workspace, ".agents", "plugins", "gentle-ai", "rules", "gentle-ai-orchestrator.md")
+	if _, err := os.Stat(workspaceOrchestrator); err != nil {
+		t.Errorf("workspace sync did not materialize workspace orchestrator rule: %v", err)
+	}
+	workspaceRouting := filepath.Join(workspace, ".agents", "plugins", "gentle-ai", "rules", "gentle-ai-routing.md")
+	if _, err := os.Stat(workspaceRouting); err != nil {
+		t.Errorf("workspace sync did not materialize workspace routing rule: %v", err)
+	}
+
+	// The global tree — state, backups, plugins, prompts — must be byte-identical.
+	after := snapshotTree(t, home)
+	for rel, beforeHash := range before {
+		if after[rel] != beforeHash {
+			t.Errorf("global file mutated by workspace sync: %q", rel)
+		}
+	}
+	for rel := range after {
+		if _, ok := before[rel]; !ok {
+			t.Errorf("global tree gained a file during workspace sync: %q", rel)
+		}
+	}
+}

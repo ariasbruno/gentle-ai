@@ -39,7 +39,7 @@ Esta documentación y la suite de pruebas toman como base el siguiente entorno d
 - **Entorno Go:** El proyecto declara compatibilidad base con Go `1.25.10` ([go.mod, líneas 1–3](../../go.mod#L1-L3)) y fue validado con cadenas de herramientas Go 1.25+.
 
 > [!NOTE]
-> La comprobación pasiva anterior únicamente verifica la presencia de los binarios en tu `PATH`. No implica que el plugin de Gentle AI esté activo ni evalúa el aislamiento del sandbox. Para aplicar la configuración en el sistema, consulta los pasos en [Puesta en marcha global](01-foundation.md#puesta-en-marcha-global).
+> La comprobación pasiva anterior únicamente verifica la presencia de los binarios en tu `PATH`. No implica que el plugin de Gentle AI esté activo ni evalúa el aislamiento del sandbox. Para aplicar la configuración en el sistema o en tu proyecto, consulta los pasos en [Puesta en marcha (Global y Workspace)](01-foundation.md#puesta-en-marcha-global-y-workspace).
 
 ## Qué está implementado y qué no está demostrado
 
@@ -69,10 +69,9 @@ En el commit de referencia de esta versión (`628bc61ec2851040f2c95de150d8c9e628
 
 ## Límites que conviene conocer antes de usar
 
-- Usar alcance global como ruta documentada. El alcance workspace tiene una discrepancia entre componentes y despliegue/import global: [análisis de rutas](01-foundation.md#alcance-workspace-no-es-un-camino-garantizado).
 - No guardar personalizaciones dentro de `agents/` o `skills/` del plugin: el reconciliador poda directorios ajenos al bundle: [`DeployPluginTree`](../../internal/agents/antigravitycli/adapter.go#L589-L625).
 - La revisión conserva `HOME` para resolver configuración/credenciales y no desactiva explícitamente toda discovery de plugins o herramientas: [frontera de aislamiento](05-review-transport.md#aislamiento-solicitado-no-cleanroom-demostrado).
 - Un exit 0 de headless no garantiza éxito de todas las herramientas: la documentación oficial describe denegaciones blandas. Véase [fuentes oficiales](10-source-index.md#fuentes-oficiales-y-observaciones-locales).
 - La separación CLI/IDE tiene un canario limitado, no una demostración universal de rutas disjuntas: [comparación IDE](../antigravity-ide-vs-cli.md).
 
-**Siguiente paso:** [leer qué cambia la configuración global](01-foundation.md), antes de autorizar escrituras.
+**Siguiente paso:** [rutas y puesta en marcha](01-foundation.md), antes de autorizar escrituras.

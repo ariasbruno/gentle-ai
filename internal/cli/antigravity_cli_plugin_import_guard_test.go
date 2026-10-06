@@ -37,8 +37,20 @@ func TestStagePlansKeepAntigravityCLIPluginImportStep(t *testing.T) {
 			wantHit: true,
 		},
 		{
+			name:    "install with antigravity-cli selected under workspace scope imports the plugin",
+			plan:    (&installRuntime{selection: agySelection, resolved: planner.ResolvedPlan{Agents: agySelection.Agents}, scope: ScopeWorkspace, workspaceDir: "/tmp/ws", state: &runtimeState{}}).stagePlan(),
+			wantID:  installStepID,
+			wantHit: true,
+		},
+		{
 			name:    "sync with antigravity-cli selected imports the plugin",
 			plan:    (&syncRuntime{selection: agySelection, agentIDs: agySelection.Agents, scope: ScopeGlobal, state: &runtimeState{}}).stagePlan(),
+			wantID:  syncStepID,
+			wantHit: true,
+		},
+		{
+			name:    "sync with antigravity-cli selected under workspace scope imports the plugin",
+			plan:    (&syncRuntime{selection: agySelection, agentIDs: agySelection.Agents, scope: ScopeWorkspace, workspaceDir: "/tmp/ws", state: &runtimeState{}}).stagePlan(),
 			wantID:  syncStepID,
 			wantHit: true,
 		},

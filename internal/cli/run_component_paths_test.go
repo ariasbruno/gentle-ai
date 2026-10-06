@@ -902,6 +902,27 @@ func TestComponentPathsEngramClaudeUsesUserRegistryAndPreservesWorkspaceScope(t 
 	}
 }
 
+func TestComponentPathsAntigravityCLIRespectsWorkspaceScope(t *testing.T) {
+	home := t.TempDir()
+	workspace := t.TempDir()
+	adapters := resolveAdapters([]model.AgentID{model.AgentAntigravityCLI})
+
+	globalMCP := componentPathsWithWorkspaceScoped(home, workspace, ScopeGlobal, model.Selection{}, adapters, model.ComponentContext7)
+	wantGlobalMCP := filepath.Join(home, ".gemini", "config", "plugins", "gentle-ai", "mcp_config.json")
+	if !containsPath(globalMCP, wantGlobalMCP) {
+		t.Fatalf("global MCP paths missing %q: paths=%v", wantGlobalMCP, globalMCP)
+	}
+
+	workspaceMCP := componentPathsWithWorkspaceScoped(home, workspace, ScopeWorkspace, model.Selection{}, adapters, model.ComponentContext7)
+	wantWorkspaceMCP := filepath.Join(workspace, ".agents", "plugins", "gentle-ai", "mcp_config.json")
+	if !containsPath(workspaceMCP, wantWorkspaceMCP) {
+		t.Fatalf("workspace MCP paths missing %q: paths=%v", wantWorkspaceMCP, workspaceMCP)
+	}
+	if containsPath(workspaceMCP, wantGlobalMCP) {
+		t.Fatalf("workspace MCP paths leaked global path %q: paths=%v", wantGlobalMCP, workspaceMCP)
+	}
+}
+
 // TestComponentPathsEngramCodexIncludesConfigTOML verifies that componentPaths
 // for ComponentEngram + Codex reports ~/.codex/config.toml as a backup target.
 func TestComponentPathsEngramCodexIncludesConfigTOML(t *testing.T) {

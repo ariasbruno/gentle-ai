@@ -757,6 +757,9 @@ func newInstallRuntime(homeDir string, scope InstallScope, channel InstallChanne
 	}
 
 	workspaceDir, _ := os.Getwd()
+	if scope == ScopeWorkspace && strings.TrimSpace(workspaceDir) != "" && containsAgent(resolved.Agents, model.AgentAntigravityCLI) {
+		_ = os.MkdirAll(filepath.Join(workspaceDir, ".agents"), 0o755)
+	}
 
 	return &installRuntime{
 		homeDir:      homeDir,
@@ -902,7 +905,12 @@ func (r *installRuntime) stagePlan() pipeline.StagePlan {
 		apply = append(apply, piCodeGraphReconcileStep{id: stepID, homeDir: r.homeDir, workspaceDir: r.workspaceDir, selected: selected, state: r.state})
 	}
 	if containsAgent(r.resolved.Agents, model.AgentAntigravityCLI) {
-		apply = append(apply, antigravityCLIPluginImportStep{id: "install:antigravity-cli:plugin-import", homeDir: r.homeDir})
+		apply = append(apply, antigravityCLIPluginImportStep{
+			id:           "install:antigravity-cli:plugin-import",
+			homeDir:      r.homeDir,
+			workspaceDir: r.workspaceDir,
+			scope:        r.scope,
+		})
 	}
 
 	return pipeline.StagePlan{Prepare: prepare, Apply: apply}
@@ -911,8 +919,10 @@ func (r *installRuntime) stagePlan() pipeline.StagePlan {
 // antigravityCLIPluginImportStep deploys bundle assets, native subagents, and hooks,
 // and ensures the plugin is imported in Antigravity CLI.
 type antigravityCLIPluginImportStep struct {
-	id      string
-	homeDir string
+	id           string
+	homeDir      string
+	workspaceDir string
+	scope        InstallScope
 }
 
 func (s antigravityCLIPluginImportStep) ID() string { return s.id }
@@ -927,14 +937,20 @@ func (s antigravityCLIPluginImportStep) Run() error {
 		// refusal:by-design operator-knowledge: factory returned an unexpected concrete adapter type for Antigravity CLI
 		return fmt.Errorf("unexpected adapter type for %s", model.AgentAntigravityCLI)
 	}
-	if err := agy.DeployPluginTree(s.homeDir); err != nil {
+	targetRoot := s.homeDir
+	if s.scope == ScopeWorkspace && strings.TrimSpace(s.workspaceDir) != "" {
+		targetRoot = s.workspaceDir
+	}
+	if err := agy.DeployPluginTree(targetRoot); err != nil {
 		return fmt.Errorf("deploy Antigravity CLI plugin tree: %w", err)
 	}
-	if err := ensureAntigravityOrchestratorRule(s.homeDir, agy); err != nil {
+	if err := ensureAntigravityOrchestratorRule(targetRoot, agy); err != nil {
 		return fmt.Errorf("finalize Antigravity CLI orchestrator rule: %w", err)
 	}
-	if err := agy.EnsurePluginImported(context.Background(), s.homeDir); err != nil {
-		return fmt.Errorf("import Antigravity CLI plugin: %w", err)
+	if s.scope != ScopeWorkspace {
+		if err := agy.EnsurePluginImported(context.Background(), s.homeDir); err != nil {
+			return fmt.Errorf("import Antigravity CLI plugin: %w", err)
+		}
 	}
 	return nil
 }
@@ -3201,8 +3217,16 @@ func selectedSkillIDs(selection model.Selection) []model.SkillID {
 }
 
 func backupTargets(homeDir, workspaceDir string, scope InstallScope, selection model.Selection, resolved planner.ResolvedPlan) ([]string, error) {
-	paths := map[string]struct{}{}
 	adapters := resolveAdapters(resolved.Agents)
+	if scope == ScopeWorkspace && strings.TrimSpace(workspaceDir) != "" {
+		for _, adapter := range adapters {
+			if adapter.Agent() == model.AgentAntigravityCLI {
+				_ = os.MkdirAll(filepath.Join(workspaceDir, ".agents"), 0o755)
+				break
+			}
+		}
+	}
+	paths := map[string]struct{}{}
 	if configDir := openCodeTelemetryConfigDir(homeDir, workspaceDir, scope, resolved.Agents); configDir != "" {
 		for _, path := range telemetryruntime.ManagedPaths(configDir) {
 			paths[path] = struct{}{}
@@ -3438,6 +3462,14 @@ func routingGuidancePaths(homeDir, workspaceDir string, scope InstallScope, adap
 }
 
 func componentPathsWithWorkspaceScoped(homeDir, workspaceDir string, scope InstallScope, selection model.Selection, adapters []agents.Adapter, component model.ComponentID) []string {
+	if scope == ScopeWorkspace && strings.TrimSpace(workspaceDir) != "" {
+		for _, adapter := range adapters {
+			if adapter.Agent() == model.AgentAntigravityCLI {
+				_ = os.MkdirAll(filepath.Join(workspaceDir, ".agents"), 0o755)
+				break
+			}
+		}
+	}
 	paths := []string{}
 	for _, adapter := range adapters {
 		targetDir := componentPathDirScoped(homeDir, workspaceDir, scope, adapter, component)
