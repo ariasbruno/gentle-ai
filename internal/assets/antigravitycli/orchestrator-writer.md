@@ -2,7 +2,7 @@
 
 Parent Antigravity session only. Load it when the Writer rule fires or an explicitly activated Judgment Day fix batch is dispatched; small tasks never need it. The Writer rule fires on a named reason (parallel units, the context backstop), never on size alone or a price ratio: a large task without a reason stays inline, following its logbook. Configured per-agent models (`subagents.json` `model_profiles`) still apply to every writer it launches. Each writer prompt requires the self-review of the Parallel review protocol in `orchestrator-verification.md`. A reason holds only when the launch delivers it:
 
-- **Parallelism**: with the Background subagent policy on, launch every disjoint unit in the same turn via `invoke_subagent` with `mode: "background"`, then wait for all completions before the Seam check; serial launches void the reason: if units cannot launch together, work inline.
+- **Parallelism**: with the Background subagent policy on, launch every disjoint unit via `invoke_subagent`, receiving each result before launching the next; if units cannot be launched together, work inline.
 
 #### Allowed edit surfaces (MANDATORY)
 

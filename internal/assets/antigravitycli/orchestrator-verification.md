@@ -17,7 +17,7 @@ The small-model bias raises the tier by one for verification purposes (medium be
 
 ## Agent escalation (gentle-shell#1494)
 
-When the change touches a Task Size high-risk item and the native tier is passive or medium, pass `"escalate": {"item": <1-6>, "reason": "<one line>"}` in the same assess input: the tool raises the tier to high, keeps the native one as `nativeRisk`, returns `agentEscalation`, and never lowers a tier. Until the installed gentle-ai assess accepts it, the raise binds this verification plan only, not the native review tier.
+When the change touches a Task Size high-risk item and the native tier is passive or medium, the native review assess operation raises the tier to high automatically; the raise binds the verification plan only, not the native review tier. The model never calls assess directly.
 
 ## Parallel review protocol (gentle-shell#1731)
 
