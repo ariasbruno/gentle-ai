@@ -1,6 +1,6 @@
 # 1. Fundamentos, rutas y puesta en marcha
 
-**`antigravity-cli` es un adaptador propio para configurar un `agy` ya instalado.** El ejecutable, la configuración de aplicación y el plugin son superficies diferentes; confundirlas produce diagnósticos y expectativas incorrectos.
+**Esta integración es completamente independiente del adaptador para Antigravity IDE: se enfoca exclusivamente en el ejecutable de terminal `agy` (Antigravity CLI).** Configura `agy` mediante su arquitectura nativa de plugins, hooks y MCP, operando sobre un ejecutable ya instalado sin requerir extensiones gráficas.
 
 [Índice](README.md) · [Arquitectura](SUMMARY.md) · [Fuentes](10-source-index.md)
 
@@ -131,24 +131,62 @@ Ambos alcances despliegan el bundle completo de assets:
 2. **Aislamiento de `HOME`:** En `--scope workspace`, el directorio de usuario (`HOME`) permanece completamente inalterado.
 3. **Precedencia:** Cuando existen ambos, las reglas y configuraciones del workspace tienen prioridad sobre las globales.
 
-### Verificación tras la instalación o sincronización
+### Verificación automatizada tras la instalación o sincronización
 
-Para comprobar que el entorno quedó listo:
-1. **Existencia de archivos:** Verificá que el directorio del plugin contenga las reglas (`rules/AGENTS.md`) y el manifiesto (`plugin.json`).
-2. **Sesión interactiva:** Al abrir `agy`, el cliente cargará las reglas y registrará los subagentes disponibles (`gentle-ai-explore`, `gentle-ai-worker`, etc.).
-3. **Diagnóstico del sistema:** Podés ejecutar `gentle-ai doctor` para comprobar el estado general del entorno y la conectividad MCP.
+No hace falta inspeccionar carpetas a mano. Podés validar la instalación directamente con las herramientas de línea de comandos:
+
+1. **Verificar que `agy` cargó el plugin y sus componentes:**
+   ```bash
+   agy plugins list
+   ```
+   Debe responder confirmando el import de `gentle-ai` con sus 4 componentes activos:
+   ```json
+   {
+     "imports": [
+       {
+         "name": "gentle-ai",
+         "source": "antigravity",
+         "components": [
+           "skills",
+           "agents",
+           "mcpServers",
+           "hooks"
+         ]
+       }
+     ]
+   }
+   ```
+
+2. **Verificar la salud del entorno y servicios MCP:**
+   ```bash
+   gentle-ai doctor
+   ```
+   Comprueba que el agente `antigravity-cli` esté registrado, el archivo de estado sea consistente y el servidor MCP de memoria (Engram) responda en su canal stdio.
 
 ## Permisos: overlay de seguridad en settings.json
 
-Gentle AI añade reglas de protección en `settings.json` mediante [`antigravityCLIOverlayJSON`](../../internal/components/permissions/inject.go#L125-L160) para prevenir operaciones destructivas accidentales:
+Para evitar comandos destructivos accidentales o fuga de secretos en sesiones automáticas, Gentle AI inyecta en `settings.json` el overlay completo [`antigravityCLIOverlayJSON`](../../internal/components/permissions/inject.go#L132-L159):
 
 ```json
 {
   "permissions": {
     "deny": [
+      "command(sudo rm -rf /)",
+      "command(rm -rf ~)",
+      "command(sudo rm -rf ~)",
       "command(git reset --hard)",
+      "command(git clean -fd)",
+      "command(git push --force)",
+      "command(chmod -R 777)",
+      "command(chown -R)",
       "read_file(.env)",
-      "write_file(.ssh)"
+      "write_file(.env)",
+      "read_file(.ssh)",
+      "write_file(.ssh)",
+      "read_file(.credentials)",
+      "write_file(.credentials)",
+      "read_file(.aws)",
+      "write_file(.aws)"
     ],
     "allow": [
       "command(gentle-ai codegraph init)",
@@ -159,8 +197,10 @@ Gentle AI añade reglas de protección en `settings.json` mediante [`antigravity
 }
 ```
 
-- **Fusión inteligente:** Gentle AI combina estas reglas con tu configuración existente sin pisar tus preferencias personales.
-- **Backup previo:** Antes de cualquier modificación sobre `settings.json`, se genera un respaldo automático recuperable.
+- **Bloqueos preventivos (`deny`):** 8 comandos de terminal destructivos o irreversibles y 8 operaciones de lectura/escritura sobre archivos sensibles (`.env`, `.ssh`, `.credentials`, `.aws`).
+- **Comandos permitidos (`allow`):** Comandos internos indispensables para la navegación de código y la revisión RDD.
+- **Fusión inteligente:** Gentle AI combina estas listas con tu configuración previa sin pisar preferencias de usuario.
+- **Backup previo:** Antes de cualquier escritura en `settings.json`, se genera un respaldo automático recuperable.
 
 ## CLI frente a IDE
 
