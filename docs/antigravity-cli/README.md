@@ -113,37 +113,12 @@ Esta documentación y la suite de pruebas toman como base el siguiente entorno d
 > [!NOTE]
 > La comprobación pasiva anterior únicamente verifica la presencia de los binarios en tu `PATH`. No implica que el plugin de Gentle AI esté activo ni evalúa el aislamiento del sandbox. Para aplicar la configuración en el sistema o en tu proyecto, consulta los pasos en [Puesta en marcha (Global y Workspace)](01-foundation.md#puesta-en-marcha-global-y-workspace).
 
-## Qué está implementado y qué no está demostrado
+## Consideraciones importantes
 
-| Afirmación acotada | Base | Límite |
-|---|---|---|
-| `antigravity-cli` está registrado y su adaptador declara `TierFull` | [`catalog.allAgents`](../../internal/catalog/agents.go#L19-L34), [`Adapter.Tier`](../../internal/agents/antigravitycli/adapter.go#L76-L78) | El nivel no promete igualdad de capacidades |
-| El bundle contiene diez definiciones de subagentes ODD/JD/4R | [`expectedSubagentNames`, `Invariant1`](../../internal/assets/antigravitycli_assets_test.go#L38-L96) | Archivos presentes no prueban ejecución ni enforcement del frontmatter por agy |
-| La captura RDD ejecuta un subprocess nuevo con stdin y `--sandbox` | [`AntigravityCLIAdapter.Review`](../../internal/reviewerprovider/antigravitycli_adapter.go#L33-L78) | Solicitud de sandbox, no medición de confinamiento del SO |
-| Hay cinco hooks y respuestas distintas por evento | [Definición](../../internal/agents/antigravitycli/adapter.go#L407-L470), [handler](../../internal/cli/antigravity_hook.go#L88-L148) | No son todos fail-open; `PreToolUse` puede denegar |
-| El origen del bundle está fijado a un SHA de Gentle Shell | [`PROVENANCE.json`](../../internal/assets/antigravitycli/PROVENANCE.json#L1-L4) | SHA no equivale a versión semántica ni a port completo de extensiones Pi |
-| `j4500` conduce sync y uninstall contra un agy falso | [`antigravityCLIRuntimeFixture`](../../bench/journeys_antigravity_cli.go#L18-L67) | No prueba credenciales, modelos, carga real de reglas ni sandbox |
+- **Personalizaciones propias fuera del árbol administrado:** No guardes skills o subagentes manuales dentro de las carpetas `agents/` o `skills/` del plugin. `gentle-ai sync` reconcilia el bundle y poda automáticamente cualquier archivo ajeno al árbol oficial: [`DeployPluginTree`](../../internal/agents/antigravitycli/adapter.go#L589-L625).
+- **Alcance por proyecto vs global:** Si usás `--scope workspace`, el plugin se ubica en `.agents/plugins/gentle-ai/` de tu repositorio actual y tiene prioridad sobre tu configuración global, sin tocar `$HOME`.
+- **Precedencia de configuraciones:** `agy` lee la configuración local de `.agents/` por sobre la global de `~/.gemini/config/`.
 
-## Criterios de evidencia y trazabilidad
+---
 
-Para documentar el estado técnico con rigor, se distinguen cuatro niveles de certeza:
-
-1. **Implementación en código:** código fuente o assets que definen el comportamiento actual.
-2. **Pruebas automatizadas:** tests unitarios y de integración con fixtures que validan contratos específicos.
-3. **Validación en entorno de referencia:** ejecuciones comprobadas sobre entornos reales o controlados con versiones y fechas explícitas.
-4. **Límites pendientes o no demostrados:** capacidades que carecen de pruebas en runtime activo o que dependen de comportamiento externo de `agy`.
-
-### Estado de validación actual
-En el commit de referencia de esta versión (`628bc61ec2851040f2c95de150d8c9e62883b17d`, validado el 2026-10-06):
-- **Tests unitarios:** 17 paquetes completados con éxito (`PASS`, exit 0).
-- **Pruebas integrales:** Las pruebas de flujo guiado (driven) y orgánicas en entornos de producción permanecen como seguimiento separado.
-- Para el desglose detallado entre pruebas unitarias, mocks y tests integrales, consulta el [Registro de verificación](09-verification.md) y el [Índice de fuentes](10-source-index.md).
-
-## Límites que conviene conocer antes de usar
-
-- No guardar personalizaciones dentro de `agents/` o `skills/` del plugin: el reconciliador poda directorios ajenos al bundle: [`DeployPluginTree`](../../internal/agents/antigravitycli/adapter.go#L589-L625).
-- La revisión conserva `HOME` para resolver configuración/credenciales y no desactiva explícitamente toda discovery de plugins o herramientas: [frontera de aislamiento](05-review-transport.md#aislamiento-solicitado-no-cleanroom-demostrado).
-- Un exit 0 de headless no garantiza éxito de todas las herramientas: la documentación oficial describe denegaciones blandas. Véase [fuentes oficiales](10-source-index.md#fuentes-oficiales-y-observaciones-locales).
-- La separación CLI/IDE tiene un canario limitado, no una demostración universal de rutas disjuntas: [comparación IDE](../antigravity-ide-vs-cli.md).
-
-**Siguiente paso:** [rutas y puesta en marcha](01-foundation.md), antes de autorizar escrituras.
+¿Querés profundizar en la arquitectura o la auditoría de código? Consultá el [Índice de fuentes](10-source-index.md) o el [Mapa de arquitectura](SUMMARY.md).
