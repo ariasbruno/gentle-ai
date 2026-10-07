@@ -213,26 +213,37 @@ Gentle-AI brings its shared workflow to Pi, OpenCode, Claude Code, Codex, **Goog
 
 ## Get started
 
-Because this fork is a dedicated source edition with native Google Antigravity CLI support (without pre-compiled release binaries or external taps), build and install directly from source:
-
-### Prerequisites
-- **Go 1.25.10+** (installed via your system package manager, [mise](https://mise.jdx.dev/), or [golang.org](https://go.dev/dl/))
-- **Git**
-
 ### Installation
 
+#### Option A: Direct install via `go install` (Recommended)
+Install the binary directly using Go (1.25.10+):
+
 ```bash
-# 1. Clone the repository
-git clone https://github.com/ariasbruno/gentle-ai.git
+# Latest release tag from this repository:
+go install github.com/ariasbruno/gentle-ai/cmd/gentle-ai@latest
+
+# Or specify a release tag:
+go install github.com/ariasbruno/gentle-ai/cmd/gentle-ai@v4.0.0
+```
+
+#### Option B: Clone and build from branch
+```bash
+# 1. Clone this repository (antigravity-cli-v4 branch)
+git clone -b antigravity-cli-v4 https://github.com/ariasbruno/gentle-ai.git
 cd gentle-ai
 
-# 2. Compile and install to your PATH ($GOPATH/bin or ~/.local/share/mise/shims)
+# 2. Compile and install to your PATH ($GOPATH/bin)
 go install ./cmd/gentle-ai
+```
 
-# 3. Configure Google Antigravity CLI (or run 'gentle-ai' for interactive wizard)
-gentle-ai install --agent antigravity-cli
+### Setup Google Antigravity CLI
 
-# 4. Verify system health and MCP connectivity
+```bash
+# Configure agy globally or per-workspace:
+gentle-ai install --agent antigravity-cli --scope global
+# or: gentle-ai install --agent antigravity-cli --scope workspace
+
+# Verify system health and MCP connectivity
 gentle-ai doctor
 ```
 

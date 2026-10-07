@@ -4,15 +4,33 @@
 
 ## Inicio Rápido (Quick Start)
 
-Si solo quieres instalar y empezar a usar Gentle AI con `agy`:
+Si querés instalar y empezar a usar Gentle AI con `agy`:
 
-### 1. Prerrequisitos
-Asegúrate de tener instalados `agy` (con login interactivo realizado previamente) y `gentle-ai`:
+### 1. Prerrequisitos e instalación del binario `gentle-ai`
+
+Necesitás tener `agy` (con login interactivo completado) y el binario `gentle-ai` en tu `$PATH`.
+
+Si todavía no tenés `gentle-ai`, podés instalarlo con Go (1.25+):
+
+#### Opción A: Vía `go install` apuntando al release / tag de este fork (Recomendado)
+```bash
+go install github.com/ariasbruno/gentle-ai/cmd/gentle-ai@latest
+```
+*(o indicando el tag específico del release, por ejemplo `@v4.0.0`)*
+
+#### Opción B: Clonando y compilando desde la rama de desarrollo
+```bash
+git clone -b antigravity-cli-v4 https://github.com/ariasbruno/gentle-ai.git
+cd gentle-ai
+go install ./cmd/gentle-ai
+```
+
+Asegurate de tener `$GOPATH/bin` (o `~/go/bin`) incluido en tu variable `$PATH` y verificá que ambos ejecutables respondan:
 ```sh
 command -v agy && command -v gentle-ai
 ```
 
-### 2. Instalación
+### 2. Instalación del plugin
 
 Elige el alcance según tu preferencia:
 
