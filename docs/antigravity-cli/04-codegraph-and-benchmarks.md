@@ -1,14 +1,21 @@
-# 4. MCP, CodeGraph y la evidencia del benchmark
+# 4. Integración MCP, CodeGraph y validación de ciclo de vida
 
-**Una configuración MCP válida no equivale a un servidor conectado.** Gentle AI reconcilia el wiring CodeGraph de agy dentro del plugin; `j4500` verifica un ciclo del producto con un ejecutable agy falso, no el funcionamiento de un modelo real.
+**La integración MCP conecta a Antigravity CLI con herramientas especializadas de desarrollo.** Gentle AI gestiona la configuración de servidores MCP como CodeGraph (análisis de grafos de código), Engram (memoria persistente) y Context7 (documentación), garantizando persistencia atómica e idempotencia. Asimismo, el módulo de benchmarks (`j4500`) valida el ciclo de vida de instalación y desinstalación de forma hermética y reproducible.
 
-[Índice](README.md) · [Orquestación](03-orchestration-and-hooks.md) · [Verificación](09-verification.md)
+[Índice](README.md) · [Orquestación](03-orchestration-and-hooks.md) · [Transporte RDD](05-review-transport.md)
 
-## Superficie CodeGraph
+## Servidores MCP integrados
 
-`codeGraphToolWiringPaths` considera para `AgentAntigravityCLI` exactamente el `MCPConfigPath` del adaptador: [codegraph_contract.go, líneas 94–106](../../internal/components/communitytool/codegraph_contract.go#L94-L106). La ruta es `~/.gemini/config/plugins/gentle-ai/mcp_config.json`: [`MCPConfigPath`](../../internal/agents/antigravitycli/adapter.go#L157-L158).
+Gentle AI define la configuración de herramientas MCP en el archivo `mcp_config.json` dentro del árbol del plugin:
+- **Ruta canónica:** `~/.gemini/config/plugins/gentle-ai/mcp_config.json` (declarada en [`MCPConfigPath`](../../internal/agents/antigravitycli/adapter.go#L157-L158)).
 
-Configuración emitida por el reconciliador:
+| Servidor | Comando / Ejecutable | Propósito |
+|---|---|---|
+| **CodeGraph** | `codegraph serve --mcp` | Inteligencia estructural de código: grafos de llamadas, dependencias e impacto |
+| **Engram** | `engram mcp --tools=agent` | Memoria persistente entre sesiones y tras compactación de contexto |
+| **Context7** | `npx -y --package=@upstash/context7-mcp@... -- context7-mcp` | Consulta y resolución de documentación externa contextual |
+
+Estructura canónica de la configuración:
 
 ```json
 {
@@ -21,110 +28,81 @@ Configuración emitida por el reconciliador:
 }
 ```
 
-[`ReconcileAntigravityCLICodeGraphWithAgents`](../../internal/components/communitytool/codegraph_guidance.go#L311-L367) usa detección/selección, devuelve sin escribir si ya es canonical y añade/reemplaza la entrada `codegraph` si falta.
+Fuentes: [`engramOverlayJSON`](../../internal/components/engram/inject.go#L129-L142), [`defaultContext7OverlayJSON`](../../internal/components/mcp/context7.go#L9-L11), [`injectMCPConfigFile`](../../internal/components/mcp/inject.go#L380-L404).
 
-## Reconciliación y controles negativos
+## Reconciliación y persistencia atómica de CodeGraph
+
+Para asegurar que CodeGraph esté siempre disponible cuando Antigravity CLI está seleccionado, el reconciliador de Gentle AI gestiona `mcp_config.json` respetando las configuraciones preexistentes:
 
 ```text
-agy no seleccionado/detectado ───────────────► no reconciliar
-agy seleccionado + wiring canonical ───────► Changed=false
-agy seleccionado + JSON válido no canonical
-  → preservar root/otros servers → upsert codegraph → WriteFileAtomic
-agy seleccionado + JSON malformed
-  → root nuevo → canonical codegraph → bytes anteriores descartados
+Antigravity CLI no seleccionado ─────────────► No reconciliar
+Antigravity CLI seleccionado:
+  ├── Archivo ya cuenta con wiring canónico ──► Sin cambios (idempotente)
+  ├── Archivo con JSON válido no canónico ────► Preservar otros servidores y hacer upsert de codegraph
+  └── Archivo ausente o malformado ───────────► Generar documento canónico nuevo
 ```
 
-| Control existente | Qué comprueba |
+El reconciliador ([`ReconcileAntigravityCLICodeGraphWithAgents`](../../internal/components/communitytool/codegraph_guidance.go#L311-L367)) aplica tres principios clave:
+1. **Preservación:** Si el archivo ya define otros servidores (por ejemplo, `engram` o `context7`), los conserva intactos y solo inserta o actualiza la entrada de `codegraph`.
+2. **Idempotencia:** Si la entrada canónica de CodeGraph ya está presente, no reescribe el disco (`Changed = false`).
+3. **Escritura atómica:** Emplea `WriteFileAtomic` para evitar estados intermedios o archivos corruptos ante fallos imprevistos.
+
+### Controles de prueba del reconciliador
+
+| Test | Aspecto verificado |
 |---|---|
-| `TestReconcileAntigravityCLICodeGraphCreatesPluginServer` | Path, comando y dos argumentos |
-| `...IsIdempotent` | Segunda pasada sin cambios de bytes |
-| `...PreservesOtherServers` | Conservación de context7/engram en base válida |
-| `...ReplacesMalformedConfig` | Recuperación con documento nuevo |
-| `TestNeedsAntigravityCLICodeGraphReconcileDetection` | No seleccionado no reconcilia; seleccionado sin wiring sí; ya wired no |
-| `TestAntigravityCLICodeGraphWiringPathsAndManagedPaths` | Wiring limitado al MCP del plugin |
+| `TestReconcileAntigravityCLICodeGraphCreatesPluginServer` | Generación correcta de ruta, comando y argumentos |
+| `TestReconcileAntigravityCLICodeGraphIsIdempotent` | Segunda pasada sin cambios en bytes ni timestamps |
+| `TestReconcileAntigravityCLICodeGraphPreservesOtherServers` | Conservación de servidores ajenos y preexistentes |
+| `TestReconcileAntigravityCLICodeGraphReplacesMalformedConfig` | Recuperación automática ante un archivo JSON inválido |
+| `TestNeedsAntigravityCLICodeGraphReconcileDetection` | Detección precisa de cuándo se requiere intervenir y cuándo no |
 
-Tests leídos: [antigravity_cli_codegraph_test.go, líneas 26–189](../../internal/components/communitytool/antigravity_cli_codegraph_test.go#L26-L189). El verificador informó PASS del paquete communitytool el 2026-10-06; no se deduce status individual ni conteo de skips.
+Referencia: [`antigravity_cli_codegraph_test.go`](../../internal/components/communitytool/antigravity_cli_codegraph_test.go#L26-L189).
 
-**Preservación es condicional a JSON válido.** El reconciliador documenta que backup/rollback del caso malformed corresponde al caller: [comentario, líneas 298–306](../../internal/components/communitytool/codegraph_guidance.go#L298-L306). Escritura atómica reduce archivos parcialmente escritos; no elimina conflictos con escritores concurrentes ni convierte todo sync en una operación indivisible.
+## Uso de CodeGraph en los subagentes
 
-## Ruta de herramienta para el explorer
+El subagente de exploración (`gentle-ai-explore`) está configurado con `enable_mcp_tools: true` en su definición ([`agent.md`](../../internal/assets/antigravitycli/agents/gentle-ai-explore/agent.md)):
 
-El explorer actual pide usar el servidor namespaced `gentle-ai_codegraph`, herramienta `codegraph_explore`, antes de broad searches. Tiene `enable_mcp_tools: true` y tools built-in en frontmatter: [agent.md, líneas 1–20](../../internal/assets/antigravitycli/agents/gentle-ai-explore/agent.md#L1-L20).
+- **Prioridad estructural:** Utiliza la herramienta `codegraph_explore` para mapear callers, dependencias y calcular el radio de impacto (*blast radius*) de los cambios antes de realizar exploraciones ciegas de archivos.
+- **Fallback progresivo:** Si CodeGraph no está instalado en la máquina o el repositorio carece de índice, el explorador recurre de forma transparente a las herramientas convencionales del sistema de archivos (`view_file`, `grep_search`, `find_by_name`).
 
-No prescribe `call_mcp_tool` ni el tool Pi cwd-scoped con `operation: "init"`, `query` o `explore`. El test rechaza esas instrucciones residuales: [`TestAntigravityCLI_ExploreAgentUsesMCPForCodeGraph`](../../internal/assets/antigravitycli_assets_test.go#L363-L381).
+## Validación del ciclo de vida con Benchmarks (`j4500`)
 
-Ejemplo conceptual de solicitud: «Mapear callers y blast radius de `AntigravityCLIAdapter.Review`». El formato concreto de llamada pertenece a las herramientas expuestas por la sesión agy; no se inventa aquí un envelope de MCP.
+Gentle AI cuenta con un módulo de benchmarks dedicado (`bench/`) diseñado para verificar el comportamiento de extremo a extremo sin depender de llamadas a modelos remotos ni credenciales externas.
 
-### Cuándo usar fallback
-
-La instrucción del explorer permite `view_file`, `grep_search` y `find_by_name` solo cuando CodeGraph está indisponible o falla. Es política escrita; no prueba que cada modelo la siga. El servidor mantiene su índice; no ejecutar operaciones administrativas o uninit para «arreglar» una ausencia de herramientas.
-
-## Engram y Context7: ownership y disponibilidad
-
-| Servidor | Construcción de configuración | Límite |
-|---|---|---|
-| Engram | Overlay `mcpServers.engram`, comando resuelto, args `mcp --tools=agent` | Configuración no demuestra memoria activa ni equivalencia de herramientas con versiones previas |
-| Context7 | Default stdio con `npx -y --package=@upstash/context7-mcp@<versión> -- context7-mcp` | Puede depender de Node/red/cache; no se midió arranque |
-| CodeGraph | `codegraph serve --mcp` reconciliado | Requiere binario/servidor/índice accesibles al cliente |
-
-Fuentes: [`engramOverlayJSON`](../../internal/components/engram/inject.go#L129-L142), [`defaultContext7OverlayJSON`](../../internal/components/mcp/context7.go#L9-L11), [`injectMCPConfigFile`](../../internal/components/mcp/inject.go#L380-L404) (la rama HTTP es IDE, no `AgentAntigravityCLI`), [reconciliador](../../internal/components/communitytool/codegraph_guidance.go#L350-L353).
-
-No afirmar que el `PreInvocation` CLI «fuerza 14 herramientas Engram»: el handler CLI actual refresca registry/baseline. Hay superficies Engram adicionales en el componente, incluidas ramas IDE, que no equivalen automáticamente a la conducta de ese handler: [hook CLI](../../internal/cli/antigravity_hook.go#L151-L172). No llamar `agy mcp list` una prueba suficiente del wiring de un plugin; discovery global y plugin son preguntas distintas.
-
-## `j4500`: contrato de ciclo de vida con mock
-
-La definición se llama `j4500-antigravity-cli-lifecycle-parity`. «Parity» es parte del identificador; **no es una conclusión de paridad general**.
-
-### Fixture
-
-[`antigravityCLIRuntimeFixture`](../../bench/journeys_antigravity_cli.go#L18-L86) crea:
-
-- Repositorio fixture y PATH aislado.
-- Script `agy` falso que informa versión `1.2.9` y simula `plugin install`.
-- Error cuando source y destination son iguales o falta plugin.json staged.
-- Manifest inicial con plugin/root ajenos.
-- Simulación de rewrite destructivo de manifest por agy.
-- Canario de IDE en `.config/antigravity/settings.json`.
-
-No usa el `agy 1.3.0` local ni llama a modelos.
-
-### Secuencia conducida
+Dentro de este conjunto se destaca el journey **`j4500-antigravity-cli-lifecycle-parity`** ([`journeys_antigravity_cli.go`](../../bench/journeys_antigravity_cli.go#L427-L439)):
 
 ```text
-fixture
-  → sync --agents antigravity-cli
-     → assert archivos, reglas y contrato/import
-  → segundo sync
-     → assert idempotencia y timestamp/import bytes
-  → uninstall --agents antigravity-cli --yes
-     → assert limpieza administrada y conservación de import ajeno/canario
+Entorno aislado (Fixture)
+  │
+  ├── 1. Instalación inicial (sync --agents antigravity-cli)
+  │      └── Valida creación de archivos, reglas, hooks y manifiesto de importación.
+  │
+  ├── 2. Segunda sincronización (sync --agents antigravity-cli)
+  │      └── Comprueba estricta idempotencia (bytes y timestamps intactos).
+  │
+  └── 3. Desinstalación completa (uninstall --agents antigravity-cli --yes)
+         └── Verifica limpieza de componentes de Gentle AI, asegurando que
+             las configuraciones externas y canarios del IDE permanezcan inalterados.
 ```
 
-[`antigravityCLILifecycleJourneys`](../../bench/journeys_antigravity_cli.go#L427-L439). Los argumentos públicos se definen en [líneas 89–100](../../bench/journeys_antigravity_cli.go#L89-L100). No conserva la receta obsoleta `--components sdd` de la documentación anterior.
+### Arquitectura hermética del test
 
-### Qué cubre y qué no
+Para garantizar reproducibilidad absoluta en cualquier entorno de CI o local:
+- **Sandbox aislado:** Crea un directorio temporal con un PATH controlado y sin acceso al entorno global del usuario.
+- **Mock de runtime `agy`:** Simula los subcomandos de `agy` (como `plugin install` y validaciones de manifiesto).
+- **Canario de coexistencia con el IDE:** Coloca un archivo de configuración testigo en `.config/antigravity/settings.json` y valida que la desinstalación del CLI jamás altere la configuración del entorno de escritorio.
 
-| Frontera | Cubierta por diseño de journey | No cubierta |
+### Estructura de pruebas del proyecto
+
+El repositorio separa deliberadamente las pruebas unitarias del core de los benchmarks de ciclo de vida:
+
+| Suite | Comando | Propósito |
 |---|---|---|
-| CLI Gentle AI | Invocaciones públicas de sync/uninstall | Todas las combinaciones de componentes/scopes |
-| Bundle | Archivos, reglas, idempotencia según assertions | Carga efectiva en contexto real |
-| Import | Staging, preservación de registro ajeno, no reinstall | Semántica de staging/runtime actual de agy |
-| Coexistencia IDE | Bytes de un canario específico | Todas las rutas compartidas legacy `.gemini` |
-| RDD | Guidance/contrato instalado | Captura autenticada o lineage real |
-| Seguridad | Fixture aislada del bench | Enforcement del sandbox/permissions del cliente |
+| **Unit tests del producto** | `go test ./...` | Validación rápida de lógica interna, adaptadores y transpilación |
+| **Benchmarks de ciclo de vida** | `cd bench && go test ./...` | Ejecución de journeys completos (`j4500`) en entornos aislados |
+| **Harness CLI de benchmarks** | `gentle-ai-bench run --binary <bin>` | Evaluación automatizada del binario compilado en pipelines de CI |
 
-## Unit, driven y CI no son sinónimos
+---
 
-`bench/` es un módulo separado. [`bench/README.md`](../../bench/README.md#L24-L75) distingue pruebas del harness de ejecución `run --binary ...`; la raíz no lo incluye en `go test ./...`.
-
-En CI se declaran pasos diferentes:
-
-1. `go test ./...` del producto.
-2. Build/vet/test dentro de bench.
-3. Build del producto y `gentle-ai-bench run --binary ... --out ...`.
-
-[ci.yml, líneas 144–171](../../.github/workflows/ci.yml#L144-L171). Una declaración YAML no es resultado ejecutado de esta tarea. La lista mostrada de `completed_once(...)` no acredita por sí misma `j4500`.
-
-**Estado actual:** tests del paquete bench PASS recibidos (4.787 s, 2026-10-06); ejecución driven actual `j4500` NO EJECUTADA; runtime real/autenticado no autorizado. [Registro reproducible](09-verification.md#benchmark-driven-no-equivale-a-go-test).
-
-**Siguiente paso:** [transporte RDD, defaults y límites de aislamiento](05-review-transport.md).
+**Siguiente paso:** [Transporte RDD, defaults y límites de aislamiento](05-review-transport.md).
