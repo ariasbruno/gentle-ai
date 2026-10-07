@@ -6,64 +6,79 @@
 
 ## Reglas y carga de contexto
 
-| Archivo instalado | Qué lo construye | Qué contiene |
+Antigravity gestiona las directivas de comportamiento a través de un sistema de reglas acumulativas (*cumulative*) con prioridades definidas. Para entender cómo encaja Gentle AI, es clave conocer la especificación oficial de reglas de `agy`:
+
+### Jerarquía y descubrimiento de reglas
+
+Antigravity combina las reglas encontradas en distintos niveles en lugar de sobreescribirlas. Ante conflictos, prevalecen las reglas más específicas:
+1. **Directorio y subdirectorios:** `<dir>/AGENTS.md`, `<dir>/.agents/rules/*.md` (se evalúan subiendo por el árbol hasta la raíz del workspace).
+2. **Workspace:** Reglas en la raíz del proyecto.
+3. **Globales de la estación de trabajo:** `~/.gemini/AGENTS.md` y reglas modulares en `~/.gemini/config/rules/*.md`.
+4. **Plugins:** Reglas empaquetadas en plugins instalados bajo `~/.gemini/config/plugins/<plugin>/rules/`.
+
+### Estructura de reglas en Gentle AI
+
+Gentle AI distribuye sus directivas en archivos especializados según su ciclo de vida y alcance:
+
+| Archivo instalado | Constructor | Contenido y propósito |
 |---|---|---|
-| `rules/AGENTS.md` | Componentes mediante secciones administradas | Carrier del system prompt, persona y guidance según selección |
-| `rules/gentle-ai-routing.md` | `injectAntigravityCLIRule` | **Solo protocolo ODD**, frontmatter y marker |
-| `rules/gentle-ai-orchestrator.md` | Bundle más finalización CLI | Coordinador transpilado y contrato de revisión renderizado |
-| Satélites en raíz | `BundleAssets` | Detalle de delegación, memoria, skills, prompts, tracking, verificación y writer; lectura bajo demanda |
+| `rules/AGENTS.md` | Inyector de componentes | Persona base del mentor, reglas de estilo y restricciones globales |
+| `rules/gentle-ai-routing.md` | `injectAntigravityCLIRule` | Protocolo ODD (Organic Driven Development) y ciclo de trabajo |
+| `rules/gentle-ai-orchestrator.md` | Bundle + finalizador de contrato | Orquestador principal y contrato de ejecución RDD renderizado |
+| Satélites en raíz | `BundleAssets` | Especificaciones modulares de delegación, memoria, tracking y verificación |
 
-Fuentes: [`SystemPromptFile`](../../internal/agents/antigravitycli/adapter.go#L128-L138), [delivery agy](../../internal/components/agentguidance/inject.go#L260-L273), [`BundleAssets`](../../internal/agents/antigravitycli/adapter.go#L192-L207), [`ensureAntigravityOrchestratorRule`](../../internal/cli/antigravity_orchestrator_rule.go#L28-L52).
+Fuentes: [`SystemPromptFile`](../../internal/agents/antigravitycli/adapter.go#L128-L138), [`injectAntigravityCLIRule`](../../internal/components/agentguidance/inject.go#L320-L382), [`ensureAntigravityOrchestratorRule`](../../internal/cli/antigravity_orchestrator_rule.go#L28-L52).
 
-El contrato implementado antepone `trigger: always_on` a las reglas no-AGENTS. Los comentarios documentan que otras reglas sin trigger eran omitidas por el cliente y que `AGENTS.md` permanece plain Markdown: [inject.go, líneas 297–318](../../internal/components/agentguidance/inject.go#L297-L318). El [registro histórico](../../odd/tasks/agy-rules-always-on.md) describe un diagnóstico con agy 1.2.12. Ese relato no se presenta como ensayo nuevo de 1.3.0 ni como fuente oficial universal.
+### Frontmatter YAML y modos de activación (`trigger`)
 
-### Límite de archivo versus límite aggregate
+La especificación de `agy` impone una distinción técnica estricta según el tipo de archivo:
 
-La documentación oficial [Rules](https://antigravity.google/docs/rules/), recuperada por el padre el 2026-10-06, especifica **24 KB (24.000 bytes) tras includes** y un límite agregado de **20.000 tokens**, con democión de los archivos mayores a pointers. Contiene tabs/superficies 2.0, CLI e IDE: hay que comprobar aplicabilidad, no transferir automáticamente todo el documento al binario instalado.
+1. **`AGENTS.md` no lleva frontmatter:** `agy` trata todo su contenido como Markdown plano y lo mantiene activo permanentemente (`always_on`).
+2. **Archivos en `rules/*.md` exigen frontmatter YAML:** Todo archivo modular debe declarar obligatoriamente un `trigger` válido en su cabecera. Si se omite el frontmatter o se usa un valor inválido (por ejemplo, camelCase como `alwaysOn` o `modelDecision`), **`agy` descarta el archivo silenciosamente sin cargarlo**.
 
-El producto define `antigravityCLIRuleCap = 24000` y los tests exigen tamaños estrictamente menores. Son dos medidas diferentes:
+Los cuatro modos de activación soportados por `agy` son:
+- **`always_on`:** Inyecta el contenido completo en el prompt del sistema en cada turno.
+- **`model_decision`:** Inyecta solo el índice de descripciones; el modelo lee el contenido completo bajo demanda.
+- **`glob`:** Se activa solo cuando el agente interactúa con archivos que coinciden con los patrones indicados en `globs`.
+- **`manual`:** Se carga únicamente mediante mención explícita con `@` en el chat.
 
-- Bytes embedded/finales locales: comprobables por Go.
-- Bytes después de includes y tokens/carga efectiva del cliente: requieren observación agy.
+Gentle AI configura tanto `gentle-ai-routing.md` como `gentle-ai-orchestrator.md` con `trigger: always_on` porque el flujo de orquestación y el protocolo ODD deben gobernar cada turno de la sesión.
 
-No se afirma que los tres archivos finales de cualquier selección estén siempre bajo ambos límites. `TestAntigravityCLI_RuleSizeLimit` inspecciona el orchestrator embedded; el test CLI comprueba el final con contrato. No son una medición aggregate de cada instalación: [asset test](../../internal/assets/antigravitycli_assets_test.go#L346-L357), [CLI test](../../internal/cli/antigravity_orchestrator_rule_test.go#L13-L60).
+### Presupuesto de tokens y el rol de `description` como red de seguridad
 
-### Por qué ya no hay splitting de routing
+Antigravity aplica dos restricciones técnicas fundamentales para evitar desbordar la ventana de contexto:
 
-El writer actual crea un solo archivo de protocolo. Limpia archivos `gentle-ai-routing*.md` fuera del set escrito **solo si contienen marker propio**. Un archivo sin marker sobrevive: [`injectAntigravityCLIRule`](../../internal/components/agentguidance/inject.go#L320-L382), [`TestInjectRoutingAntigravityCLIStalePartCleanup`](../../internal/components/agentguidance/inject_test.go#L1086-L1140).
+- **Límite de 24 KB (`24.000` bytes) por archivo:** Cualquier regla individual que supere los 24.000 bytes (tras expandir inclusiones `@[label](path)`) es truncada por `agy`. Por esta razón, el instalador y transpilador de Gentle AI imponen una cota estricta (`antigravityCLIRuleCap = 24000`), validada en [`antigravity_orchestrator_rule_test.go`](../../internal/cli/antigravity_orchestrator_rule_test.go).
+- **Presupuesto agregado de 20.000 tokens:** Todas las reglas globales y `always_on` activas comparten una bolsa de 20.000 tokens. Si el total supera este límite, `agy` **degrada automáticamente las reglas más pesadas a punteros livianos** (`- <path>: <description>`) para que el agente las lea solo bajo demanda.
+- **Por qué `description` es obligatoria en Gentle AI:** Aunque `description` es estrictamente requerida solo en `model_decision`, Gentle AI la incluye explícitamente en sus reglas `always_on`:
+  ```yaml
+  ---
+  trigger: always_on
+  description: Gentle AI orchestrator instructions for Antigravity - coordinator role, delegation ladder, memory and skill registry, review execution contract
+  ---
+  ```
+  Si el usuario carga muchas reglas en su estación y el presupuesto agregado de 20.000 tokens se sobrepasa, `agy` degrada el archivo a su puntero de respaldo. La descripción garantiza que el modelo preserve el contexto de orquestación y sepa cuándo consultar el archivo completo.
 
-La decisión histórica «canon-first» evita repetir doctrina ya presente en satélites y conserva el protocolo que los assets no llevan: [registro](../../odd/tasks/agy-canon-first-routing.md). No describir los viejos split parts como estrategia vigente.
+## Orquestación: flujo ODD
 
-## Orchestrator: coordinación escrita
-
-El [asset actual](../../internal/assets/antigravitycli/orchestrator.md#L11-L98) establece coordinación, tamaño por comprensión/riesgo/resumibilidad, preguntas, exploration, verificación independiente en alto riesgo y superficies derivadas por el padre. Son **instrucciones al modelo**.
+El orquestador ([`orchestrator.md`](../../internal/assets/antigravitycli/orchestrator.md)) define la disciplina de coordinación de tareas:
 
 ```text
-usuario autoriza objetivo
-  → padre deriva alcance y criterios
-  → lectura/mapeo acotado si falta comprensión
-  → implementación inline o worker por razón explícita
-  → checks y verificador cuando corresponde
-  → padre sintetiza y conserva decisiones de entrega
+Usuario solicita cambio o tarea
+  → El orquestador evalúa comprensión y nivel de riesgo
+  → Exploración acotada de solo lectura (gentle-ai-explore) si falta contexto
+  → Implementación inline (tareas chicas) o delegada a gentle-ai-worker (tareas sustanciales)
+  → Validación con tests y verificador independiente (gentle-ai-verify) si hay alto riesgo
+  → Síntesis final para el usuario
 ```
 
-El asset usa `invoke_subagent` y prescribe foreground. La variante original Pi utiliza mecanismos propios de background/runtime; la mutación no incorpora su implementación. Un texto que diga «runtime-enforced» no basta para probar enforcing de superficies en agy. Véase [diferencias de adaptación](02-asset-transpiler.md#mutaciones-que-marcan-diferencias-con-pi).
+## Inyección del contrato de revisión RDD
 
-La cadena [4r-review.chain.md](../../internal/assets/antigravitycli/chains/4r-review.chain.md#L1-L38) se declara **manual/compat-lane**; native review captures no la cargan. No convertir sus cuatro secciones en una secuencia RDD autorizada por el modelo.
+Para que el modelo conozca el protocolo de revisión formal de Gentle AI, el paso final del instalador inyecta el contrato canónico dentro de `rules/gentle-ai-orchestrator.md`:
 
-## Finalización del contrato de revisión
-
-El bundle trae `<!-- antigravity-review-execution-contract:insert -->`. El paso CLI:
-
-1. Lee la regla desplegada.
-2. Renderiza `reviewassets.ReviewExecutionContractFor(AgentAntigravityCLI)`.
-3. Reemplaza el marker una vez, o acepta un contrato ya rellenado.
-4. Falla si no hay ninguno de ambos.
-5. Anteponer frontmatter y escribir atómicamente.
-
-[`ensureAntigravityOrchestratorRule`](../../internal/cli/antigravity_orchestrator_rule.go#L28-L52). El test comprueba marker ausente, secciones del contrato, tamaño y bytes idénticos tras segunda finalización; otro test rechaza falta de deploy: [tests, líneas 13–68](../../internal/cli/antigravity_orchestrator_rule_test.go#L13-L68).
-
-Esto prueba materialización en fixture, no cumplimiento por el modelo.
+1. Localiza el marcador `<!-- antigravity-review-execution-contract:insert -->` en la plantilla del orquestador.
+2. Renderiza el contrato canónico para `agy` vía `reviewassets.ReviewExecutionContractFor(AgentAntigravityCLI)`.
+3. Sustituye el marcador atómicamente garantizando idempotencia en ejecuciones sucesivas (`ensureAntigravityOrchestratorRule`).
 
 ## Hooks: contrato registrado
 
@@ -129,40 +144,39 @@ Con `conversationId` y herramienta válida:
 
 Sin conversationId, toolCall o nombre, retorna allow y no puede seguir repetición: [líneas 409–411](../../internal/cli/antigravity_hook.go#L409-L411). No es un detector de todos los loops ni de equivalencia semántica de comandos; solo repetición consecutiva de nombre/args. Persistencia fallida puede debilitar seguimiento entre invocaciones; no se trata de garantía universal anti-loop.
 
-## `PreInvocation`: no siempre es pasivo
+## `PreInvocation`: inicialización de sesión
 
-Cuando `InvocationNum == 0`, el código intenta refrescar skill registry, asegurar ignore de `.atl` y registrar baseline RDD si puede resolver target. Emite `{}` aun cuando esas operaciones best-effort fallen: [líneas 151–172](../../internal/cli/antigravity_hook.go#L151-L172).
+Cuando inicia una nueva interacción (`InvocationNum == 0`), el hook ejecuta tareas de sincronización inicial en segundo plano:
+- Refresca el índice de skills.
+- Asegura la exclusión de metadatos de sincronización (`.atl`).
+- Registra el punto base (baseline) del repositorio si RDD está activo.
 
-Por tanto, no ejecutar un hook manual de inicio como si fuera un read-only probe. `TestAntigravityHookPreInvocationBaselineAndSilent` utiliza HOME/repositorio fixture y comprueba baseline y silencio: [test, líneas 12–58](../../internal/cli/antigravity_hook_test.go#L12-L58).
+## `Stop`: recordatorio de revisión pendiente
 
-## `Stop`: recordatorio condicionado, no gate de entrega
+Si el modelo finaliza su turno (`model_stop`) y el sistema queda desocupado (`fullyIdle == true`), el hook comprueba si existen cambios de código sin revisar:
+- Si detecta cambios pendientes en un repositorio con RDD activo, emite una respuesta `continue` recordando ejecutar la revisión formal:
+  ```json
+  {
+    "decision": "continue",
+    "reason": "Receipt-Driven Development: unreviewed candidate changes detected since session baseline. Please run gentle-ai review status preflight before completing."
+  }
+  ```
+- Si no hay cambios nuevos o la revisión ya fue abordada, emite `{}` permitiendo que la sesión cierre con normalidad.
 
-Solo entra en evaluación si `terminationReason == "model_stop"` **y** `fullyIdle == true`. Además debe resolverse repo/modo RDD y status con target no vacío y `Action=start`. Baseline/reminder previo del mismo target suprimen repetición; ciertos errores y ausencia de modo retornan `{}`: [`handleAntigravityStop`](../../internal/cli/antigravity_hook.go#L212-L282).
+## Política de seguridad y respuestas de los hooks
 
-Salida posible:
+Los hooks de Gentle AI operan con un enfoque de seguridad estricto (*fail-closed* ante cargas corruptas o bucles, y *no-op* transparente para eventos posteriores):
 
-```json
-{
-  "decision": "continue",
-  "reason": "Receipt-Driven Development: unreviewed candidate changes detected since session baseline. Please run gentle-ai review status preflight before completing."
-}
-```
+| Escenario | Respuesta del hook | Comportamiento |
+|---|---|---|
+| Carga malformada o inválida en `PreToolUse` | `deny` | Bloquea la llamada a la herramienta para evitar fallos inesperados |
+| Delegación a subagente sin campos requeridos | `deny` | Exige `TypeName`, `Role` y `Prompt` obligatorios |
+| 3 llamadas consecutivas idénticas (Circuit Breaker) | `deny` | Interrumpe bucles infinitos repetitivos del modelo |
+| Ejecución normal de herramientas | `{}` o `allow` | Permite la ejecución de la herramienta por parte de `agy` |
+| Eventos posteriores (`PostToolUse`, `PostInvocation`) | `{}` | No bloqueantes, no interfieren con la respuesta del agente |
+| Cierre con cambios pendientes de revisión | `continue` | Solicita al modelo recordar el preflight de revisión antes de terminar |
+| Cierre estándar sin pendientes | `{}` | Permite el cierre normal de la interacción |
 
-No inicia por sí mismo reviewers ni crea aprobación. El test `TestAntigravityHookStopOutcomes` comprueba idle/model positivo, no-idle/no-model neutros y segundo recordatorio suprimido: [líneas 60–137](../../internal/cli/antigravity_hook_test.go#L60-L137).
+---
 
-## Por qué «todos fail-open» es incorrecto
-
-| Caso | Salida del producto |
-|---|---|
-| Lectura stdin falla | `{}` |
-| `PreToolUse` malformed | `deny` |
-| Delegación malformed | `deny` |
-| Tercera llamada idéntica | `deny` |
-| Post hooks | `{}` |
-| Stop no calificante/error de resolución | `{}` |
-| Stop calificante con candidato nuevo | `continue` |
-| CLI invocada con agente/subcomando incorrecto | Error de parsing/validación |
-
-Fuente completa: [`RunHook`, `runHookCommand`, `RunAntigravityCLIHook`](../../internal/cli/antigravity_hook.go#L52-L137), [circuit breaker](../../internal/cli/antigravity_hook.go#L440-L476). Un proceso que sale exitosamente puede emitir deny. «Exit 0» y «permitido» son preguntas distintas.
-
-**Siguiente paso:** [MCP y la prueba limitada del benchmark](04-codegraph-and-benchmarks.md).
+**Siguiente paso:** [MCP y la prueba del benchmark](04-codegraph-and-benchmarks.md).
