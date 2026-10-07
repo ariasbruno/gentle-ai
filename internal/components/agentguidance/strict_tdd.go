@@ -84,6 +84,9 @@ func InjectStrictTDDWithOptions(targetDir string, agent model.AgentID, enabled b
 		return Result{Changed: written.Changed, Files: []string{path}}, nil
 	}
 	path := StrictTDDPath(targetDir, agent)
+	if agent == model.AgentAntigravityCLI && options.SystemPromptPath != "" {
+		path = options.SystemPromptPath
+	}
 	if path == "" {
 		return Result{}, nil
 	}

@@ -266,6 +266,61 @@ func TestAntigravityCLI_AssetsUseInstalledRuntimePaths(t *testing.T) {
 	}
 }
 
+func TestAntigravityCLI_PhaseLoadingContracts(t *testing.T) {
+	cases := []struct {
+		path string
+		want []string
+		deny []string
+	}{
+		{
+			path: "antigravitycli/orchestrator.md",
+			want: []string{
+				"rules/AGENTS.md", "always_on", "model_decision",
+				"Before the associated phase or action", "strict-tdd.md", "strict-tdd-verify.md",
+				"system_prompt", "enable_write_tools", "enable_mcp_tools",
+				"Do not assume children inherit parent history", "asynchronous",
+				"Every task follows ODD", "read-only", "no writer or artifacts",
+				"ambiguous intent", "ask once and stop", "Explore before proposing or writing",
+				"Clarify real uncertainty", "Track substantial authorized work",
+				"injected language policy", "including custom personas",
+			},
+			deny: []string{"identity/harness section above", "harness section above", "launched together in background", "Current persona mode:"},
+		},
+		{
+			path: "antigravitycli/agents/gentle-ai-worker/agent.md",
+			want: []string{
+				"Before the first implementation edit", "~/.gemini/config/plugins/gentle-ai/rules/strict-tdd.md",
+				"Do not assume access to parent history", "exact authorized", "observed RED", "observed GREEN",
+			},
+		},
+		{
+			path: "antigravitycli/agents/gentle-ai-verify/agent.md",
+			want: []string{
+				"Before verification", "~/.gemini/config/plugins/gentle-ai/rules/strict-tdd-verify.md",
+				"Do not assume access to parent history", "exact", "authorized",
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.path, func(t *testing.T) {
+			content, err := assets.Read(tc.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, want := range tc.want {
+				if !strings.Contains(content, want) {
+					t.Errorf("missing phase/role contract %q", want)
+				}
+			}
+			for _, deny := range tc.deny {
+				if strings.Contains(content, deny) {
+					t.Errorf("obsolete context/topology assumption %q", deny)
+				}
+			}
+		})
+	}
+}
+
 func antigravityCLIAssetMarkdownPaths() ([]string, error) {
 	var paths []string
 	err := fs.WalkDir(assets.FS, "antigravitycli", func(path string, entry fs.DirEntry, err error) error {

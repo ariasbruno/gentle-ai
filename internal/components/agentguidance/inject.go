@@ -69,6 +69,8 @@ type RoutingOptions struct {
 	// Runtime-specific assets ignore this hint. It does not configure models.
 	OrchestratorCapability      string
 	SettingsPath                string
+	SystemPromptPath            string // Caller-resolved legacy cleanup carrier.
+	RoutingRulePath             string // Caller-resolved Antigravity CLI rule.
 	ReviewContract              ReviewContractSource
 	CodexPhaseModelAssignments  map[string]string
 	CodexModelAssignments       map[string]model.CodexEffort
@@ -258,8 +260,11 @@ func resolveRoutingDelivery(targetDir string, agent model.AgentID, options Routi
 		}, nil
 
 	case agent == model.AgentAntigravityCLI:
-		rulesDir := adapter.SystemPromptDir(targetDir)
-		if strings.TrimSpace(rulesDir) == "" {
+		rulePath := options.RoutingRulePath
+		if rulePath == "" {
+			rulePath = filepath.Join(adapter.SystemPromptDir(targetDir), "gentle-ai-routing.md")
+		}
+		if strings.TrimSpace(rulePath) == "" {
 			return routingDelivery{}, fmt.Errorf("%w: adapter %q exposes no system prompt dir", ErrInvalidTarget, agent)
 		}
 		// The dedicated rule carries the ODD workflow protocol only — the rest
@@ -268,7 +273,7 @@ func resolveRoutingDelivery(targetDir string, agent model.AgentID, options Routi
 		return routingDelivery{
 			kind:    deliveryAntigravityCLIRule,
 			adapter: adapter,
-			paths:   []string{filepath.Join(rulesDir, "gentle-ai-routing.md")},
+			paths:   []string{rulePath},
 		}, nil
 
 	default:
@@ -318,39 +323,42 @@ const antigravityCLIRoutingMarker = "<!-- gentle-ai:agent-routing -->"
 // canonical single path. After writing, stale marker-owned gentle-ai-routing*.md
 // files outside the written set are removed (historical split parts).
 func injectAntigravityCLIRule(targetDir string, delivery routingDelivery, rendered string) (Result, error) {
-	rulesDir := delivery.adapter.SystemPromptDir(targetDir)
-	if strings.TrimSpace(rulesDir) == "" {
-		return Result{}, fmt.Errorf("%w: adapter %q exposes no system prompt dir", ErrInvalidTarget, delivery.adapter.Agent())
+	// Use the pre-resolved path from delivery.paths (set by resolveRoutingDelivery)
+	// to avoid heuristic workspace detection in SystemPromptDir.
+	if len(delivery.paths) == 0 {
+		return Result{}, fmt.Errorf("%w: no routing paths resolved for %q", ErrInvalidTarget, delivery.adapter.Agent())
 	}
+	partPath := delivery.paths[0]
 
 	parts := []string{rendered}
 
 	writtenPaths := make([]string, 0, len(parts))
 	anyChanged := false
 	for i, part := range parts {
-		var partPath string
+		var currentPath string
 		if i == 0 {
-			partPath = filepath.Join(rulesDir, "gentle-ai-routing.md")
+			currentPath = partPath
 		} else {
-			partPath = filepath.Join(rulesDir, fmt.Sprintf("gentle-ai-routing-%d.md", i+1))
+			currentPath = filepath.Join(filepath.Dir(partPath), fmt.Sprintf("gentle-ai-routing-%d.md", i+1))
 		}
 
 		// Wrap part with marker and prepend frontmatter
 		wrapped := filemerge.InjectMarkdownSection("", RoutingSectionID, part)
 		withFrontmatter := filemerge.PrependYAMLFrontmatter(wrapped, antigravityCLIRuleFrontmatter)
 
-		writeResult, err := filemerge.WriteFileAtomic(partPath, []byte(withFrontmatter), filemerge.ExistingFileMode(partPath, 0o644))
+		writeResult, err := filemerge.WriteFileAtomic(currentPath, []byte(withFrontmatter), filemerge.ExistingFileMode(currentPath, 0o644))
 		if err != nil {
 			return Result{}, err
 		}
 		if writeResult.Changed {
 			anyChanged = true
 		}
-		writtenPaths = append(writtenPaths, partPath)
+		writtenPaths = append(writtenPaths, currentPath)
 	}
 
 	// Stale-part cleanup: remove gentle-ai-routing*.md files that have our
 	// ownership marker but are not in the written set.
+	rulesDir := filepath.Dir(partPath)
 	entries, err := os.ReadDir(rulesDir)
 	if err != nil {
 		return Result{}, err

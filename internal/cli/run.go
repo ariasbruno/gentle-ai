@@ -937,18 +937,23 @@ func (s antigravityCLIPluginImportStep) Run() error {
 		// refusal:by-design operator-knowledge: factory returned an unexpected concrete adapter type for Antigravity CLI
 		return fmt.Errorf("unexpected adapter type for %s", model.AgentAntigravityCLI)
 	}
-	targetRoot := s.homeDir
+
+	// Compute the correct plugin directory based on scope
+	var pluginDir string
 	if s.scope == ScopeWorkspace && strings.TrimSpace(s.workspaceDir) != "" {
-		targetRoot = s.workspaceDir
+		pluginDir = agy.WorkspacePluginDir(s.workspaceDir)
+	} else {
+		pluginDir = agy.GlobalPluginDir(s.homeDir)
 	}
-	if err := agy.DeployPluginTree(targetRoot); err != nil {
+
+	if err := agy.DeployPluginTreeToDir(pluginDir); err != nil {
 		return fmt.Errorf("deploy Antigravity CLI plugin tree: %w", err)
 	}
-	if err := ensureAntigravityOrchestratorRule(targetRoot, agy); err != nil {
+	if err := ensureAntigravityOrchestratorRuleForScope(s.scope, s.homeDir, s.workspaceDir, agy); err != nil {
 		return fmt.Errorf("finalize Antigravity CLI orchestrator rule: %w", err)
 	}
 	if s.scope != ScopeWorkspace {
-		if err := agy.EnsurePluginImported(context.Background(), s.homeDir); err != nil {
+		if err := agy.EnsurePluginImportedToDir(context.Background(), s.homeDir, pluginDir); err != nil {
 			return fmt.Errorf("import Antigravity CLI plugin: %w", err)
 		}
 	}
@@ -1618,12 +1623,12 @@ func (s agentRoutingGuidanceStep) Run() error {
 		}
 	}
 
-	options := routingGuidanceOptions(s.homeDir, s.workspaceDir, adapter)
+	options := routingGuidanceOptions(s.homeDir, s.workspaceDir, adapter, s.scope)
 
 	// Strip first: an installation upgraded from an older release still carries
 	// the retired block, and leaving it beside fresh guidance would hand the
 	// agent two conflicting sets of instructions.
-	stripped, err := stripLegacyTriggerRules(targetDir, adapter, options.SettingsPath)
+	stripped, err := stripLegacyTriggerRules(targetDir, scopedInjectionAdapter(s.homeDir, s.workspaceDir, s.scope, adapter), options.SettingsPath)
 	if err != nil {
 		return err
 	}
@@ -2543,7 +2548,7 @@ func splitPathForOS(value, goos string) []string {
 }
 
 func (s componentApplyStep) Run() error {
-	adapters := resolveAdapters(s.agents)
+	adapters := scopedComponentAdapters(s.homeDir, s.workspaceDir, s.scope, s.component, resolveAdapters(s.agents))
 
 	switch s.component {
 	case model.ComponentEngram:
@@ -3286,7 +3291,7 @@ func backupTargets(homeDir, workspaceDir string, scope InstallScope, selection m
 		paths[path] = struct{}{}
 	}
 	for _, adapter := range adapters {
-		if path := agentguidance.StrictTDDPath(routingGuidanceDir(homeDir, workspaceDir, scope, adapter), adapter.Agent()); path != "" {
+		if path := strictTDDPathForScope(homeDir, workspaceDir, scope, adapter); path != "" {
 			paths[path] = struct{}{}
 		}
 	}
@@ -3439,10 +3444,10 @@ func routingGuidancePaths(homeDir, workspaceDir string, scope InstallScope, adap
 			continue
 		}
 		targetDir := routingGuidanceDir(homeDir, workspaceDir, scope, adapter)
-		options := routingGuidanceOptions(homeDir, workspaceDir, adapter)
+		options := routingGuidanceOptions(homeDir, workspaceDir, adapter, scope)
 		var routing []string
 		var err error
-		if options.SettingsPath == "" {
+		if options.SettingsPath == "" && options.RoutingRulePath == "" {
 			routing, err = agentguidance.RoutingPaths(targetDir, adapter.Agent())
 		} else {
 			routing, err = agentguidance.RoutingPathsWithOptions(targetDir, adapter.Agent(), options)
@@ -3496,7 +3501,7 @@ func componentPathsWithWorkspaceScoped(homeDir, workspaceDir string, scope Insta
 					paths = append(paths, p)
 				}
 			case model.StrategyMCPConfigFile:
-				if p := adapter.MCPConfigPath(targetDir, "engram"); p != "" {
+				if p := mcpConfigPathForAdapter(homeDir, workspaceDir, scope, adapter, "engram"); p != "" {
 					paths = append(paths, p)
 				}
 				if adapter.Agent() == model.AgentAntigravity {
@@ -3505,11 +3510,11 @@ func componentPathsWithWorkspaceScoped(homeDir, workspaceDir string, scope Insta
 					}
 				}
 			case model.StrategyMergeIntoYAML:
-				if p := adapter.MCPConfigPath(targetDir, "engram"); p != "" {
+				if p := mcpConfigPathForAdapter(homeDir, workspaceDir, scope, adapter, "engram"); p != "" {
 					paths = append(paths, p)
 				}
 			case model.StrategyTOMLFile:
-				if p := adapter.MCPConfigPath(targetDir, "engram"); p != "" {
+				if p := mcpConfigPathForAdapter(homeDir, workspaceDir, scope, adapter, "engram"); p != "" {
 					paths = append(paths, p)
 					// Track the gentle-ai files written alongside the Codex config.toml
 					// so they are restored on rollback and removed on uninstall.
@@ -3522,7 +3527,7 @@ func componentPathsWithWorkspaceScoped(homeDir, workspaceDir string, scope Insta
 				}
 			}
 			if adapter.SystemPromptStrategy() == model.StrategyMarkdownSections {
-				paths = append(paths, adapter.SystemPromptFile(targetDir))
+				paths = append(paths, systemPromptFileForAdapter(homeDir, workspaceDir, scope, adapter))
 			}
 		case model.ComponentSDD:
 			// Jinja modular hubs (e.g. Kimi KIMI.md) are appended once below so SDD+Persona
@@ -3531,7 +3536,7 @@ func componentPathsWithWorkspaceScoped(homeDir, workspaceDir string, scope Insta
 			if adapter.SupportsSystemPrompt() &&
 				!opencoderuntimeplugins.AgentReceivesManagedOpenCodePlugins(adapter.Agent()) &&
 				adapter.SystemPromptStrategy() != model.StrategyJinjaModules {
-				paths = append(paths, adapter.SystemPromptFile(targetDir))
+				paths = append(paths, systemPromptFileForAdapter(homeDir, workspaceDir, scope, adapter))
 			}
 			if adapter.SupportsSlashCommands() {
 				paths = append(paths, legacyassets.SlashCommandPaths(adapter.Agent(), adapter.CommandsDir(targetDir))...)
@@ -3552,7 +3557,7 @@ func componentPathsWithWorkspaceScoped(homeDir, workspaceDir string, scope Insta
 					}
 				}
 			}
-			paths = append(paths, sddSubAgentPaths(targetDir, adapter)...)
+			paths = append(paths, sddSubAgentPathsForAdapter(homeDir, workspaceDir, scope, adapter)...)
 			if adapter.Agent() == model.AgentCodex {
 				// SDD installs the Codex skill-registry hook outside the skills
 				// directory, so it must share the component's backup contract.
@@ -3598,7 +3603,7 @@ func componentPathsWithWorkspaceScoped(homeDir, workspaceDir string, scope Insta
 					}
 					break
 				}
-				paths = append(paths, adapter.MCPConfigPath(targetDir, "context7"))
+				paths = append(paths, mcpConfigPathForAdapter(homeDir, workspaceDir, scope, adapter, "context7"))
 			case model.StrategyMergeIntoSettings:
 				p := adapter.SettingsPath(targetDir)
 				if adapter.Agent() == model.AgentOpenCode {
@@ -3608,11 +3613,11 @@ func componentPathsWithWorkspaceScoped(homeDir, workspaceDir string, scope Insta
 					paths = append(paths, p)
 				}
 			case model.StrategyMCPConfigFile:
-				if p := adapter.MCPConfigPath(targetDir, "context7"); p != "" {
+				if p := mcpConfigPathForAdapter(homeDir, workspaceDir, scope, adapter, "context7"); p != "" {
 					paths = append(paths, p)
 				}
 			case model.StrategyTOMLFile, model.StrategyMergeIntoYAML:
-				if p := adapter.MCPConfigPath(targetDir, "context7"); p != "" {
+				if p := mcpConfigPathForAdapter(homeDir, workspaceDir, scope, adapter, "context7"); p != "" {
 					paths = append(paths, p)
 				}
 			}
@@ -3629,7 +3634,7 @@ func componentPathsWithWorkspaceScoped(homeDir, workspaceDir string, scope Insta
 				break
 			}
 			if adapter.SupportsSystemPrompt() && adapter.SystemPromptStrategy() != model.StrategyJinjaModules {
-				paths = append(paths, adapter.SystemPromptFile(targetDir))
+				paths = append(paths, systemPromptFileForAdapter(homeDir, workspaceDir, scope, adapter))
 			}
 			if adapter.SupportsOutputStyles() {
 				if stylePaths := persona.ResourcePlanFor(selection.Persona).OutputStylePaths(adapter.OutputStyleDir(targetDir)); stylePaths.Write != "" {
@@ -3709,20 +3714,36 @@ func openCodeLoadedSettingsPath(homeDir, workspaceDir string, adapter agents.Ada
 // OpenCode does not load workspace-scoped orchestrator guidance; other agents
 // retain their existing targetDir-derived routing path. Every runtime receives
 // the review contract source its orchestrator render needs.
-func routingGuidanceOptions(homeDir, workspaceDir string, adapter agents.Adapter) agentguidance.RoutingOptions {
+func routingGuidanceOptions(homeDir, workspaceDir string, adapter agents.Adapter, scopes ...InstallScope) agentguidance.RoutingOptions {
 	options := agentguidance.RoutingOptions{ReviewContract: routingReviewContract}
+	scope := ScopeGlobal
+	if len(scopes) > 0 {
+		scope = scopes[0]
+	}
+	if adapter.Agent() == model.AgentAntigravityCLI {
+		options.SystemPromptPath = systemPromptFileForAdapter(homeDir, workspaceDir, scope, adapter)
+		options.RoutingRulePath = filepath.Join(filepath.Dir(options.SystemPromptPath), "gentle-ai-routing.md")
+	}
 	if adapter.Agent() == model.AgentOpenCode {
 		options.SettingsPath = effectiveOpenCodeSettingsPath(homeDir, workspaceDir, ScopeGlobal, adapter)
 	}
 	return options
 }
 
+func strictTDDPathForScope(home, workspace string, scope InstallScope, adapter agents.Adapter) string {
+	if adapter.Agent() == model.AgentAntigravityCLI {
+		return systemPromptFileForAdapter(home, workspace, scope, adapter)
+	}
+	return agentguidance.StrictTDDPath(routingGuidanceDir(home, workspace, scope, adapter), adapter.Agent())
+}
+
 // routingGuidanceDir resolves the installation root routing guidance is
 // delivered under. Orchestrator-prompt adapters retain their home-level adapter
 // root for legacy cleanup and ordinary delivery; OpenCode's effective settings
-// authority is supplied separately through routingGuidanceOptions. Every other
-// agent keeps the ordinary scoped resolution. The guidance step and the backup
-// contract both resolve through here so the snapshot cannot drift from what
+// authority is supplied separately through routingGuidanceOptions. For
+// Antigravity CLI, explicit destination paths are supplied in routing options.
+// Every agent keeps the ordinary scoped root resolution. The guidance step and
+// backup contract both resolve through here so the snapshot cannot drift from what
 // the injector writes.
 func routingGuidanceDir(homeDir, workspaceDir string, scope InstallScope, adapter agents.Adapter) string {
 	if agentguidance.DeliversThroughOrchestratorPrompt(adapter.Agent()) {
@@ -3731,11 +3752,137 @@ func routingGuidanceDir(homeDir, workspaceDir string, scope InstallScope, adapte
 	return componentInjectionDirScoped(homeDir, workspaceDir, scope, adapter)
 }
 
+// scopedPathAdapter delegates the full adapter contract except explicitly resolved
+// prompt and MCP destinations. The injection root keeps its original semantics.
+type scopedPathAdapter struct {
+	agents.Adapter
+	promptPath string
+	mcpPath    string
+}
+
+func (a scopedPathAdapter) SystemPromptFile(string) string      { return a.promptPath }
+func (a scopedPathAdapter) MCPConfigPath(string, string) string { return a.mcpPath }
+
+func scopedInjectionAdapter(home, workspace string, scope InstallScope, adapter agents.Adapter) agents.Adapter {
+	if adapter.Agent() != model.AgentAntigravityCLI {
+		return adapter
+	}
+	return scopedPathAdapter{Adapter: adapter,
+		promptPath: systemPromptFileForAdapter(home, workspace, scope, adapter),
+		mcpPath:    mcpConfigPathForAdapter(home, workspace, scope, adapter, "")}
+}
+
+func scopedComponentAdapters(home, workspace string, scope InstallScope, component model.ComponentID, adapters []agents.Adapter) []agents.Adapter {
+	if component == model.ComponentPersona || component == model.ComponentEngram || component == model.ComponentContext7 {
+		for i, adapter := range adapters {
+			adapters[i] = scopedInjectionAdapter(home, workspace, scope, adapter)
+		}
+	}
+	return adapters
+}
+
 // componentInjectionDirScoped returns the directory to inject component files for the given adapter,
 // taking the install scope into account. When scope is ScopeWorkspace, agent-scoped
 // components write to workspaceDir instead of the selected agent's global config root.
 func componentInjectionDirScoped(homeDir, workspaceDir string, scope InstallScope, adapter agents.Adapter) string {
 	return ResolveAgentConfigDir(scope, homeDir, workspaceDir)
+}
+
+// antigravityCLISystemPromptFile returns the system prompt file path for
+// Antigravity CLI using scope-aware resolution. Global scope uses
+// GlobalSystemPromptFile(homeDir); workspace scope uses WorkspaceSystemPromptFile(workspaceDir).
+func antigravityCLISystemPromptFile(homeDir, workspaceDir string, scope InstallScope, agy *antigravitycliagent.Adapter) string {
+	if scope == ScopeWorkspace && strings.TrimSpace(workspaceDir) != "" {
+		return agy.WorkspaceSystemPromptFile(workspaceDir)
+	}
+	return agy.GlobalSystemPromptFile(homeDir)
+}
+
+// antigravityCLIMCPConfigPath returns the MCP config path for Antigravity CLI
+// using scope-aware resolution.
+func antigravityCLIMCPConfigPath(homeDir, workspaceDir string, scope InstallScope, agy *antigravitycliagent.Adapter, serverName string) string {
+	if scope == ScopeWorkspace && strings.TrimSpace(workspaceDir) != "" {
+		return agy.WorkspaceMCPConfigPath(workspaceDir)
+	}
+	return agy.GlobalMCPConfigPath(homeDir)
+}
+
+// antigravityCLISkillsDir returns the skills directory for Antigravity CLI
+// using scope-aware resolution.
+func antigravityCLISkillsDir(homeDir, workspaceDir string, scope InstallScope, agy *antigravitycliagent.Adapter) string {
+	if scope == ScopeWorkspace && strings.TrimSpace(workspaceDir) != "" {
+		return agy.WorkspaceSkillsDir(workspaceDir)
+	}
+	return agy.GlobalSkillsDir(homeDir)
+}
+
+// antigravityCLISubAgentsDir returns the sub-agents directory for Antigravity CLI
+// using scope-aware resolution.
+func antigravityCLISubAgentsDir(homeDir, workspaceDir string, scope InstallScope, agy *antigravitycliagent.Adapter) string {
+	if scope == ScopeWorkspace && strings.TrimSpace(workspaceDir) != "" {
+		return agy.WorkspaceSubAgentsDir(workspaceDir)
+	}
+	return agy.GlobalSubAgentsDir(homeDir)
+}
+
+// antigravityCLISettingsPath returns the settings path for Antigravity CLI
+// using scope-aware resolution (though Antigravity CLI doesn't use settings).
+func antigravityCLISettingsPath(homeDir, workspaceDir string, scope InstallScope, agy *antigravitycliagent.Adapter) string {
+	if scope == ScopeWorkspace && strings.TrimSpace(workspaceDir) != "" {
+		// Antigravity CLI doesn't have a workspace settings path; return empty
+		return ""
+	}
+	return agy.SettingsPath(homeDir)
+}
+
+// systemPromptFileForAdapter returns the system prompt file path for the given
+// adapter using scope-aware resolution. For Antigravity CLI, uses the
+// scope-aware methods; for other agents, uses the adapter interface.
+func systemPromptFileForAdapter(homeDir, workspaceDir string, scope InstallScope, adapter agents.Adapter) string {
+	if agy, ok := adapter.(*antigravitycliagent.Adapter); ok {
+		return antigravityCLISystemPromptFile(homeDir, workspaceDir, scope, agy)
+	}
+	return adapter.SystemPromptFile(componentInjectionDirScoped(homeDir, workspaceDir, scope, adapter))
+}
+
+// mcpConfigPathForAdapter returns the MCP config path for the given adapter
+// using scope-aware resolution. For Antigravity CLI, uses the scope-aware
+// methods; for other agents, uses the adapter interface.
+func mcpConfigPathForAdapter(homeDir, workspaceDir string, scope InstallScope, adapter agents.Adapter, serverName string) string {
+	if agy, ok := adapter.(*antigravitycliagent.Adapter); ok {
+		return antigravityCLIMCPConfigPath(homeDir, workspaceDir, scope, agy, serverName)
+	}
+	return adapter.MCPConfigPath(componentInjectionDirScoped(homeDir, workspaceDir, scope, adapter), serverName)
+}
+
+// skillsDirForAdapter returns the skills directory for the given adapter
+// using scope-aware resolution. For Antigravity CLI, uses the scope-aware
+// methods; for other agents, uses the adapter interface.
+func skillsDirForAdapter(homeDir, workspaceDir string, scope InstallScope, adapter agents.Adapter) string {
+	if agy, ok := adapter.(*antigravitycliagent.Adapter); ok {
+		return antigravityCLISkillsDir(homeDir, workspaceDir, scope, agy)
+	}
+	return adapter.SkillsDir(componentInjectionDirScoped(homeDir, workspaceDir, scope, adapter))
+}
+
+// subAgentsDirForAdapter returns the sub-agents directory for the given adapter
+// using scope-aware resolution. For Antigravity CLI, uses the scope-aware
+// methods; for other agents, uses the adapter interface.
+func subAgentsDirForAdapter(homeDir, workspaceDir string, scope InstallScope, adapter agents.Adapter) string {
+	if agy, ok := adapter.(*antigravitycliagent.Adapter); ok {
+		return antigravityCLISubAgentsDir(homeDir, workspaceDir, scope, agy)
+	}
+	return adapter.SubAgentsDir(componentInjectionDirScoped(homeDir, workspaceDir, scope, adapter))
+}
+
+// settingsPathForAdapter returns the settings path for the given adapter
+// using scope-aware resolution. For Antigravity CLI, uses the scope-aware
+// methods; for other agents, uses the adapter interface.
+func settingsPathForAdapter(homeDir, workspaceDir string, scope InstallScope, adapter agents.Adapter) string {
+	if agy, ok := adapter.(*antigravitycliagent.Adapter); ok {
+		return antigravityCLISettingsPath(homeDir, workspaceDir, scope, agy)
+	}
+	return adapter.SettingsPath(componentInjectionDirScoped(homeDir, workspaceDir, scope, adapter))
 }
 
 // piPersonaConfigRoots returns the roots whose Pi persona state is managed by
@@ -3794,6 +3941,13 @@ func componentPathDirScoped(homeDir, workspaceDir string, scope InstallScope, ad
 }
 
 func sddSubAgentPaths(homeDir string, adapter agents.Adapter) []string {
+	return sddSubAgentPathsForAdapter(homeDir, "", ScopeGlobal, adapter)
+}
+
+// sddSubAgentPathsForAdapter returns the sub-agent paths for the given adapter
+// using scope-aware resolution. For Antigravity CLI, uses the scope-aware
+// sub-agents directory; for other agents, uses the adapter interface.
+func sddSubAgentPathsForAdapter(homeDir, workspaceDir string, scope InstallScope, adapter agents.Adapter) []string {
 	if !adapter.SupportsSubAgents() {
 		return nil
 	}
@@ -3803,12 +3957,19 @@ func sddSubAgentPaths(homeDir string, adapter agents.Adapter) []string {
 		return nil
 	}
 
+	var subAgentsDir string
+	if agy, ok := adapter.(*antigravitycliagent.Adapter); ok {
+		subAgentsDir = antigravityCLISubAgentsDir(homeDir, workspaceDir, scope, agy)
+	} else {
+		subAgentsDir = adapter.SubAgentsDir(componentInjectionDirScoped(homeDir, workspaceDir, scope, adapter))
+	}
+
 	paths := make([]string, 0, len(entries))
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
 		}
-		paths = append(paths, filepath.Join(adapter.SubAgentsDir(homeDir), entry.Name()))
+		paths = append(paths, filepath.Join(subAgentsDir, entry.Name()))
 	}
 
 	return paths

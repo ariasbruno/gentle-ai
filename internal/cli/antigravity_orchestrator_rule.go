@@ -25,8 +25,29 @@ description: Gentle AI orchestrator instructions for Antigravity - coordinator r
 // marker with the runtime-bound rendered contract and prepends always_on
 // frontmatter. It runs on every install and sync right after DeployPluginTree,
 // and is idempotent so repeated syncs produce byte-identical output.
+// LEGACY: Uses heuristic workspace detection. Call sites with known scope MUST
+// use ensureAntigravityOrchestratorRuleForScope instead.
 func ensureAntigravityOrchestratorRule(homeDir string, agy *antigravitycliagent.Adapter) error {
 	rulePath := filepath.Join(agy.PluginDir(homeDir), "rules", "gentle-ai-orchestrator.md")
+	return ensureAntigravityOrchestratorRuleAtPath(rulePath, agy)
+}
+
+// ensureAntigravityOrchestratorRuleForScope finalizes the orchestrator rule at
+// the correct plugin directory for the given scope. Global scope uses
+// GlobalPluginDir(homeDir); workspace scope uses WorkspacePluginDir(workspaceDir).
+func ensureAntigravityOrchestratorRuleForScope(scope InstallScope, homeDir, workspaceDir string, agy *antigravitycliagent.Adapter) error {
+	var rulePath string
+	if scope == ScopeWorkspace && strings.TrimSpace(workspaceDir) != "" {
+		rulePath = filepath.Join(agy.WorkspacePluginDir(workspaceDir), "rules", "gentle-ai-orchestrator.md")
+	} else {
+		rulePath = filepath.Join(agy.GlobalPluginDir(homeDir), "rules", "gentle-ai-orchestrator.md")
+	}
+	return ensureAntigravityOrchestratorRuleAtPath(rulePath, agy)
+}
+
+// ensureAntigravityOrchestratorRuleAtPath is the internal implementation that
+// finalizes the orchestrator rule at a specific path.
+func ensureAntigravityOrchestratorRuleAtPath(rulePath string, agy *antigravitycliagent.Adapter) error {
 	raw, err := os.ReadFile(rulePath)
 	if err != nil {
 		return fmt.Errorf("read Antigravity CLI orchestrator rule %q: %w", rulePath, err)

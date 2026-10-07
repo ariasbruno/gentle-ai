@@ -1411,7 +1411,7 @@ func retainedAntigravityCLIPluginOperations(adapter agents.Adapter, homeDir stri
 	if !ok {
 		return ops
 	}
-	pluginDir := agy.PluginDir(homeDir)
+	pluginDir := agy.GlobalPluginDir(homeDir)
 	for _, asset := range agy.BundleAssets() {
 		path := filepath.Join(pluginDir, asset[1])
 		ops = append(ops, removeFile(path))
@@ -1430,7 +1430,7 @@ func retainedAntigravityCLIPluginOperations(adapter agents.Adapter, homeDir stri
 	)
 	entries, err := fs.ReadDir(assets.FS, agy.EmbeddedSubAgentsDir())
 	if err == nil {
-		agentsDir := agy.SubAgentsDir(homeDir)
+		agentsDir := agy.GlobalSubAgentsDir(homeDir)
 		for _, entry := range entries {
 			if entry.IsDir() {
 				agentFile := filepath.Join(agentsDir, entry.Name(), "agent.md")
@@ -1449,7 +1449,7 @@ func retainedAntigravityCLIPluginOperations(adapter agents.Adapter, homeDir stri
 		removeFile(hookCmd),
 		removeDirIfEmpty(hooksDir),
 	)
-	mcpPath := adapter.MCPConfigPath(homeDir, "codegraph")
+	mcpPath := agy.GlobalMCPConfigPath(homeDir)
 	ops = append(ops, rewriteJSONFile(mcpPath, jsonPath{"mcpServers", "codegraph"}))
 	manifestPath := agy.ImportManifestPath(homeDir)
 	ops = append(ops, removePluginImportOperation(manifestPath))

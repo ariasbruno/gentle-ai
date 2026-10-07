@@ -3,6 +3,8 @@ package antigravitycli
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"encoding/json"
 	"errors"
 	"os"
@@ -12,9 +14,64 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gentleman-programming/gentle-ai/v4/internal/assets"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/model"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
+	"gopkg.in/yaml.v3"
 )
+
+func TestDeployPluginPhaseReferences(t *testing.T) {
+	home := t.TempDir()
+	a := NewAdapter()
+	if err := a.DeployPluginTree(home); err != nil {
+		t.Fatal(err)
+	}
+	const pluginRoot = "~/.gemini/config/plugins/gentle-ai/"
+	for _, role := range []string{"gentle-ai-worker", "gentle-ai-verify"} {
+		t.Run(role, func(t *testing.T) {
+			relative := "agents/" + role + "/agent.md"
+			data, err := os.ReadFile(filepath.Join(a.PluginDir(home), relative))
+			if err != nil {
+				t.Fatal(err)
+			}
+			source, err := assets.Read("antigravitycli/" + relative)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(data) != source {
+				t.Fatal("role body changed at deployment; dynamic system_prompt must use the same role instructions")
+			}
+			module := "strict-tdd.md"
+			if role == "gentle-ai-verify" {
+				module = "strict-tdd-verify.md"
+			}
+			if !strings.Contains(string(data), "`"+pluginRoot+"rules/"+module+"`") {
+				t.Fatalf("deployed role must point directly to native rules/%s", module)
+			}
+			rule, err := os.ReadFile(filepath.Join(a.PluginDir(home), "rules", module))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.HasPrefix(string(rule), "---\ntrigger: model_decision\n") {
+				t.Fatal("referenced TDD module is not a native conditional rule")
+			}
+		})
+	}
+	data, err := os.ReadFile(filepath.Join(a.PluginDir(home), "rules", "gentle-ai-orchestrator.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Bare filenames in the parent resolve beside the deployed core, not at
+	// the plugin root. Exercise every phase module, not just source text.
+	for module := range nativeRuleDescriptions {
+		if !strings.Contains(string(data), "`"+module+"`") {
+			t.Errorf("deployed core lacks explicit phase route to %s", module)
+		}
+		if _, err := os.Stat(filepath.Join(a.PluginDir(home), "rules", module)); err != nil {
+			t.Errorf("broken deployed phase route %s: %v", module, err)
+		}
+	}
+}
 
 func TestDetect(t *testing.T) {
 	tests := []struct {
@@ -170,6 +227,48 @@ func TestConfigPaths(t *testing.T) {
 	}
 }
 
+func TestAntigravityConfigPathsGlobalScopeWithHomeAgents(t *testing.T) {
+	// This test demonstrates the bug: when homeDir contains .agents,
+	// PluginDir incorrectly resolves to workspace plugin dir for global scope.
+	a := NewAdapter()
+	homeDir := t.TempDir()
+	// Create .agents in home to simulate the bug condition
+	if err := os.MkdirAll(filepath.Join(homeDir, ".agents"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// For global scope, all plugin paths MUST resolve to GlobalPluginDir
+	wantGlobalPlugin := filepath.Join(homeDir, ".gemini", "config", "plugins", "gentle-ai")
+	wantGlobalRules := filepath.Join(wantGlobalPlugin, "rules")
+	wantGlobalAgents := filepath.Join(wantGlobalPlugin, "agents")
+	wantGlobalSkills := filepath.Join(wantGlobalPlugin, "skills")
+	wantGlobalMCP := filepath.Join(wantGlobalPlugin, "mcp_config.json")
+
+	// These are the scope-aware methods we will add; they should return global paths
+	if got := a.GlobalPluginDir(homeDir); got != wantGlobalPlugin {
+		t.Fatalf("GlobalPluginDir() = %q, want %q", got, wantGlobalPlugin)
+	}
+	if got := a.GlobalSystemPromptDir(homeDir); got != wantGlobalRules {
+		t.Fatalf("GlobalSystemPromptDir() = %q, want %q", got, wantGlobalRules)
+	}
+	if got := a.GlobalSystemPromptFile(homeDir); got != filepath.Join(wantGlobalRules, "AGENTS.md") {
+		t.Fatalf("GlobalSystemPromptFile() = %q, want %q", got, filepath.Join(wantGlobalRules, "AGENTS.md"))
+	}
+	if got := a.GlobalSkillsDir(homeDir); got != wantGlobalSkills {
+		t.Fatalf("GlobalSkillsDir() = %q, want %q", got, wantGlobalSkills)
+	}
+	if got := a.GlobalSubAgentsDir(homeDir); got != wantGlobalAgents {
+		t.Fatalf("GlobalSubAgentsDir() = %q, want %q", got, wantGlobalAgents)
+	}
+	if got := a.GlobalMCPConfigPath(homeDir); got != wantGlobalMCP {
+		t.Fatalf("GlobalMCPConfigPath() = %q, want %q", got, wantGlobalMCP)
+	}
+
+	// The legacy PluginDir (without scope) should still work for backward compat,
+	// but call sites must use scope-aware methods.
+	_ = a.PluginDir(homeDir) // legacy, not asserted
+}
+
 func TestWorkspaceConfigPaths(t *testing.T) {
 	a := NewAdapter()
 	workspaceDir := t.TempDir()
@@ -177,6 +276,31 @@ func TestWorkspaceConfigPaths(t *testing.T) {
 	wantWorkspacePlugin := filepath.Join(workspaceDir, ".agents", "plugins", "gentle-ai")
 	if got := a.WorkspacePluginDir(workspaceDir); got != wantWorkspacePlugin {
 		t.Fatalf("WorkspacePluginDir() = %q, want %q", got, wantWorkspacePlugin)
+	}
+	if got := a.WorkspaceSystemPromptDir(workspaceDir); got != filepath.Join(wantWorkspacePlugin, "rules") {
+		t.Fatalf("WorkspaceSystemPromptDir() = %q, want %q", got, filepath.Join(wantWorkspacePlugin, "rules"))
+	}
+	if got := a.WorkspaceSystemPromptFile(workspaceDir); got != filepath.Join(wantWorkspacePlugin, "rules", "AGENTS.md") {
+		t.Fatalf("WorkspaceSystemPromptFile() = %q, want %q", got, filepath.Join(wantWorkspacePlugin, "rules", "AGENTS.md"))
+	}
+	if got := a.WorkspaceSkillsDir(workspaceDir); got != filepath.Join(wantWorkspacePlugin, "skills") {
+		t.Fatalf("WorkspaceSkillsDir() = %q, want %q", got, filepath.Join(wantWorkspacePlugin, "skills"))
+	}
+	if got := a.WorkspaceSubAgentsDir(workspaceDir); got != filepath.Join(wantWorkspacePlugin, "agents") {
+		t.Fatalf("WorkspaceSubAgentsDir() = %q, want %q", got, filepath.Join(wantWorkspacePlugin, "agents"))
+	}
+	if got := a.WorkspaceMCPConfigPath(workspaceDir); got != filepath.Join(wantWorkspacePlugin, "mcp_config.json") {
+		t.Fatalf("WorkspaceMCPConfigPath() = %q, want %q", got, filepath.Join(wantWorkspacePlugin, "mcp_config.json"))
+	}
+
+	// When .git directory exists in workspace (even without .agents yet)
+	workspaceWithGit := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(workspaceWithGit, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	wantGitPlugin := filepath.Join(workspaceWithGit, ".agents", "plugins", "gentle-ai")
+	if got := a.PluginDir(workspaceWithGit); got != wantGitPlugin {
+		t.Fatalf("PluginDir() with .git = %q, want %q", got, wantGitPlugin)
 	}
 
 	// When .agents directory exists in workspace
@@ -200,16 +324,6 @@ func TestWorkspaceConfigPaths(t *testing.T) {
 	}
 	if got := a.MCPConfigPath(workspaceDir, "context7"); got != filepath.Join(wantWorkspacePlugin, "mcp_config.json") {
 		t.Fatalf("MCPConfigPath() with .agents = %q, want %q", got, filepath.Join(wantWorkspacePlugin, "mcp_config.json"))
-	}
-
-	// When .git directory exists in workspace (even without .agents yet)
-	workspaceWithGit := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(workspaceWithGit, ".git"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	wantGitPlugin := filepath.Join(workspaceWithGit, ".agents", "plugins", "gentle-ai")
-	if got := a.PluginDir(workspaceWithGit); got != wantGitPlugin {
-		t.Fatalf("PluginDir() with .git = %q, want %q", got, wantGitPlugin)
 	}
 }
 
@@ -652,6 +766,233 @@ func writeModeFile(t *testing.T, path string, data []byte, mode os.FileMode) {
 	}
 }
 
+func TestDeployNativeRules(t *testing.T) {
+	a := NewAdapter()
+	home := t.TempDir()
+	plugin := a.PluginDir(home)
+	names := []string{"orchestrator-delegation", "orchestrator-memory", "orchestrator-skills", "orchestrator-prompts", "orchestrator-tracking", "orchestrator-verification", "orchestrator-writer", "strict-tdd", "strict-tdd-verify"}
+	for _, name := range names {
+		source := "antigravitycli/" + name + ".md"
+		legacy := name + ".md"
+		if strings.HasPrefix(name, "strict-tdd") {
+			source = "antigravitycli/support/" + name + ".md"
+			legacy = filepath.Join("support", legacy)
+		}
+		content, err := assets.Read(source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeModeFile(t, filepath.Join(plugin, legacy), []byte(content), 0o644)
+	}
+	persona := filepath.Join(plugin, "rules", "AGENTS.md")
+	writeModeFile(t, persona, []byte("User persona\n"), 0o644)
+	if err := a.DeployPluginTree(home); err != nil {
+		t.Fatal(err)
+	}
+	first := make(map[string]string)
+	for _, name := range names {
+		path := filepath.Join(plugin, "rules", name+".md")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		content := string(data)
+		if !strings.HasPrefix(content, "---\ntrigger: model_decision\ndescription: \"") || !strings.Contains(content, "\"\n---\n") {
+			t.Errorf("%s: invalid descriptive native metadata", name)
+		}
+		var metadata struct {
+			Trigger     string `yaml:"trigger"`
+			Description string `yaml:"description"`
+		}
+		end := strings.Index(content[4:], "\n---\n")
+		if end < 0 || yaml.Unmarshal([]byte(content[4:4+end]), &metadata) != nil || metadata.Trigger != "model_decision" || len(metadata.Description) < 40 {
+			t.Errorf("%s: metadata is not valid activation YAML", name)
+		}
+		if len(data) >= 24000 {
+			t.Errorf("%s: exceeds individual rule budget (%d)", name, len(data))
+		}
+		for _, old := range []string{"`orchestrator.md`", "gentle-ai/orchestrator.md", "support/strict-tdd"} {
+			if strings.Contains(content, old) {
+				t.Errorf("%s: broken legacy reference %q", name, old)
+			}
+		}
+		for _, target := range append(names, "gentle-ai-orchestrator") {
+			if strings.Contains(content, "`"+target+".md`") {
+				if _, err := os.Stat(filepath.Join(plugin, "rules", target+".md")); err != nil {
+					t.Errorf("%s: unresolved relative reference %s: %v", name, target, err)
+				}
+			}
+		}
+		first[path] = content
+		legacy := name + ".md"
+		if strings.HasPrefix(name, "strict-tdd") {
+			legacy = filepath.Join("support", legacy)
+		}
+		if _, err := os.Stat(filepath.Join(plugin, legacy)); !os.IsNotExist(err) {
+			t.Errorf("managed legacy %s remains: %v", legacy, err)
+		}
+	}
+	core, err := os.ReadFile(filepath.Join(plugin, "rules", "gentle-ai-orchestrator.md"))
+	if err != nil || !bytes.Contains(core, []byte(ReviewContractInsertMarker)) || bytes.Contains(core, []byte("trigger: model_decision")) {
+		t.Fatalf("core authority changed: %v", err)
+	}
+	if err := a.DeployPluginTree(home); err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range first {
+		got, err := os.ReadFile(path)
+		if err != nil || string(got) != want {
+			t.Errorf("second deployment changed %s: %v", path, err)
+		}
+	}
+	if data, err := os.ReadFile(persona); err != nil || string(data) != "User persona\n" {
+		t.Errorf("persona changed: %v", err)
+	}
+}
+
+func TestDeployNativeRulesPreservesConflicts(t *testing.T) {
+	for _, relative := range []string{"orchestrator.md", "orchestrator-memory.md", "support/strict-tdd.md", "rules/orchestrator-memory.md"} {
+		t.Run(relative, func(t *testing.T) {
+			a := NewAdapter()
+			home := t.TempDir()
+			path := filepath.Join(a.PluginDir(home), relative)
+			writeModeFile(t, path, []byte("User customization\n"), 0o644)
+			if err := a.DeployPluginTree(home); err == nil || !strings.Contains(err.Error(), "conflict") {
+				t.Fatalf("want explicit migration conflict, got %v", err)
+			}
+			if data, err := os.ReadFile(path); err != nil || string(data) != "User customization\n" {
+				t.Fatalf("user content changed: %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(a.PluginDir(home), "plugin.json")); !os.IsNotExist(err) {
+				t.Fatalf("deployment wrote before conflict preflight: %v", err)
+			}
+		})
+	}
+}
+
+func TestDeployNativeRulesRejectsSymlinks(t *testing.T) {
+	for _, relative := range []string{"rules", "support", "orchestrator-memory.md", "rules/strict-tdd.md", ".native-rule-ownership.json"} {
+		t.Run(relative, func(t *testing.T) {
+			a := NewAdapter()
+			home := t.TempDir()
+			path := filepath.Join(a.PluginDir(home), relative)
+			target := t.TempDir()
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(target, path); err != nil {
+				t.Skipf("symlink unavailable: %v", err)
+			}
+			if err := a.DeployPluginTree(home); err == nil || !strings.Contains(err.Error(), "conflict") {
+				t.Fatalf("want symlink conflict, got %v", err)
+			}
+			if entries, err := os.ReadDir(target); err != nil || len(entries) != 0 {
+				t.Fatalf("symlink target changed: %v", err)
+			}
+		})
+	}
+}
+
+func TestDeployNativeRulesSuccessiveUpgrades(t *testing.T) {
+	a, home := NewAdapter(), t.TempDir()
+	name := "orchestrator-memory.md"
+	original := nativeRuleDescriptions[name]
+	defer func() { nativeRuleDescriptions[name] = original }()
+	for _, description := range []string{"First generated description", "Second generated description"} {
+		nativeRuleDescriptions[name] = description
+		if err := a.DeployPluginTree(home); err != nil {
+			t.Fatalf("upgrade %q: %v", description, err)
+		}
+	}
+	plugin := a.PluginDir(home)
+	path := filepath.Join(plugin, "rules", name)
+	// A prior successful generator may change both description and body.
+	prior := renderNativeRule("antigravitycli/"+name, "Previous generated body\n")
+	writeModeFile(t, path, []byte(prior), 0o644)
+	metadataPath := filepath.Join(plugin, ".native-rule-ownership.json")
+	raw, err := os.ReadFile(metadataPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var record struct {
+		Version int               `json:"version"`
+		Rules   map[string]string `json:"rules"`
+	}
+	if err := json.Unmarshal(raw, &record); err != nil {
+		t.Fatal(err)
+	}
+	record.Rules["rules/"+name] = fmt.Sprintf("%x", sha256.Sum256([]byte(prior)))
+	raw, err = json.Marshal(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeModeFile(t, metadataPath, raw, 0o644)
+	nativeRuleDescriptions[name] = original
+	if err := a.DeployPluginTree(home); err != nil {
+		t.Fatalf("body upgrade: %v", err)
+	}
+	current, err := os.ReadFile(path)
+	if err != nil || bytes.Equal(current, []byte(prior)) {
+		t.Fatalf("body was not upgraded: %v", err)
+	}
+	writeModeFile(t, path, []byte("User edit\n"), 0o644)
+	if err := a.DeployPluginTree(home); err == nil {
+		t.Fatal("accepted edited managed rule")
+	}
+	got, _ := os.ReadFile(path)
+	if string(got) != "User edit\n" {
+		t.Fatal("overwrote user edit")
+	}
+}
+
+func TestDeployNativeRulesInvalidProvenance(t *testing.T) {
+	for _, record := range []string{`{`, `{}`, `null`, `{"version":2,"rules":{}}`, `{"version":1,"rules":{},"unknown":true}`, `{"version":1,"rules":{}} {}`, `{"version":1,"rules":{"../outside":"abc"}}`, `{"version":1,"rules":{"rules/orchestrator-memory.md":"bad"}}`} {
+		t.Run(record, func(t *testing.T) {
+			a, home := NewAdapter(), t.TempDir()
+			plugin := a.PluginDir(home)
+			writeModeFile(t, filepath.Join(plugin, ".native-rule-ownership.json"), []byte(record), 0o644)
+			writeModeFile(t, filepath.Join(plugin, "plugin.json"), []byte("Existing manifest\n"), 0o644)
+			if err := a.DeployPluginTree(home); err == nil {
+				t.Fatal("accepted invalid provenance")
+			}
+			got, _ := os.ReadFile(filepath.Join(plugin, "plugin.json"))
+			if string(got) != "Existing manifest\n" {
+				t.Fatal("wrote before preflight")
+			}
+		})
+	}
+}
+
+func TestDeployCoreRuleTypePreflight(t *testing.T) {
+	for _, symlink := range []bool{true, false} {
+		t.Run(fmt.Sprint(symlink), func(t *testing.T) {
+			a, home := NewAdapter(), t.TempDir()
+			plugin := a.PluginDir(home)
+			path := filepath.Join(plugin, "rules", "gentle-ai-orchestrator.md")
+			writeModeFile(t, filepath.Join(plugin, "plugin.json"), []byte("Existing manifest\n"), 0o644)
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if symlink {
+				target := filepath.Join(t.TempDir(), "core.md")
+				writeModeFile(t, target, []byte("Target\n"), 0o644)
+				if err := os.Symlink(target, path); err != nil {
+					t.Skip(err)
+				}
+			} else if err := os.Mkdir(path, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := a.DeployPluginTree(home); err == nil {
+				t.Fatal("accepted nonregular core")
+			}
+			got, _ := os.ReadFile(filepath.Join(plugin, "plugin.json"))
+			if string(got) != "Existing manifest\n" {
+				t.Fatal("manifest changed before core preflight")
+			}
+		})
+	}
+}
+
 func TestDeployPluginTree(t *testing.T) {
 	homeDir := t.TempDir()
 	adapter := NewAdapter()
@@ -678,10 +1019,13 @@ func TestDeployPluginTree(t *testing.T) {
 	}
 	staleChain := filepath.Join(pluginDir, "chains", "sdd-full.chain.md")
 	writeModeFile(t, staleChain, []byte("stale chain"), 0o644)
-	// Pre-create the legacy root orchestrator.md from older installs: agy never
-	// reads the plugin root, so deploy must prune it.
+	// Only exact embedded bytes prove ownership of the old core location.
 	staleRootOrchestrator := filepath.Join(pluginDir, "orchestrator.md")
-	writeModeFile(t, staleRootOrchestrator, []byte("legacy root orchestrator"), 0o644)
+	oldCore, err := assets.Read("antigravitycli/orchestrator.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeModeFile(t, staleRootOrchestrator, []byte(oldCore), 0o644)
 
 	// Pre-create AGENTS.md with duplicate agent-routing
 	agentsMD := filepath.Join(pluginDir, "rules", "AGENTS.md")

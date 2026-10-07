@@ -902,6 +902,62 @@ func TestComponentPathsEngramClaudeUsesUserRegistryAndPreservesWorkspaceScope(t 
 	}
 }
 
+func TestAntigravityInstallDestinationsAndLegacyCleanup(t *testing.T) {
+	for _, scope := range []InstallScope{ScopeGlobal, ScopeWorkspace} {
+		t.Run(string(scope), func(t *testing.T) {
+			home := t.TempDir()
+			workspace := filepath.Join(t.TempDir(), "plugins", "gentle-ai-project")
+			if err := os.MkdirAll(filepath.Join(home, ".agents"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			adapter, _ := agents.NewAdapter(model.AgentAntigravityCLI)
+			prompt := systemPromptFileForAdapter(home, workspace, scope, adapter)
+			if err := os.MkdirAll(filepath.Dir(prompt), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			legacy := filemerge.InjectMarkdownSection("user text", legacyTriggerRulesSection, "retired")
+			legacy = filemerge.InjectMarkdownSection(legacy, "strict-tdd-mode", "retired")
+			if err := os.WriteFile(prompt, []byte(legacy), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			for _, component := range []model.ComponentID{model.ComponentPersona, model.ComponentContext7} {
+				step := componentApplyStep{homeDir: home, workspaceDir: workspace, scope: scope,
+					agents: []model.AgentID{model.AgentAntigravityCLI}, component: component,
+					selection: model.Selection{Persona: model.PersonaNeutral}}
+				if err := step.Run(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			root := routingGuidanceDir(home, workspace, scope, adapter)
+			options := routingGuidanceOptions(home, workspace, adapter, scope)
+			if paths := routingGuidancePaths(home, workspace, scope, []agents.Adapter{adapter}); !containsPath(paths, options.RoutingRulePath) {
+				t.Fatalf("routing backup omitted scoped destination: %v", paths)
+			}
+			if _, err := stripLegacyTriggerRules(root, scopedInjectionAdapter(home, workspace, scope, adapter), ""); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := agentguidance.InjectStrictTDDWithOptions(root, adapter.Agent(), false, options); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := agentguidance.InjectRoutingWithOptions(root, adapter.Agent(), options); err != nil {
+				t.Fatal(err)
+			}
+			raw, err := os.ReadFile(prompt)
+			if err != nil || strings.Contains(string(raw), "retired") || !strings.Contains(string(raw), "user text") || !strings.Contains(string(raw), "<!-- gentle-ai:persona -->") {
+				t.Fatalf("cleanup failed or user text lost: %s, %v", raw, err)
+			}
+			for _, path := range []string{options.RoutingRulePath, mcpConfigPathForAdapter(home, workspace, scope, adapter, "context7")} {
+				if _, err := os.Stat(path); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := os.Stat(filepath.Join(home, ".agents", "plugins")); !os.IsNotExist(err) {
+				t.Fatalf("wrote unscoped global tree: %v", err)
+			}
+		})
+	}
+}
+
 func TestComponentPathsAntigravityCLIRespectsWorkspaceScope(t *testing.T) {
 	home := t.TempDir()
 	workspace := t.TempDir()

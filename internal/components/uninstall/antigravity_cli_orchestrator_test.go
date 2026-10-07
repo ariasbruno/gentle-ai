@@ -1,7 +1,9 @@
 package uninstall
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents"
@@ -18,8 +20,16 @@ func TestRetainedAntigravityCLIPluginOperationsCoverOrchestratorRuleAndLegacyRoo
 		t.Fatalf("adapter is not *antigravitycli.Adapter")
 	}
 	homeDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(homeDir, ".agents"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	ops := retainedAntigravityCLIPluginOperations(adapter, homeDir)
-	pluginDir := agy.PluginDir(homeDir)
+	pluginDir := agy.GlobalPluginDir(homeDir)
+	for _, op := range ops {
+		if !strings.HasPrefix(op.path, pluginDir+string(filepath.Separator)) && op.path != pluginDir && op.path != agy.ImportManifestPath(homeDir) {
+			t.Errorf("global uninstall escaped plugin root: %s", op.path)
+		}
+	}
 
 	// Static file removals that should always be present
 	wanted := []string{

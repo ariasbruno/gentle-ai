@@ -118,9 +118,59 @@ func (a *Adapter) GlobalPluginDir(homeDir string) string {
 	return filepath.Join(homeDir, ".gemini", "config", "plugins", gentleAIPluginName)
 }
 
+// GlobalSystemPromptDir returns the global system prompt directory.
+func (a *Adapter) GlobalSystemPromptDir(homeDir string) string {
+	return filepath.Join(a.GlobalPluginDir(homeDir), "rules")
+}
+
+// GlobalSystemPromptFile returns the global system prompt file (AGENTS.md).
+func (a *Adapter) GlobalSystemPromptFile(homeDir string) string {
+	return filepath.Join(a.GlobalSystemPromptDir(homeDir), "AGENTS.md")
+}
+
+// GlobalSkillsDir returns the global skills directory.
+func (a *Adapter) GlobalSkillsDir(homeDir string) string {
+	return filepath.Join(a.GlobalPluginDir(homeDir), "skills")
+}
+
+// GlobalSubAgentsDir returns the global sub-agents directory.
+func (a *Adapter) GlobalSubAgentsDir(homeDir string) string {
+	return filepath.Join(a.GlobalPluginDir(homeDir), "agents")
+}
+
+// GlobalMCPConfigPath returns the global MCP config path.
+func (a *Adapter) GlobalMCPConfigPath(homeDir string) string {
+	return filepath.Join(a.GlobalPluginDir(homeDir), "mcp_config.json")
+}
+
 // WorkspacePluginDir returns the project-scoped plugin directory: <workspaceDir>/.agents/plugins/gentle-ai
 func (a *Adapter) WorkspacePluginDir(workspaceDir string) string {
 	return filepath.Join(workspaceDir, ".agents", "plugins", gentleAIPluginName)
+}
+
+// WorkspaceSystemPromptDir returns the workspace system prompt directory.
+func (a *Adapter) WorkspaceSystemPromptDir(workspaceDir string) string {
+	return filepath.Join(a.WorkspacePluginDir(workspaceDir), "rules")
+}
+
+// WorkspaceSystemPromptFile returns the workspace system prompt file (AGENTS.md).
+func (a *Adapter) WorkspaceSystemPromptFile(workspaceDir string) string {
+	return filepath.Join(a.WorkspaceSystemPromptDir(workspaceDir), "AGENTS.md")
+}
+
+// WorkspaceSkillsDir returns the workspace skills directory.
+func (a *Adapter) WorkspaceSkillsDir(workspaceDir string) string {
+	return filepath.Join(a.WorkspacePluginDir(workspaceDir), "skills")
+}
+
+// WorkspaceSubAgentsDir returns the workspace sub-agents directory.
+func (a *Adapter) WorkspaceSubAgentsDir(workspaceDir string) string {
+	return filepath.Join(a.WorkspacePluginDir(workspaceDir), "agents")
+}
+
+// WorkspaceMCPConfigPath returns the workspace MCP config path.
+func (a *Adapter) WorkspaceMCPConfigPath(workspaceDir string) string {
+	return filepath.Join(a.WorkspacePluginDir(workspaceDir), "mcp_config.json")
 }
 
 // isWorkspaceDir reports whether dir is recognized as a workspace root
@@ -141,6 +191,8 @@ func (a *Adapter) isWorkspaceDir(dir string) bool {
 // PluginDir resolves the plugin directory for the given base directory.
 // When dir is detected as a workspace root, it resolves to <dir>/.agents/plugins/gentle-ai.
 // Otherwise, it defaults to the global directory <dir>/.gemini/config/plugins/gentle-ai.
+// LEGACY: This method uses heuristic workspace detection. Call sites with known scope
+// MUST use GlobalPluginDir/WorkspacePluginDir or the scope-aware variants above.
 func (a *Adapter) PluginDir(dir string) string {
 	if a.isWorkspaceDir(dir) {
 		return a.WorkspacePluginDir(dir)
@@ -221,7 +273,7 @@ func (a *Adapter) EmbeddedSubAgentsDir() string {
 // BundleAssets returns the embedded asset path to destination relative path
 // mappings for the Antigravity CLI plugin manifest and managed bundle assets.
 func (a *Adapter) BundleAssets() [][2]string {
-	return [][2]string{
+	bundle := [][2]string{
 		{"antigravitycli/plugin.json", "plugin.json"},
 		{"antigravitycli/orchestrator.md", filepath.Join("rules", "gentle-ai-orchestrator.md")},
 		{"antigravitycli/orchestrator-delegation.md", "orchestrator-delegation.md"},
@@ -235,6 +287,12 @@ func (a *Adapter) BundleAssets() [][2]string {
 		{"antigravitycli/support/strict-tdd-verify.md", filepath.Join("support", "strict-tdd-verify.md")},
 		{"antigravitycli/chains/4r-review.chain.md", filepath.Join("chains", "4r-review.chain.md")},
 	}
+	for i, pair := range bundle {
+		if _, ok := nativeRuleDescriptions[filepath.Base(pair[0])]; ok {
+			bundle[i][1] = filepath.Join("rules", filepath.Base(pair[0]))
+		}
+	}
+	return bundle
 }
 
 func (a *Adapter) SupportsSkills() bool {
@@ -504,17 +562,35 @@ const antigravityCLIPluginHooksJSON = `{
 
 // DeployPluginTree deploys embedded ODD bundle assets, native subagents, and hooks
 // into the Antigravity CLI plugin directory, and cleans up any legacy SDD assets.
+// LEGACY: Uses heuristic workspace detection. Call sites with known scope MUST
+// use DeployPluginTreeForScope instead.
 func (a *Adapter) DeployPluginTree(homeDir string) error {
 	pluginDir := a.PluginDir(homeDir)
+	return a.DeployPluginTreeToDir(pluginDir)
+}
+
+
+
+// deployPluginTreeToDir is the internal implementation that deploys to a given plugin directory.
+func (a *Adapter) DeployPluginTreeToDir(pluginDir string) error {
+	legacyRules, err := a.preflightNativeRules(pluginDir)
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(pluginDir, 0o755); err != nil {
 		return fmt.Errorf("create plugin dir %q: %w", pluginDir, err)
 	}
 
 	// 1. Write Bundle Assets
+	ownership := nativeOwnership{Version: 1, Rules: make(map[string]string)}
 	for _, pair := range a.BundleAssets() {
 		content, err := assets.Read(pair[0])
 		if err != nil {
 			return fmt.Errorf("read bundle asset %s: %w", pair[0], err)
+		}
+		content = renderNativeRule(pair[0], content)
+		if _, modular := nativeRuleDescriptions[filepath.Base(pair[0])]; modular {
+			ownership.Rules[filepath.ToSlash(pair[1])] = ruleDigest([]byte(content))
 		}
 		outPath := filepath.Join(pluginDir, pair[1])
 		if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
@@ -635,9 +711,6 @@ func (a *Adapter) DeployPluginTree(homeDir string) error {
 		filepath.Join(pluginDir, "chains", "sdd-verify.chain.md"),
 		filepath.Join(pluginDir, "rules", "gentle-ai-codegraph.md"),
 		filepath.Join(pluginDir, "rules", "gentle-ai-orchestrator-details.md"),
-		// agy never reads the plugin root; this was the pre-rule-cap deploy
-		// location for the orchestrator and is dead weight on existing installs.
-		filepath.Join(pluginDir, "orchestrator.md"),
 		// The Pi-runtime review ledger shipped in _shared before the canon-first
 		// split; its content describes Pi's extension system (SessionManager,
 		// globalThis[Symbol.for], host relay) and is removed from the bundle.
@@ -658,6 +731,13 @@ func (a *Adapter) DeployPluginTree(homeDir string) error {
 		}
 	}
 
+	// Remove only exact embedded legacy module copies proven by the preflight.
+	for _, path := range legacyRules {
+		if err := os.Remove(path); err != nil {
+			return fmt.Errorf("remove managed legacy rule %q: %w", path, err)
+		}
+	}
+
 	// 6. Clean up duplicate agent-routing section from AGENTS.md if present
 	agentsMDPath := filepath.Join(pluginDir, "rules", "AGENTS.md")
 	if data, err := os.ReadFile(agentsMDPath); err == nil {
@@ -667,14 +747,29 @@ func (a *Adapter) DeployPluginTree(homeDir string) error {
 		}
 	}
 
-	return nil
+	// Record only successful native module deployment, not workflow/review state.
+	encodedOwnership, err := json.MarshalIndent(ownership, "", "  ")
+	if err != nil {
+		return err
+	}
+	_, err = filemerge.WriteFileAtomic(filepath.Join(pluginDir, nativeOwnershipFile), append(encodedOwnership, '\n'), 0o644)
+	return err
 }
 
 // EnsurePluginImported performs the first native AGY import only when the
 // manifest has no Gentle AI entry. The canonical plugin tree is copied to a
 // distinct temporary source because AGY rejects source == destination.
+// LEGACY: Uses heuristic workspace detection for pluginDir. Call sites with
+// known scope MUST compute the correct plugin directory and call
+// ensurePluginImportedToDir directly.
 func (a *Adapter) EnsurePluginImported(ctx context.Context, homeDir string) error {
-	manifestPath := a.ImportManifestPath(homeDir)
+	return a.EnsurePluginImportedToDir(ctx, homeDir, a.PluginDir(homeDir))
+}
+
+// ensurePluginImportedToDir is the internal implementation that imports from a given plugin directory.
+// The import manifest path is always global (homeDir).
+func (a *Adapter) EnsurePluginImportedToDir(ctx context.Context, homeDir, pluginDir string) error {
+	manifestPath := a.ImportManifestPath(homeDir) // always global
 	snapshot, err := snapshotPluginImportManifest(manifestPath)
 	if err != nil {
 		return err
@@ -683,7 +778,6 @@ func (a *Adapter) EnsurePluginImported(ctx context.Context, homeDir string) erro
 		return nil
 	}
 
-	pluginDir := a.PluginDir(homeDir)
 	pluginInfo, err := os.Lstat(pluginDir)
 	if err != nil {
 		return fmt.Errorf("inspect completed Antigravity CLI plugin tree %q before import: %w", pluginDir, err)

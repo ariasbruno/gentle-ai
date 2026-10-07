@@ -713,6 +713,9 @@ func TestRunSyncWorkspaceScopeWritesProjectOpenCodeSettings(t *testing.T) {
 func TestRunSyncWorkspaceScopeAntigravityCLIUpdatesWorkspaceWithoutGlobalMutation(t *testing.T) {
 	t.Setenv(scopeEnvVar, "")
 	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".agents"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	globalWorkspace := t.TempDir()
 	workspace := t.TempDir()
 
@@ -745,6 +748,30 @@ func TestRunSyncWorkspaceScopeAntigravityCLIUpdatesWorkspaceWithoutGlobalMutatio
 	if _, err := os.Stat(globalPluginManifest); err != nil {
 		t.Fatalf("global sync did not create global plugin manifest: %v", err)
 	}
+	checkDestinations := func(scope InstallScope, pluginDir string) {
+		t.Helper()
+		for _, component := range []model.ComponentID{model.ComponentPersona, model.ComponentContext7, model.ComponentEngram} {
+			step := componentSyncStep{homeDir: home, workspaceDir: workspace, scope: scope,
+				agents: []model.AgentID{model.AgentAntigravityCLI}, component: component,
+				selection: model.Selection{Persona: model.PersonaNeutral}}
+			if err := step.Run(); err != nil {
+				t.Fatalf("%s injection: %v", component, err)
+			}
+		}
+		for _, rel := range []string{"plugin.json", "mcp_config.json", "rules/AGENTS.md", "rules/gentle-ai-orchestrator.md", "rules/gentle-ai-routing.md", "rules/strict-tdd.md", "rules/strict-tdd-verify.md", "rules/orchestrator-delegation.md"} {
+			if _, err := os.Stat(filepath.Join(pluginDir, rel)); err != nil {
+				t.Errorf("missing scoped destination %s: %v", rel, err)
+			}
+		}
+	}
+	checkDestinations(ScopeGlobal, filepath.Dir(globalPluginManifest))
+	globalMCP, err := os.ReadFile(filepath.Join(filepath.Dir(globalPluginManifest), "mcp_config.json"))
+	if err != nil || !strings.Contains(string(globalMCP), "engram") || !strings.Contains(string(globalMCP), "context7") {
+		t.Fatalf("missing scoped MCP servers: %s, %v", globalMCP, err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".agents", "plugins")); !os.IsNotExist(err) {
+		t.Errorf("global injection wrote workspace plugin tree: %v", err)
+	}
 
 	before := snapshotTree(t, home)
 
@@ -775,6 +802,7 @@ func TestRunSyncWorkspaceScopeAntigravityCLIUpdatesWorkspaceWithoutGlobalMutatio
 		t.Errorf("workspace sync did not materialize workspace routing rule: %v", err)
 	}
 
+	checkDestinations(ScopeWorkspace, filepath.Dir(workspacePluginManifest))
 	// The global tree — state, backups, plugins, prompts — must be byte-identical.
 	after := snapshotTree(t, home)
 	for rel, beforeHash := range before {

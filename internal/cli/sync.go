@@ -778,7 +778,7 @@ func syncBackupTargetsScoped(homeDir, workspaceDir string, scope InstallScope, s
 		if workspace && workspaceRoutingGuidanceGlobalOnly(adapter.Agent()) {
 			continue
 		}
-		if path := agentguidance.StrictTDDPath(routingGuidanceDir(homeDir, workspaceDir, scope, adapter), adapter.Agent()); path != "" {
+		if path := strictTDDPathForScope(homeDir, workspaceDir, scope, adapter); path != "" {
 			paths[path] = struct{}{}
 		}
 	}
@@ -1040,12 +1040,12 @@ func syncPersonaPathsWithWorkspaceScoped(homeDir, workspaceDir string, scope Ins
 			continue
 		}
 		if adapter.SystemPromptStrategy() != model.StrategyJinjaModules {
-			paths = append(paths, adapter.SystemPromptFile(targetDir))
+			paths = append(paths, systemPromptFileForAdapter(homeDir, workspaceDir, scope, adapter))
 		}
 		if adapter.SupportsOutputStyles() {
 			if stylePaths := persona.ResourcePlanFor(selection.Persona).OutputStylePaths(adapter.OutputStyleDir(targetDir)); stylePaths.Write != "" {
 				paths = append(paths, stylePaths.Write)
-				if p := adapter.SettingsPath(targetDir); p != "" {
+				if p := settingsPathForAdapter(homeDir, workspaceDir, scope, adapter); p != "" {
 					paths = append(paths, p)
 				}
 			}
@@ -1434,7 +1434,7 @@ func (s componentSyncStep) skipWorkspace(component model.ComponentID, agent mode
 }
 
 func (s componentSyncStep) Run() error {
-	adapters := resolveAdapters(s.agents)
+	adapters := scopedComponentAdapters(s.homeDir, s.workspaceDir, s.scope, s.component, resolveAdapters(s.agents))
 
 	if s.scope == ScopeWorkspace {
 		if workspaceGlobalOnlyComponent(s.component) {
