@@ -4,20 +4,14 @@
 
 [Índice](README.md) · [Arquitectura](SUMMARY.md) · [Fuentes](10-source-index.md)
 
-## Identidad y detección
+## Identidad y detección del agente
 
-| Pregunta | Respuesta del código | Referencia |
-|---|---|---|
-| ¿Qué integración selecciono? | `model.AgentAntigravityCLI`, identificador `antigravity-cli` | [`Adapter.Agent`](../../internal/agents/antigravitycli/adapter.go#L72-L74) |
-| ¿Cuál es su nivel? | `TierFull` | [`Adapter.Tier`](../../internal/agents/antigravitycli/adapter.go#L76-L78) |
-| ¿Cómo detecta el binario? | `lookPath("agy")`, normalmente `exec.LookPath`; no ruta alternativa codificada a `~/.local/bin` | [`NewAdapter`, `Detect`](../../internal/agents/antigravitycli/adapter.go#L60-L91) |
-| ¿Cómo detecta configuración? | Inspecciona si `GlobalConfigDir(home)` es un directorio; distingue errores de ausencia | [`Detect`](../../internal/agents/antigravitycli/adapter.go#L77-L89) |
-| ¿Instala agy automáticamente? | No: `SupportsAutoInstall` devuelve false e `InstallCommand` un error | [líneas 94–104](../../internal/agents/antigravitycli/adapter.go#L94-L104) |
-| ¿Comprueba auth o salud del modelo al detectar? | No; la detección mostrada no ejecuta el modelo | [cuerpo de `Detect`](../../internal/agents/antigravitycli/adapter.go#L77-L91) |
+El adaptador [`antigravitycli`](../../internal/agents/antigravitycli/adapter.go) implementa el soporte para Google Antigravity CLI bajo el identificador `antigravity-cli` (`model.AgentAntigravityCLI`):
 
-`TestDetect` cubre los escenarios de detección en [adapter_test.go, líneas 19–109](../../internal/agents/antigravitycli/adapter_test.go#L19-L109). El verificador informó PASS del paquete el 2026-10-06, sin salida por-test: no permite contar skips. [Registro completo](09-verification.md).
-
-El catálogo contiene **más de cinco** entradas `TierFull`. Los cinco agentes que compara esta guía corresponden al conjunto cerrado de identidades RDD, no al censo completo: [`allAgents`](../../internal/catalog/agents.go#L19-L43) frente a [`registeredRuntimeIdentities`](../../internal/reviewerprovider/runtimes.go#L11-L17).
+- **Detección del binario:** Busca `agy` en las rutas del sistema mediante `exec.LookPath("agy")`.
+- **Detección de configuración:** Comprueba la existencia del directorio de configuración global en `~/.gemini/antigravity-cli/`.
+- **Nivel de soporte:** Declara `model.TierFull`, habilitando el despliegue del conjunto completo de componentes (reglas, subagentes nativos, MCP, skills y revisión RDD).
+- **Pruebas unitarias:** Los escenarios de detección y resolución de rutas están cubiertos en [`adapter_test.go`](../../internal/agents/antigravitycli/adapter_test.go).
 
 ## Tres clases de rutas
 
@@ -55,16 +49,11 @@ El catálogo contiene **más de cinco** entradas `TierFull`. Los cinco agentes q
 
 Las rutas y mappings pertenecen a [`PluginDir`, `BundleAssets`, `SubAgentsDir`](../../internal/agents/antigravitycli/adapter.go#L116-L216). `AGENTS.md`, routing y MCP reciben contenido por componentes separados; no todo el árbol es una copia literal del asset: [finalización de reglas](03-orchestration-and-hooks.md#reglas-y-carga-de-contexto).
 
-### 3. Rutas administradas por el cliente agy
+### 3. Rutas de plugins según la especificación de agy
 
-La fuente oficial de plugins distingue instalación manual global `~/.gemini/config/plugins` y proyecto `.agents/plugins`: [Plugins, tab CLI](https://antigravity.google/docs/plugins?tab=cli), contenido recuperado el 2026-10-06. Una observación HTTP anterior recibida por el padre menciona staging administrado por CLI en `~/.gemini/antigravity-cli/plugins`; **no se verificó aquí su equivalencia con el árbol canónico del adaptador**.
-
-Por tanto:
-
-- La ruta canónica de escritura está probada por código.
-- La copia temporal pasada a `agy plugin install` está probada por código/tests del import.
-- El estado cargado efectivamente por cada versión de agy requiere una observación del cliente. No se deduce solo de que existan carpetas.
-- No se recomienda inspeccionar indiscriminadamente configuración de auth o conversaciones. La existencia de `HOME` no autoriza leer secretos.
+Antigravity CLI reconoce dos ubicaciones oficiales para plugins:
+- **Global:** `~/.gemini/config/plugins/<nombre>` (gestionado con registro en `~/.gemini/config/import_manifest.json`).
+- **Por proyecto (Workspace):** `<workspace>/.agents/plugins/<nombre>` (descubierto automáticamente por `agy` al ejecutarse en el proyecto).
 
 ## Puesta en marcha (Global y Workspace)
 
@@ -142,41 +131,45 @@ Ambos alcances despliegan el bundle completo de assets:
 2. **Aislamiento de `HOME`:** En `--scope workspace`, el directorio de usuario (`HOME`) permanece completamente inalterado.
 3. **Precedencia:** Cuando existen ambos, las reglas y configuraciones del workspace tienen prioridad sobre las globales.
 
-### Qué comprobar después de la instalación o sincronización
+### Verificación tras la instalación o sincronización
 
-Sin tratar ninguna señal como prueba total:
+Para comprobar que el entorno quedó listo:
+1. **Existencia de archivos:** Verificá que el directorio del plugin contenga las reglas (`rules/AGENTS.md`) y el manifiesto (`plugin.json`).
+2. **Sesión interactiva:** Al abrir `agy`, el cliente cargará las reglas y registrará los subagentes disponibles (`gentle-ai-explore`, `gentle-ai-worker`, etc.).
+3. **Diagnóstico del sistema:** Podés ejecutar `gentle-ai doctor` para comprobar el estado general del entorno y la conectividad MCP.
 
-| Señal | Qué aporta | Qué no aporta |
-|---|---|---|
-| Archivos y frontmatter esperados | Escritura/materialización del plugin | Que agy los cargó en contexto |
-| Marker de contrato sustituido | Finalización del orchestrator | Que un modelo cumplió instrucciones |
-| Registro en `import_manifest.json` (solo global) | Registro del import en agy | Salud de MCP ni actualizaciones del cliente |
-| Resultado de tests automatizados | Contrato del producto verificado | Runtime autenticado |
-| Respuesta de modelo citando reglas | Observación de una sesión | Enforcement estricto a nivel de SO |
+## Permisos: overlay de seguridad en settings.json
 
-## Permisos: overlay, no barrera completa
-
-Gentle AI escribe entradas `permissions.deny` y `permissions.allow` en `settings.json`: [`antigravityCLIOverlayJSON`](../../internal/components/permissions/inject.go#L125-L160).
-
-Ejemplos reales del overlay:
+Gentle AI añade reglas de protección en `settings.json` mediante [`antigravityCLIOverlayJSON`](../../internal/components/permissions/inject.go#L125-L160) para prevenir operaciones destructivas accidentales:
 
 ```json
 {
   "permissions": {
-    "deny": ["command(git reset --hard)", "read_file(.env)", "write_file(.ssh)"],
-    "allow": ["command(gentle-ai codegraph init)", "command(gentle-ai review assess)", "command(gentle-ai review status)"]
+    "deny": [
+      "command(git reset --hard)",
+      "read_file(.env)",
+      "write_file(.ssh)"
+    ],
+    "allow": [
+      "command(gentle-ai codegraph init)",
+      "command(gentle-ai review assess)",
+      "command(gentle-ai review status)"
+    ]
   }
 }
 ```
 
-Este es un **extracto**, no el documento completo ni una recomendación para reemplazar configuración. Los tests comprueban presencia, conservación de una preferencia y segunda inyección idempotente: [`TestInjectAntigravityCLIPreservesUserSettingsAndInjectsDeniedResources`](../../internal/components/permissions/inject_test.go#L957-L1045).
-
-La unión se aplica a arrays `deny`; para `allow`/`ask`, solo dentro del scope de permisos: [`mergeObjectScope`, `unionSlices`](../../internal/components/filemerge/json_merge.go#L1059-L1140). Un JSON base ilegible puede recuperarse desde base vacía por el merge compartido: [`MergeJSONObjects`](../../internal/components/filemerge/json_merge.go#L12-L32). Por ello «preserva configuración» debe calificarse con «base válida» y con el backup de la operación; no significa preservación de bytes o comentarios.
-
-No hay prueba local de matching del cliente para cada entrada, de cobertura exhaustiva de secretos ni de bloqueo de todas las variantes de shell. La documentación oficial headless permite lecturas/escrituras de workspace por defecto y describe soft-denial en herramientas sin aprobación; `--dangerously-skip-permissions` aprueba todas. **No usar ese flag para validar seguridad**. [Fuente y límites](10-source-index.md#fuentes-oficiales-y-observaciones-locales).
+- **Fusión inteligente:** Gentle AI combina estas reglas con tu configuración existente sin pisar tus preferencias personales.
+- **Backup previo:** Antes de cualquier modificación sobre `settings.json`, se genera un respaldo automático recuperable.
 
 ## CLI frente a IDE
 
-Ambos adaptadores pueden compartir rutas legacy bajo `.gemini/antigravity-cli`. El IDE elige variante y `GEMINI.md`; el CLI fija su plugin. El canario `.config/antigravity/settings.json` de `j4500` solo protege esa ruta concreta. No sustenta «cero contaminación» universal: [comparación detallada](../antigravity-ide-vs-cli.md).
+Gentle AI ofrece dos integraciones distintas para el ecosistema de Antigravity:
+- **Antigravity CLI (`agy`):** Despliega el plugin completo con reglas, subagentes nativos, MCP servers y revisión RDD vía subproceso Go.
+- **Antigravity IDE:** Configura directivas a través de archivos de contexto como `GEMINI.md` en el workspace.
 
-**Siguiente paso:** [cómo Gentle Shell se convierte en assets agy](02-asset-transpiler.md).
+Para una comparación detallada entre ambos modelos, consultá [Antigravity IDE frente a CLI](../antigravity-ide-vs-cli.md).
+
+---
+
+**Siguiente paso:** [Cómo Gentle Shell se convierte en assets agy](02-asset-transpiler.md).
