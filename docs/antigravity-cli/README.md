@@ -54,12 +54,6 @@ Dependiendo del alcance seleccionado, Gentle AI despliega el bundle completo del
 └── chains/                                                                         # Cadenas de flujos compuestos (4r-review.chain.md)
 ```
 
-### 4. Verificar en agy
-Inicia una sesión de `agy`. La herramienta detectará automáticamente el plugin y sus capacidades:
-```sh
-agy
-```
-
 ---
 
 ## Leer según la necesidad
