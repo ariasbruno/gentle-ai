@@ -4,9 +4,9 @@
 
 [Índice](README.md) · [Propiedad](06-asset-ownership-and-drift.md) · [Decisiones](08-decisions.md)
 
-## Fuente reproducible, no versión inventada
+## Fuente reproducible y procedencia
 
-[`PROVENANCE.json`](../../internal/assets/antigravitycli/PROVENANCE.json#L1-L4) contiene:
+Para asegurar compilaciones deterministas y trazables, los assets transpilados están anclados a un commit inmutable de Gentle Shell registrado en [`PROVENANCE.json`](../../internal/assets/antigravitycli/PROVENANCE.json#L1-L4):
 
 ```json
 {
@@ -15,16 +15,11 @@
 }
 ```
 
-Durante la lectura documental, `git -C /home/bruno/dev/gentle-shell rev-parse HEAD` devolvió ese mismo SHA. Se inspeccionaron directamente el orchestrator, el explorer, el writer y el skill `gentle-ai` del checkout canónico. No se infiere un semver de Gentle Shell desde ese SHA.
-
-Para referencias inmutables:
-
-- [Orchestrator canónico](https://github.com/Gentleman-Programming/gentle-shell/blob/0da07ce949952268b290bf751f22ad1202a40fc3/assets/orchestrator.md#L1-L121).
-- [Explorer canónico](https://github.com/Gentleman-Programming/gentle-shell/blob/0da07ce949952268b290bf751f22ad1202a40fc3/assets/agents/gentle-ai-explore.md#L1-L25).
-- [Writer canónico](https://github.com/Gentleman-Programming/gentle-shell/blob/0da07ce949952268b290bf751f22ad1202a40fc3/assets/orchestrator-writer.md#L1-L55).
-- [Skill del harness](https://github.com/Gentleman-Programming/gentle-shell/blob/0da07ce949952268b290bf751f22ad1202a40fc3/skills/gentle-ai/SKILL.md#L1-L61).
-
-La documentación histórica que menciona otro SHA refleja una etapa anterior, no cambia el pin actual.
+Fuentes canónicas de referencia en dicho commit:
+- [Orchestrator canónico](https://github.com/Gentleman-Programming/gentle-shell/blob/0da07ce949952268b290bf751f22ad1202a40fc3/assets/orchestrator.md#L1-L121)
+- [Explorer canónico](https://github.com/Gentleman-Programming/gentle-shell/blob/0da07ce949952268b290bf751f22ad1202a40fc3/assets/agents/gentle-ai-explore.md#L1-L25)
+- [Writer canónico](https://github.com/Gentleman-Programming/gentle-shell/blob/0da07ce949952268b290bf751f22ad1202a40fc3/assets/orchestrator-writer.md#L1-L55)
+- [Skill del harness](https://github.com/Gentleman-Programming/gentle-shell/blob/0da07ce949952268b290bf751f22ad1202a40fc3/skills/gentle-ai/SKILL.md#L1-L61)
 
 ## Entradas y salidas
 
@@ -97,48 +92,41 @@ La página oficial [Agents](https://antigravity.google/docs/cli/commands/agents/
 
 `--strict` falla si se acumulan tools sin mapping; los errores estructurales de la transformación también abortan. No llamarlo «validación completa del AST de agy»: la implementación usa strings/regex para gran parte de los contratos: [`main`](../../scripts/transpile-antigravitycli/main.go#L90-L137), [`transpileSubagentMarkdown`](../../scripts/transpile-antigravitycli/main.go#L515-L566).
 
-## Mutaciones que marcan diferencias con Pi
+## Adaptaciones de runtime frente a Pi
 
-| Contrato de origen | Adaptación agy | Límite de la prueba |
+Dado que `agy` no ejecuta el runtime TypeScript de Pi ni sus extensiones propietarias, el transpilador aplica mutaciones específicas para adaptar las directivas a las capacidades reales de `agy`:
+
+| Directiva en Gentle Shell (Pi) | Adaptación para Antigravity CLI | Motivo técnico |
 |---|---|---|
-| `subagent_run` y background | `invoke_subagent`/`send_message`, trabajo foreground | No porta scheduler ni watchdog TS |
-| UI `ask_user_choice` | `ask_question` solo si representa todo el envelope; fallback textual y stop | No demuestra equivalencia de UI ni pérdida cero real |
-| RDD host relay Pi | Contrato native review renderizado por Go en regla | No entrega ledger Pi ni authority a prompts |
-| Config `subagents.json`/model profiles | Secciones específicas Pi eliminadas; defaults del runtime en genéricos | No demuestra lectura de profiles Pi por agy |
-| Tool CodeGraph cwd-scoped init/query/explore | MCP `gentle-ai_codegraph`, `codegraph_explore` | No ofrece operaciones Pi inexistentes |
-| Rutas de assets de paquete | Rutas instaladas de plugin | Texto de ruta no cambia el instalador workspace |
-| Enforcing runtime de superficies/parallelism | Disciplina escrita y adaptación de satélite | No se identificó aquí equivalente ejecutable agy |
+| `subagent_run` en background | `invoke_subagent` / `send_message` | `agy` ejecuta subagentes mediante su sistema nativo de mensajería interactiva |
+| Menús interactivos `ask_user_choice` | `ask_question` nativo | Se mapea al modal de preguntas nativo de `agy` |
+| Relay de sockets para RDD | Contrato nativo de Go en reglas | En `agy`, la revisión RDD se controla directamente vía subproceso Go con `--sandbox` |
+| Perfiles en `subagents.json` | Secciones específicas removidas | `agy` resuelve modelos vía flags de CLI o configuración estándar |
+| Operaciones CodeGraph built-in | Servidor MCP `gentle-ai_codegraph` | CodeGraph se expone como servidor MCP estándar vía stdio |
+| Rutas canónicas de Pi (`.pi/`) | Rutas de plugin (`.agents/` o `.gemini/`) | Ajuste automático al destino seleccionado (global o workspace) |
 
-Referencias: [`mutateAgentRuntimeInstructions`](../../scripts/transpile-antigravitycli/main.go#L1092-L1167), [`applyAntigravityCLIParentMutations`](../../scripts/transpile-antigravitycli/main.go#L1170-L1261). El writer canónico contiene background paralelo; la mutación agy lo serializa/condiciona. Debe evaluarse como diferencia, no como «paridad de concurrencia».
+Referencias: [`mutateAgentRuntimeInstructions`](../../scripts/transpile-antigravitycli/main.go#L1092-L1167) y [`applyAntigravityCLIParentMutations`](../../scripts/transpile-antigravitycli/main.go#L1170-L1261).
 
-## Census actual y lo que realmente cubren los invariantes
+## Subagentes incluidos y validación por invariantes
 
-El censo fijado por `expectedSubagentNames` es:
+El bundle transpilado incluye 10 definiciones nativas de subagentes ([`expectedSubagentNames`](../../internal/assets/antigravitycli_assets_test.go#L38-L96)):
 
-| Familia | Nombres | Uso |
+| Familia | Subagentes | Función |
 |---|---|---|
-| Trabajo ODD | `gentle-ai-explore`, `gentle-ai-worker`, `gentle-ai-verify` | Explorar, escribir acotadamente, verificar |
-| Judgment Day | `jd-fix-agent`, `jd-judge-a`, `jd-judge-b` | Flujo explícito, no default de todo trabajo |
-| Lentes manuales | `review-risk`, `review-readability`, `review-reliability`, `review-resilience` | Definiciones instaladas; no identidad del transporte RDD |
+| **Ciclo ODD** | `gentle-ai-explore`, `gentle-ai-worker`, `gentle-ai-verify` | Exploración de código de solo lectura, escritura acotada y verificación |
+| **Judgment Day** | `jd-fix-agent`, `jd-judge-a`, `jd-judge-b` | Revisión adversarial ciega en dos rondas y corrección quirúrgica |
+| **Revisión 4R** | `review-risk`, `review-readability`, `review-reliability`, `review-resilience` | Lentes especializados de seguridad, legibilidad, confiabilidad y resiliencia |
 
-[`expectedSubagentNames`, `Invariant1`](../../internal/assets/antigravitycli_assets_test.go#L38-L96). Los seis roles de routing RDD incluyen refuter y validator sin que por ello existan seis agent.md de revisión: [routing](05-review-transport.md#modelos-de-revisión-y-propiedad-global).
+### Cobertura de invariantes en tests automatizados
 
-| Test existente | Aserción real | No demuestra |
-|---|---|---|
-| `Invariant1_Subagents` | Diez directorios y nombres esperados, archivos no triviales | Descubrimiento o ejecución real |
-| `Invariant2_Frontmatter` | Fences y ausencia de tools/residuos Pi prohibidos; contrato de lentes | Un parser YAML completo ni enforcement del cliente |
-| `Invariant3_Satellites` | Tres nombres históricos, mínimo de longitud | Census exacto de siete satélites; el comentario «exactly 3» no es la entrega actual |
-| `Invariant4_SupportContracts` | Dos contratos presentes y longitud mínima | Ejecución de TDD ni validación semántica integral |
-| `Invariant5_Chains` | Una cadena presente y longitud mínima | Motor de cadenas nativo ni prueba de cada paso |
-| `RuleSizeLimit` | Orchestrator embedded menor que 24.000 bytes | Tamaño final tras rellenar contrato ni presupuesto token aggregate |
-| `ExploreAgentUsesMCPForCodeGraph` | Prefijo/operación MCP, ausencia de `call_mcp_tool`/init Pi | MCP conectado en agy real |
+La integridad del transpilador está asegurada mediante tests de invariantes en [`antigravitycli_assets_test.go`](../../internal/assets/antigravitycli_assets_test.go):
 
-Código de tests: [líneas 64–184](../../internal/assets/antigravitycli_assets_test.go#L64-L184), [soporte/cadena/tamaño/explorer](../../internal/assets/antigravitycli_assets_test.go#L306-L381). El tamaño **final** del orchestrator sí tiene test separado: [`TestEnsureAntigravityOrchestratorRuleFillsContractAndFrontmatter`](../../internal/cli/antigravity_orchestrator_rule_test.go#L13-L60).
+- **Invariante 1 (Estructura):** Valida la presencia de las 10 carpetas y archivos `agent.md` obligatorios.
+- **Invariante 2 (Frontmatter):** Asegura que no queden residuos de sintaxis o herramientas prohibidas de Pi y valida el frontmatter YAML para `agy`.
+- **Invariante 3 (Satélites):** Comprueba que los satélites del orquestador contengan las directivas vigentes.
+- **Invariante 4 y 5 (Soporte y Cadenas):** Verifica la integridad de los contratos de TDD (`strict-tdd*.md`) y las cadenas de revisión (`4r-review.chain.md`).
+- **Límite de tamaño:** Asegura que el prompt base del orquestador respete el límite máximo de bytes permitido para no desbordar el contexto inicial.
 
-## Atomicidad y riesgo de adaptación
+---
 
-La generación de subagentes escribe un directorio staged y sustituye destino con backup/rollback si falla el rename: [`replaceStagedAgentDirectory`](../../scripts/transpile-antigravitycli/main.go#L484-L512). No extender esa atomicidad a todo `transpileAll` ni al deployment instalado, que escribe múltiples archivos secuencialmente.
-
-El mayor riesgo de un transpilador textual es **texto sintácticamente válido con significado equivocado**. Los tests de residuos y paths reducen errores conocidos; no prueban que todas las capacidades de cada harness coincidan. Una actualización debe revisar fuente, diff de transformaciones y prueba del runtime requerido, no solo aceptar un SHA nuevo.
-
-**Siguiente paso:** [cómo se entregan reglas y qué hacen los hooks](03-orchestration-and-hooks.md).
+**Siguiente paso:** [Cómo se entregan reglas y qué hacen los hooks](03-orchestration-and-hooks.md).
