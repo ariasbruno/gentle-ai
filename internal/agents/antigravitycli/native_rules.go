@@ -151,7 +151,7 @@ func (a *Adapter) preflightNativeRules(pluginDir string) ([]string, error) {
 			owned := string(data) == want
 			if modular && relative == pair[1] {
 				if digest, recorded := prior.Rules[filepath.ToSlash(relative)]; recorded {
-					owned = ruleDigest(data) == digest
+					owned = owned || ruleDigest(data) == digest
 				}
 			}
 			if !modular && relative == legacy && ruleDigest(data) == legacyCoreSHA256 {

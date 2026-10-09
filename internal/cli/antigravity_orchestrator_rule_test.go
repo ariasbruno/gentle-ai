@@ -45,7 +45,9 @@ func TestEnsureAntigravityOrchestratorRuleFillsContractAndFrontmatter(t *testing
 		t.Fatalf("orchestrator rule lost its Review Execution Contract heading")
 	}
 	for _, want := range []string{
-		"~/.gemini/config/plugins/gentle-ai/rules/AGENTS.md",
+		"~/.gemini/config/plugins/gentle-ai", "<workspace>/.agents/plugins/gentle-ai",
+		"Persona: `rules/AGENTS.md` at that root.",
+		"Required rules (relative to plugin root's `rules/`)",
 		"ODD and applicable test-first obligations are mandatory",
 		"Before the associated phase or action",
 		"`strict-tdd.md`", "`strict-tdd-verify.md`",
@@ -57,6 +59,7 @@ func TestEnsureAntigravityOrchestratorRuleFillsContractAndFrontmatter(t *testing
 			t.Errorf("rendered always_on core lost obligation or route %q", want)
 		}
 	}
+	t.Logf("rendered core: %d bytes", len(data))
 	if len(data) >= 24000 {
 		t.Fatalf("orchestrator rule exceeds agy per-file cap of 24000 bytes: %d", len(data))
 	}

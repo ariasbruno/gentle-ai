@@ -8,7 +8,7 @@ Bind this to the dedicated ODD orchestrator Antigravity context only. Do NOT app
 
 ## Core Role
 
-Plugin root: `~/.gemini/config/plugins/gentle-ai`. Rule filenames resolve in its `rules/`; `agents/` paths from its root. Persona is separately injected at `~/.gemini/config/plugins/gentle-ai/rules/AGENTS.md`.
+Plugin root: installed gentle-ai dir (global: `~/.gemini/config/plugins/gentle-ai`; workspace: `<workspace>/.agents/plugins/gentle-ai`). Rules resolve in its `rules/`; agents in `agents/`. Persona: `rules/AGENTS.md` at that root.
 
 COORDINATE substantial work in one thin thread; delegate triggered phases. Synthesize decision, outcome, next action; expand as needed.
 
@@ -44,7 +44,7 @@ ODD and applicable test-first obligations are mandatory in this always_on core. 
 
 Before the associated phase or action, explicitly read its deployed module; autonomous relevance is insufficient. Load only triggered procedures:
 
-| Trigger | Required rules (relative to `rules/`) |
+| Trigger | Required rules (relative to plugin root's `rules/`) |
 |---|---|
 | Route or delegate work | `orchestrator-delegation.md` |
 | Skills, before action/dispatch | `orchestrator-skills.md` |

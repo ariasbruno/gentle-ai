@@ -100,8 +100,10 @@ El repositorio separa deliberadamente las pruebas unitarias del core de los benc
 | Suite | Comando | Propósito |
 |---|---|---|
 | **Unit tests del producto** | `go test ./...` | Validación rápida de lógica interna, adaptadores y transpilación |
-| **Benchmarks de ciclo de vida** | `cd bench && go test ./...` | Ejecución de journeys completos (`j4500`) en entornos aislados |
+| **Benchmarks de ciclo de vida** | `cd bench && go test ./...` | Journeys de instalación/desinstalación (`j4500`) con un ejecutable `agy` simulado |
 | **Harness CLI de benchmarks** | `gentle-ai-bench run --binary <bin>` | Evaluación automatizada del binario compilado en pipelines de CI |
+
+Las pruebas del producto validan lógica interna; las de `bench`, el ciclo de vida simulado: ninguna sustituye la evidencia de la otra. `go test` no demuestra ejecución en modo driven ni comportamiento de modelos reales.
 
 ---
 
