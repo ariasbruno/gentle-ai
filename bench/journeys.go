@@ -912,6 +912,7 @@ func Journeys() []Journey {
 	journeys = append(journeys, stopHookJourneys()...)
 	journeys = append(journeys, issue2995Journeys()...)
 	journeys = append(journeys, antigravityCLILifecycleJourneys()...)
+	journeys = append(journeys, issue4772Journeys()...)
 	journeys = removeRetiredAtomicJourneys(journeys)
 	return declareCoreJourneyReviewModes(journeys)
 }
