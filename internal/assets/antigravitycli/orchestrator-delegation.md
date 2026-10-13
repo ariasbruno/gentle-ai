@@ -7,7 +7,7 @@ Detail modules, each loaded only when its mechanism fires (small tasks load none
 - `orchestrator-tracking.md` — large-task ODD tracking: authorization and progress, research depth, checks and candidate consent, phase signaling, RDD assess, delivery strategy.
 - `orchestrator-verification.md` — the Verification rule, native risk tiers, writer verification contract.
 - `orchestrator-writer.md` — allowed edit surfaces and Judgment Day fix dispatch.
-- `orchestrator-prompts.md` — lossless blocking-prompt relays and Gentle AI provider defect handoff.
+- `orchestrator-prompts.md` — explorer web work, lossless prompts and Gentle AI provider defects.
 
 ### Language Domain Contract
 
@@ -16,23 +16,6 @@ Detail modules, each loaded only when its mechanism fires (small tasks load none
 - If technical artifacts are explicitly requested in another language, use a neutral/professional register unless the user explicitly requests a different tone or regional variant.
 - Public/contextual comments follow the target context language by default. Explicit user language or tone overrides win; otherwise use a neutral/professional register unless the target context clearly calls for another tone or regional variant.
 - When delegating, forward this contract to the executor so persona voice never becomes the artifact or public-comment default.
-
-## Session subject and display identity
-
-Once a meaningful task subject is clear, before delegation or cross-session coordination, call `orchestrator_session_id` with a short, non-sensitive `subject`. Batch with setup if possible; no extra model call. Skip tiny replies; exclude user prompts/private detail. The tool preserves canonical names/human renames; never ask humans to type aliases. Names display only; stable IDs route.
-
-### Publish and find classified work
-
-Publish explicit `state.work` with `orchestrator_session_id` or `invoke_subagent.work`;
-never publish private history. Opt into search with `orchestrator_list.filter`.
-Follow tool schemas and `docs/gentle-agents-activity.md` for full usage and examples.
-Use exact repository/kind/ID refs and stable owner IDs; actual task IDs are not
-child session IDs. Unknown or omitted projections are non-exhaustive, never authority.
-
-Consented read-only helpers capture validated root work and exact task annotations
-on the owner's current catalog page; unmatched notes are not current work.
-Classification stays untrusted and non-authoritative. Existing caps and supported
-model-cost dialog grants apply.
 
 ## Language Boundary — subagent-facing English + exceptions
 
@@ -49,7 +32,7 @@ These rules select execution topology, not the implementation method. Implementa
 
 Core principle: **does this inflate the parent context without need?** If yes, use one bounded worker. If no, do it inline.
 
-Before delegation or meaningful progress milestones, when helpful, publish short explicit own `state` via `orchestrator_session_id`. Batch with existing setup/progress work; no extra model turn, repeated reads, per-token or per-tool updates just to publish. Exclude private prompts, internal instructions and credentials. Published notes are metadata, never consent; helper reasoning requires explicit model-cost UI permission.
+
 
 | Action | Direct inline | Delegated direct worker |
 |--------|---------------|-------------------------|
@@ -101,13 +84,17 @@ Delegate when a mechanism's own trigger fires, within the ODD workflow: understa
 
 Use Antigravity's native subagent runtime. Prefer `invoke_subagent` for a fresh delegated context and `send_message` for follow-up guidance; do not invent an alternate delegation or model-routing contract.
 
+A child must be able to do the task it is given. Read its installed agent definition and declared tools before launching; never assume the parent's tools transfer. With no qualified role, report the capability gap; a fired trigger is never replaced by inline work.
+
 For bounded writes, follow the canonical Writer rule under Mandatory Delegation Triggers.
+
+Waiting on CI, a build, or a server is not delegation: use native `run_command` and its documented completion mechanism. Do not invent Pi background tools, poll, sleep, or delegate an idle waiter; report an unavailable completion mechanism.
 
 For generic mapping, follow the Evidence-budget rule under Mandatory Delegation Triggers.
 
 The canonical Writer rule under Mandatory Delegation Triggers overrides the general runtime preference above.
 
-Delegate generic verification that executes or delegates commands per the RDD-aware Verification rule (trigger 3 under Mandatory Delegation Triggers, Gentle AI#661) -- the normative on/off/unknown routing lives in `orchestrator-verification.md`, not here: the bounded writer always self-verifies via `## Verification`, and `gentle-ai-verify` (or the `invoke_subagent` fallback, with the same read-only verification constraints, exact parent-authorized commands, and fallback reporting) is on-demand only when the rendered `Receipt-driven development:` line reads `on`; when the line reads `off` or `unknown`, the the native review lifecycle `assess` operation's returned plan decides it by native risk tier instead of a blanket non-trivial rule (Gentle AI#662). `## Known environmental failures` follows the same definition as `gentle-ai-worker`'s Verification contract: exact pre-existing base failures reported as evidence, never blockers -- any other failing required command still forces `status: partial`. The change's own focused test and suite run inline. Separate exploration stays reserved for when the parent needs the map to decide or route; reading that prepares a write belongs with the writer making the change, consistent with the Delegation Rules table above.
+Delegate generic verification that executes or delegates commands per the RDD-aware Verification rule (trigger 3 under Mandatory Delegation Triggers, Gentle AI#661) -- the normative on/off/unknown routing lives in `orchestrator-verification.md`, not here: the bounded writer always self-verifies via `## Verification`, and the the native review lifecycle `assess` operation's returned plan decides whether `gentle-ai-verify` (or the `invoke_subagent` fallback, with the same read-only verification constraints, exact parent-authorized commands, and fallback reporting) also runs, by native risk tier and whatever the rendered `Receipt-driven development:` line reads, instead of a blanket non-trivial rule (Gentle AI#662). `## Known environmental failures` follows the same definition as `gentle-ai-worker`'s Verification contract: exact pre-existing base failures reported as evidence, never blockers -- any other failing required command still forces `status: partial`. The change's own focused test and suite run inline. Separate exploration stays reserved for when the parent needs the map to decide or route; reading that prepares a write belongs with the writer making the change, consistent with the Delegation Rules table above.
 
 #### Key Learnings closing block
 

@@ -15,6 +15,13 @@ const (
 	antigravityUnrelatedPlugin = "unrelated-plugin"
 )
 
+// Native modules are deployed as conditional rules, never root/support copies.
+var antigravityNativePhaseModules = []string{
+	"orchestrator-delegation.md", "orchestrator-memory.md", "orchestrator-skills.md",
+	"orchestrator-prompts.md", "orchestrator-tracking.md", "orchestrator-verification.md",
+	"orchestrator-writer.md", "strict-tdd.md", "strict-tdd-verify.md",
+}
+
 func antigravityCLIRuntimeFixture(sandbox *Sandbox) error {
 	if err := baseRepo(sandbox); err != nil {
 		return err
@@ -211,6 +218,9 @@ func assertAntigravityCLIFirstSync(sandbox *Sandbox, observation Observation) er
 	if !strings.Contains(orchestratorStr, "## Entry rule") || !strings.Contains(orchestratorStr, "Concurrent Reviewer Group") {
 		return fmt.Errorf("orchestrator rule missing the rendered review execution contract")
 	}
+	if len(orchestratorBytes) >= 24000 {
+		return fmt.Errorf("rendered orchestrator exceeds native byte cap: %d", len(orchestratorBytes))
+	}
 	sandbox.Scratch["j4500-orchestrator-first-sync"] = orchestratorStr
 	if _, err := os.Stat(filepath.Join(pluginDir, "orchestrator.md")); !os.IsNotExist(err) {
 		return fmt.Errorf("legacy root orchestrator.md survived deploy: agy never reads the plugin root")
@@ -245,19 +255,23 @@ func assertAntigravityCLIFirstSync(sandbox *Sandbox, observation Observation) er
 		}
 	}
 
-	// Verify satellites
-	for _, sat := range []string{"orchestrator-delegation.md", "orchestrator-memory.md", "orchestrator-skills.md"} {
-		satFile := filepath.Join(pluginDir, sat)
-		if _, err := os.Stat(satFile); err != nil {
-			return fmt.Errorf("missing satellite file %s: %w", satFile, err)
+	// Verify every conditional phase rule and reject obsolete deployment paths.
+	for _, module := range antigravityNativePhaseModules {
+		path := filepath.Join(rulesDir, module)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("missing native phase rule %s: %w", path, err)
 		}
-	}
-
-	// Verify support contracts
-	for _, sup := range []string{"strict-tdd.md", "strict-tdd-verify.md"} {
-		supFile := filepath.Join(pluginDir, "support", sup)
-		if _, err := os.Stat(supFile); err != nil {
-			return fmt.Errorf("missing support contract file %s: %w", supFile, err)
+		if !strings.HasPrefix(string(data), "---\ntrigger: model_decision\ndescription: ") || len(data) >= 24000 {
+			return fmt.Errorf("native phase rule %s has invalid metadata or byte cap", module)
+		}
+		sandbox.Scratch["j4500-phase-first-sync-"+module] = string(data)
+		legacy := filepath.Join(pluginDir, module)
+		if strings.HasPrefix(module, "strict-tdd") {
+			legacy = filepath.Join(pluginDir, "support", module)
+		}
+		if _, err := os.Stat(legacy); !os.IsNotExist(err) {
+			return fmt.Errorf("obsolete phase path survived deployment %s: %v", legacy, err)
 		}
 	}
 
@@ -328,6 +342,12 @@ func assertAntigravityCLISecondSync(sandbox *Sandbox, observation Observation) e
 	if string(orchestratorBytes) != sandbox.Scratch["j4500-orchestrator-first-sync"] {
 		return fmt.Errorf("second sync modified orchestrator rule (fill not deterministic)")
 	}
+	for _, module := range antigravityNativePhaseModules {
+		data, err := os.ReadFile(filepath.Join(rulesDir, module))
+		if err != nil || string(data) != sandbox.Scratch["j4500-phase-first-sync-"+module] {
+			return fmt.Errorf("second sync changed native phase rule %s: %v", module, err)
+		}
+	}
 	manifestBytes, manifest, err := readAntigravityImportManifest(sandbox.Home)
 	if err != nil {
 		return fmt.Errorf("read import manifest after second sync: %w", err)
@@ -370,6 +390,12 @@ func assertAntigravityCLIUninstall(sandbox *Sandbox, observation Observation) er
 		return fmt.Errorf("plugin manifest was not uninstalled: %v", err)
 	}
 
+	for _, module := range antigravityNativePhaseModules {
+		path := filepath.Join(pluginDir, "rules", module)
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			return fmt.Errorf("native phase rule was not uninstalled %s: %v", path, err)
+		}
+	}
 	// Verify satellites are removed
 	for _, sat := range []string{"orchestrator-delegation.md", "orchestrator-memory.md", "orchestrator-skills.md"} {
 		satFile := filepath.Join(pluginDir, sat)

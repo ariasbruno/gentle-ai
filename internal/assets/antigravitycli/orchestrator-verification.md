@@ -4,9 +4,9 @@ Bind this to the parent Antigravity session only. Load it when the Verification 
 
 ## Verification rule (normative)
 
-5. **Verification rule**: executing or delegating verification commands routes to `gentle-ai-verify`; only a small read-only check stays inline.
+5. **Verification rule**: the bounded writer always self-verifies with exact authorized checks. Follow the native risk tier and the table below in any RDD state. High risk always requires independent `gentle-ai-verify` before native review; medium adds it for a small-model writer, and failed assessment is treated as high. Native review never replaces or skips verification and never authorizes delivery.
 
-| Native risk tier | Verification when RDD is `off`/`unknown` |
+| Native risk tier | Verification (any RDD state) |
 |---|---|
 | passive | structural readback by the parent; no separate verifier, no tests |
 | medium | writer self-verification stands; a separate `gentle-ai-verify` run is added only when the writer profile is a small model (mini or low effort) |
@@ -25,4 +25,4 @@ When the change touches a Task Size high-risk item and the native tier is passiv
 2. **Independent verify per unit**, once, after its final self-review (never per worker cycle or retry), in parallel when several finish together, only when that unit is high risk: its Risk line, `assess` over its actual diff or the worker's own `escalate` (high-risk list in Task Size; small-model bias per the tier table), never inferred from the worker's summary alone. Assess per unit via its work-unit commit (`{"baseRef":"<previous>","committedOnly":true}`) or its own isolated worktree. Same-model inline code over several deliveries of one feature: one verify at the feature's end; smaller-model writer code stays per unit.
 3. **Seam check**: after parallel units finish, one inline full-suite command (the parent spot check) catches seams between units.
 4. **Verify handoff**: the whole feature document (every `S#`, never one task), the baseline commit, and the probe command forms (tests, CLI, typecheck) for probes on isolated state in a fresh `mktemp -d` scratch copy, never just "read-only"; `gentle-ai-verify` holds the checklist. Resolve every unmet item before closing; the writer commits its probes as regression tests.
-5. **One correction**: verify blockers get one correction batch that fixes every reported blocker, then one re-verify limited to those blockers, never a new full sweep. Blockers still open after that stop as one **Needs your decision**. Advisories never start a correction. A second correction runs automatically only when the recheck shows the same blocker still failing; a new finding never earns one. A `partial` or `blocked` writer report gets only this correction, never an extra verify run (overriding the Verification rule's on-demand verify); partial, blocked, unavailable, or exhausted proof left after it becomes that one **Needs your decision**.
+5. **One correction**: verify blockers get one correction batch that fixes every reported blocker, then one re-verify limited to those blockers, never a new full sweep. Blockers still open after that stop as one **Needs your decision**. Advisories never start a correction. A second correction runs automatically only when the recheck shows the same blocker still failing; a new finding never earns one. A `partial` or `blocked` writer report gets only this correction, never an extra verify run beyond the risk tier's verifier; partial, blocked, unavailable, or exhausted proof left after it becomes that one **Needs your decision**.
