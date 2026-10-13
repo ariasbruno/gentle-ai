@@ -9,6 +9,7 @@ import (
 	"testing"
 	"unicode"
 
+	antigravitycliagent "github.com/gentleman-programming/gentle-ai/v4/internal/agents/antigravitycli"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/capabilitymanifest"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/catalog"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/model"
@@ -869,6 +870,10 @@ func TestRenderRoutingSizesTasksByUnderstandingRiskAndResumability(t *testing.T)
 		t.Run(string(agent.ID), func(t *testing.T) {
 			t.Parallel()
 
+			if agent.ID == model.AgentAntigravityCLI {
+				assertAntigravityCanonicalRouting(t)
+				return
+			}
 			rendered, err := RenderRouting(agent.ID)
 			if err != nil {
 				t.Fatalf("RenderRouting(%q) error = %v", agent.ID, err)
@@ -994,6 +999,10 @@ func TestRenderRoutingDelegatesForReason(t *testing.T) {
 		t.Run(string(agent.ID), func(t *testing.T) {
 			t.Parallel()
 
+			if agent.ID == model.AgentAntigravityCLI {
+				assertAntigravityCanonicalRouting(t)
+				return
+			}
 			rendered, err := RenderRouting(agent.ID)
 			if err != nil {
 				t.Fatalf("RenderRouting(%q) error = %v", agent.ID, err)
@@ -1011,5 +1020,57 @@ func TestRenderRoutingDelegatesForReason(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// AGY delivers doctrine through its deployed core and mandatory phase modules,
+// not the protocol-only RenderRouting carrier. Assert that actual public
+// deployment instead of exempting AGY from the shared behavioral rules.
+func assertAntigravityCanonicalRouting(t *testing.T) {
+	t.Helper()
+	home := t.TempDir()
+	adapter := antigravitycliagent.NewAdapter()
+	if err := adapter.DeployPluginTree(home); err != nil {
+		t.Fatal(err)
+	}
+	rules := filepath.Join(adapter.PluginDir(home), "rules")
+	clauses := map[string][]string{
+		"gentle-ai-orchestrator.md":    {"**Understood**", "**Contained risk**", "**Resumable from the diff**", "File/command/test/fix counts", "the resume test fails", "no commits unless requested", "**High risk**", "(1) data/irreversible", "(2) security", "(3) consumed-contract", "(4) concurrency", "(5) delivery/environment", "(6) untestable", "Risk: item N", "unrequested existing behavior", "Required Phase Loading", "orchestrator-delegation.md", "strict-tdd.md"},
+		"orchestrator-delegation.md":   {"open product or design decision", "re-evaluate task size", "high-risk change", "independent", "Writer trigger", "parallelism", "context", "Without a reason, the parent works inline", "disjoint", "Inline writes read inline", "the user explicitly", "stop"},
+		"orchestrator-verification.md": {"any RDD state", "high", "independent", "small-model", "never replaces", "failed assessment"},
+		"strict-tdd.md":                {"RED", "GREEN"},
+	}
+	for file, wants := range clauses {
+		raw, err := os.ReadFile(filepath.Join(rules, file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := string(raw)
+		for _, want := range wants {
+			if !strings.Contains(body, want) {
+				t.Errorf("deployed AGY %s missing obligation %q", file, want)
+			}
+		}
+		// Core always_on metadata is added by public sync, not DeployPluginTree;
+		// the driven lifecycle journey asserts that final delivery boundary.
+		if file != "gentle-ai-orchestrator.md" && !strings.HasPrefix(body, "---\ntrigger: model_decision\n") {
+			t.Errorf("%s is not a conditional phase rule", file)
+		}
+	}
+	for _, role := range []string{"gentle-ai-worker", "gentle-ai-verify"} {
+		raw, err := os.ReadFile(filepath.Join(adapter.PluginDir(home), "agents", role, "agent.md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(raw), "Do not assume access to parent history") {
+			t.Errorf("%s loses bounded context", role)
+		}
+		if role == "gentle-ai-worker" {
+			for _, want := range []string{"previous behavior", "add no other cases", "RED", "GREEN"} {
+				if !strings.Contains(string(raw), want) {
+					t.Errorf("worker missing %q", want)
+				}
+			}
+		}
 	}
 }

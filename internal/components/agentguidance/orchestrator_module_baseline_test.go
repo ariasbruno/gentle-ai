@@ -63,6 +63,7 @@ var moduleVariantInputs = []moduleVariantInput{
 	{id: "gemini-cli", agent: model.AgentGeminiCLI, asset: "gemini/orchestrator.md"},
 	{id: "cursor", agent: model.AgentCursor, asset: "cursor/orchestrator.md"},
 	{id: "antigravity", agent: model.AgentAntigravity, asset: "antigravity/orchestrator.md"},
+	{id: "antigravity-cli", agent: model.AgentAntigravityCLI, asset: "antigravitycli/orchestrator.md"},
 	{id: "windsurf", agent: model.AgentWindsurf, asset: "windsurf/orchestrator.md"},
 	{id: "kimi/legacy", agent: model.AgentKimi, asset: "kimi/orchestrator.md"},
 	{id: "kimi/current", agent: model.AgentKimi, kimiCurrent: true, asset: "kimi/orchestrator.md"},
