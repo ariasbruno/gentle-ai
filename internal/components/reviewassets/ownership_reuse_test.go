@@ -114,10 +114,33 @@ func TestOwnershipReuseFreshLedgerBytes(t *testing.T) {
 	}
 }
 
+// stdlibOwnershipHashField characterizes only the stdlib's map-entry field
+// path. Both supported spellings retain the exact public error and metadata
+// assertions below; the production decoder and install are not used as an oracle.
+func stdlibOwnershipHashField(t *testing.T, body string) string {
+	t.Helper()
+	type ownershipLedger struct {
+		Version int               `json:"version"`
+		Files   map[string]string `json:"files"`
+	}
+	var ledger ownershipLedger
+	var typeErr *json.UnmarshalTypeError
+	if err := json.Unmarshal([]byte(body), &ledger); !errors.As(err, &typeErr) {
+		t.Fatalf("stdlib map-entry fixture error = %v, want UnmarshalTypeError", err)
+	}
+	if typeErr.Field != "files" && typeErr.Field != "files.jd-judge-a.md" {
+		t.Fatalf("unexpected stdlib map-entry field %q", typeErr.Field)
+	}
+	return typeErr.Field
+}
+
 func TestOwnershipReuseRejectsLedgerWithoutMutation(t *testing.T) {
 	valid := sha("x")
+	const hashNumberBody = `{"version":1,"files":{"jd-judge-a.md":7}}`
+	hashField := stdlibOwnershipHashField(t, hashNumberBody)
 	// JSON type errors keep the baseline 9e metadata: the native struct name,
-	// the root type and its package, and the decoder offsets.
+	// the root type and its package, and the decoder offsets. Only the map-key
+	// field path follows the stdlib; all rejection and no-mutation checks remain.
 	root := `reviewassets.ownershipLedger "github.com/gentleman-programming/gentle-ai/v4/internal/components/reviewassets"`
 	for _, tc := range []struct {
 		name, body, want, typeErr string
@@ -135,7 +158,7 @@ func TestOwnershipReuseRejectsLedgerWithoutMutation(t *testing.T) {
 		{name: "version string", body: `{"version":"1","files":{}}`, want: "decode ownership ledger: json: cannot unmarshal string into Go struct field ownershipLedger.version of type int", typeErr: `string int "" 14 ownershipLedger.version`},
 		{name: "version array", body: `{"version":[],"files":{}}`, want: "decode ownership ledger: json: cannot unmarshal array into Go struct field ownershipLedger.version of type int", typeErr: `array int "" 12 ownershipLedger.version`},
 		{name: "files string", body: `{"version":1,"files":"x"}`, want: "decode ownership ledger: json: cannot unmarshal string into Go struct field ownershipLedger.files of type map[string]string", typeErr: `string map[string]string "" 24 ownershipLedger.files`},
-		{name: "hash number", body: `{"version":1,"files":{"jd-judge-a.md":7}}`, want: "decode ownership ledger: json: cannot unmarshal number into Go struct field ownershipLedger.files of type string", typeErr: `number string "" 39 ownershipLedger.files`},
+		{name: "hash number", body: hashNumberBody, want: "decode ownership ledger: json: cannot unmarshal number into Go struct field ownershipLedger." + hashField + " of type string", typeErr: `number string "" 39 ownershipLedger.` + hashField},
 		{name: "root array", body: `[]`, want: "decode ownership ledger: json: cannot unmarshal array into Go value of type reviewassets.ownershipLedger", typeErr: "array " + root + " 1 ."},
 		{name: "root string", body: `"x"`, want: "decode ownership ledger: json: cannot unmarshal string into Go value of type reviewassets.ownershipLedger", typeErr: "string " + root + " 3 ."},
 		{name: "root number", body: `7`, want: "decode ownership ledger: json: cannot unmarshal number into Go value of type reviewassets.ownershipLedger", typeErr: "number " + root + " 1 ."},

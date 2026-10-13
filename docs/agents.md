@@ -18,6 +18,7 @@ Gentle AI configures agents you already have; it does not install an AI agent fo
 | <a id="codex"></a>Codex | `codex` | Native multi-agent when available, solo fallback, skills and MCP |
 | <a id="windsurf"></a>Windsurf | `windsurf` | Native skills, global rules and MCP |
 | <a id="antigravity"></a>Antigravity | `antigravity` | Native skills, MCP and built-in Mission Control tools |
+| <a id="antigravity-cli"></a>Antigravity CLI (agy) | `antigravity-cli` | Native plugin rules, skills, subagents, hooks and MCP; see [AGY integration](antigravity-cli/README.md) |
 | <a id="kimi-code"></a>Kimi Code | `kimi` | Native custom agents, skills and MCP |
 | <a id="qwen-code"></a>Qwen Code | `qwen-code` | Native subagents, skills and MCP |
 | <a id="kiro-ide"></a>Kiro IDE | `kiro-ide` | Native agents, steering, skills and MCP |

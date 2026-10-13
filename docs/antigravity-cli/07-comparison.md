@@ -21,7 +21,7 @@ Los cinco están en el catálogo `TierFull`, pero hay más entradas con ese tier
 | `SystemPrompt` | Sí | Sí | Sí | Sí | False | [Mismo manifest](../../internal/agents/capabilitymanifest/manifest.go#L320-L359); no equiparar false con ausencia de system prompt en Pi |
 | `MCP` | Sí | Sí | Sí | Sí | Sí | [Manifest](../../internal/agents/capabilitymanifest/manifest.go#L320-L359); el wiring cambia por adaptador |
 | `FileSubAgents` | Sí | Sí | No | No | No | [Manifest](../../internal/agents/capabilitymanifest/manifest.go#L320-L359); OpenCode puede entregar agents en settings, no `SubAgentsDir` |
-| `SlashCommands` | No | Sí | No | Sí | No | [Manifest](../../internal/agents/capabilitymanifest/manifest.go#L320-L359); no convierte texto `/sdd-*` en función disponible |
+| `SlashCommands` | No | Sí | No | Sí | No | [Manifest](../../internal/agents/capabilitymanifest/manifest.go#L320-L359); no convierte instrucciones textuales en comandos nativos disponibles |
 | `OutputStyles` | No | Sí | No | No | No | [Manifest](../../internal/agents/capabilitymanifest/manifest.go#L320-L359); distinta de persona/prompt |
 | Skills del catálogo Gentle AI | Omitido | Elegibles si adapter soporta | Elegibles | Elegibles | Omitidos por capability | [`DeliversFor`, `InjectWithCapability`](../../internal/components/skills/inject.go#L28-L52) y manifest |
 | Orchestrator de routing renderizado por Gentle AI | Excepción: transpilado/fill | Sí | Sí | Sí, carrier settings | Excepción: Gentle Shell owner | [`InjectRoutingWithOptions`](../../internal/components/agentguidance/inject.go#L124-L132), [`DeliversThroughOrchestratorPrompt`](../../internal/components/agentguidance/inject.go#L283-L295) |
