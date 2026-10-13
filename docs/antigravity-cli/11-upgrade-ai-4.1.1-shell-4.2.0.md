@@ -1,6 +1,6 @@
 # Incremental update: AI 4.1.1 / Shell 4.2.0 / AGY 1.3.4
 
-Status: implemented and verified locally within the scope below; final documentation record being closed. The global suite is not green and authenticated AGY behavior is not certified. This update preserves the accepted AGY integration; no historical fork reconstruction or upstream PR.
+Status: implemented, verified and recorded locally within the scope below. The global suite is not green and authenticated AGY behavior is not certified. This update preserves the accepted AGY integration; no historical fork reconstruction or upstream PR.
 
 ## Fixed inputs
 
