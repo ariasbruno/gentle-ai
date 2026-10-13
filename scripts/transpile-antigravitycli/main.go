@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -37,6 +38,12 @@ type UnmappedToolWarning struct {
 	Agent string
 	Tool  string
 }
+
+// The native core keeps mandatory policy and phase loading always on while
+// the full portable procedures remain in the pinned Shell satellites.
+//
+//go:embed orchestrator-core.md
+var antigravityCLIOrchestratorCore string
 
 var unmappedToolWarnings []UnmappedToolWarning
 
@@ -89,15 +96,15 @@ var isolatedAgents = map[string]bool{
 var subagentAliases = map[string][]string{}
 
 func main() {
-	sourceDir := flag.String("source-dir", "", "Path to local gentle-pi repository clone (if empty, clones remote)")
+	sourceDir := flag.String("source-dir", "", "Path to a clean local source clone (including untracked/ignored files; if empty, clones remote)")
 	sourceRepo := flag.String("source-repo", defaultRemoteRepo, "Remote git URL for gentle-pi")
 	outputDir := flag.String("output-dir", defaultOutputDir, "Destination directory for generated assets")
-	strict := flag.Bool("strict", false, "Fail with exit code 1 if any unmapped tools or frontmatter discrepancies are detected")
+	strict := flag.Bool("strict", false, "Reject unmapped tools during generation or --check")
 	check := flag.Bool("check", false, "Verify the committed bundle matches a fresh transpilation from the pinned provenance (drift gate)")
 	flag.Parse()
 
 	if *check {
-		if err := runCheckGate(*outputDir, *sourceDir, *sourceRepo); err != nil {
+		if err := runCheckGate(*outputDir, *sourceDir, *sourceRepo, *strict); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.Exit(1)
 		}
@@ -143,7 +150,7 @@ func resolveSourceRootWithProvenance(localDir, remoteRepo string) (string, func(
 
 	if localDir != "" {
 		if info, err := os.Stat(localDir); err == nil && info.IsDir() {
-			sha, err := getGitHEAD(localDir)
+			sha, err := getSourceHEAD(localDir)
 			if err != nil {
 				return "", func() {}, provenance, fmt.Errorf("get git HEAD for %s: %w", localDir, err)
 			}
@@ -157,7 +164,7 @@ func resolveSourceRootWithProvenance(localDir, remoteRepo string) (string, func(
 	for _, envKey := range []string{"GENTLE_SHELL_DIR", "GENTLE_PI_DIR"} {
 		if val := os.Getenv(envKey); val != "" {
 			if info, err := os.Stat(val); err == nil && info.IsDir() {
-				sha, err := getGitHEAD(val)
+				sha, err := getSourceHEAD(val)
 				if err != nil {
 					return "", func() {}, provenance, fmt.Errorf("get git HEAD for %s: %w", val, err)
 				}
@@ -176,7 +183,7 @@ func resolveSourceRootWithProvenance(localDir, remoteRepo string) (string, func(
 	}
 	for _, candidate := range candidates {
 		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
-			sha, err := getGitHEAD(candidate)
+			sha, err := getSourceHEAD(candidate)
 			if err != nil {
 				return "", func() {}, provenance, fmt.Errorf("get git HEAD for %s: %w", candidate, err)
 			}
@@ -208,6 +215,19 @@ func resolveSourceRootWithProvenance(localDir, remoteRepo string) (string, func(
 	provenance.SourceCommit = sha
 
 	return tempDir, cleanup, provenance, nil
+}
+
+func getSourceHEAD(dir string) (string, error) {
+	cmd := exec.Command("git", "status", "--porcelain=v1", "--untracked-files=all", "--ignored")
+	cmd.Dir = dir
+	status, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("check source worktree: %w", err)
+	}
+	if len(status) != 0 {
+		return "", errors.New("source checkout must be clean (including untracked and ignored files)")
+	}
+	return getGitHEAD(dir)
 }
 
 func getGitHEAD(dir string) (string, error) {
@@ -542,7 +562,11 @@ func transpileSubagentMarkdown(agentName, raw string) (string, error) {
 	// enable_mcp_tools: true (agy 1.2.3 fix). In agy these tools are exposed
 	// via call_mcp_tool with the server prefix (gentle-ai_codegraph,
 	// gentle-ai_engram).
-	if strings.Contains(raw, "codegraph") || strings.Contains(raw, "mem_save") {
+	if agentName == "gentle-ai-worker" {
+		// The bounded writer consumes parent-selected context, not persistent
+		// memory or arbitrary MCP surfaces inherited from the plugin.
+		extraFrontmatter += "enable_mcp_tools: false\n"
+	} else if strings.Contains(raw, "codegraph") || strings.Contains(raw, "mem_save") {
 		extraFrontmatter += "enable_mcp_tools: true\n"
 	}
 	frontmatter := fmt.Sprintf("---\nname: %s\ndescription: %s\ntools: %s\n%s---\n", agentName, description, toolsStr, extraFrontmatter)
@@ -562,7 +586,20 @@ func transpileSubagentMarkdown(agentName, raw string) (string, error) {
 		return "", fmt.Errorf("empty body content after frontmatter")
 	}
 
-	return frontmatter + "\n" + trimmedBody + "\n", nil
+	return frontmatter + "\n" + nativeAgentPhaseGuidance(agentName) + trimmedBody + "\n", nil
+}
+
+func nativeAgentPhaseGuidance(agentName string) string {
+	var action, module string
+	switch agentName {
+	case "gentle-ai-worker":
+		action, module = "Before the first implementation edit", "strict-tdd.md"
+	case "gentle-ai-verify":
+		action, module = "Before verification", "strict-tdd-verify.md"
+	default:
+		return ""
+	}
+	return "## Native phase context\n\n" + action + ", read `~/.gemini/config/plugins/gentle-ai/rules/" + module + "` (global) or `<workspace>/.agents/plugins/gentle-ai/rules/" + module + "` (workspace), using the parent's effective plugin root. Do not assume access to parent history, persona, rules or authorization. Use only exact authorized scope and checks. Applicable deterministic behavior changes require observed RED before implementation and observed GREEN afterward; justify non-applicability and run proportionate checks otherwise.\n\n"
 }
 
 // transpileTopLevelOrchestrator generates internal/assets/antigravitycli/orchestrator.md
@@ -587,28 +624,15 @@ func transpileTopLevelOrchestrator(piRoot, outputDir string) error {
 		return fmt.Errorf("prepare Antigravity review contract section: %w", err)
 	}
 
-	header := `# el Gentleman Orchestrator (Antigravity)
-
-Bind this to the dedicated ODD orchestrator Antigravity context only. Do NOT apply it to delegated execution workers.
-
-## Agent Teams Orchestrator (Unified Adapter)
-
-You are the **Google Antigravity agent** running inside **Mission Control**. Antigravity supports native static subagents deployed under ` + "`~/.gemini/config/plugins/gentle-ai/agents/<name>/agent.md`" + ` (or workspace ` + "`.agents/agents/<name>/agent.md`" + `). When delegating bounded ODD work, prioritize delegating directly via ` + "`invoke_subagent`" + `. If static subagents are not detected in the runtime environment, fall back to defining the subagent dynamically with ` + "`define_subagent`" + ` (` + "`enable_mcp_tools: true`" + `) before invoking it.
-
-Your role is to maintain a thin working thread, delegate bounded work, and synthesize results.
-`
-
-	var rest string
-	if idx := strings.Index(body, "### Lossless Blocking Prompts"); idx >= 0 {
-		rest = body[idx:]
-	} else if idx := strings.Index(body, "## Core Role"); idx >= 0 {
-		rest = body[idx:]
-	} else {
-		rest = body
+	// Validate the source contract shape above, but do not concatenate the
+	// monolithic Pi prompt with Go's growing provider contract. AGY's native
+	// core routes to the fully transpiled phase rules and retains mandatory
+	// safety, ODD and verification obligations within its per-rule byte cap.
+	core, err := ensureAntigravityCLIReviewContract(antigravityCLIOrchestratorCore)
+	if err != nil {
+		return fmt.Errorf("prepare native Antigravity core: %w", err)
 	}
-
-	destPath := filepath.Join(outputDir, "orchestrator.md")
-	return writeDeterministicFile(destPath, header+"\n"+strings.TrimSpace(rest)+"\n")
+	return writeDeterministicFile(filepath.Join(outputDir, "orchestrator.md"), core)
 }
 
 func ensureAntigravityCLIReviewContract(content string) (string, error) {
@@ -717,7 +741,7 @@ func copyAndTransformFile(srcPath, destPath string) error {
 		transformed := transformSkillContent(string(content), "")
 		return writeDeterministicFile(destPath, transformed)
 	}
-	return writeDeterministicFile(destPath, string(content))
+	return os.WriteFile(destPath, content, 0o644)
 }
 
 // copyAndTransformSkillDir recursively copies a skill directory, applying transformations to markdown files.
@@ -748,7 +772,7 @@ func copyAndTransformSkillDir(srcDir, destDir, skillName string) error {
 		}
 
 		// Copy non-markdown files as-is
-		return writeDeterministicFile(destPath, string(content))
+		return os.WriteFile(destPath, content, 0o644)
 	})
 }
 
@@ -757,6 +781,13 @@ func transformSkillContent(content, skillName string) string {
 	content = stripDynamicInjections(content)
 	content = applyCommonTextMutations(content)
 	content = applyAntigravityCLIParentMutations(content)
+	// Shell 4.1.0 still ships these historical workflow references. The Go
+	// runtime has retired that workflow; preserve the portable commit/registry
+	// policy without inventing replacement CLI commands.
+	content = strings.ReplaceAll(content, "`sdd-tasks`", "`odd/tasks/<feature-name>.md`")
+	content = strings.ReplaceAll(content, "`sdd-*`, ", "")
+	content = strings.ReplaceAll(content, "regardless of SDD persistence mode", "when indexing installed skills")
+	content = strings.ReplaceAll(content, "SDD", "ODD")
 	return content
 }
 
@@ -872,6 +903,10 @@ func isKnownIgnoredPiTool(tool string) bool {
 	}
 	if strings.HasPrefix(tool, "mem_") {
 		// Handled via gentle-ai_engram MCP server
+		return true
+	}
+	if tool == "web_enable" {
+		// Pi activation is unnecessary: AGY exposes native web tools directly.
 		return true
 	}
 	if tool == "codegraph" || strings.HasPrefix(tool, "codegraph_") {
@@ -1160,6 +1195,9 @@ func applyAntigravityCLIParentMutations(content string) string {
 		"If neither worker definition exists, fall back to the native `Agent` even when `subagent_*` tools are available.",
 		"If neither worker definition exists, delegate the bounded write with Antigravity's native `invoke_subagent`.")
 
+	// AGY has native subagent messaging, not the Pi cross-session directory.
+	content = stripAntigravityCLISectionUntil(content, "## Session subject and display identity", "## Pi Runtime Overlays")
+	content = replaceAntigravityCLILineContaining(content, "Before work beyond small direct tasks, publish own", "")
 	content = stripSection(content, "## Pi Runtime Overlays")
 	content = stripAntigravityCLIMarkedSection(content, "<!-- gentle-pi:background-subagents -->", "<!-- /gentle-pi:background-subagents -->")
 	content = stripAntigravityCLISectionUntil(content, "#### Pi Trigger Runtime Bindings", "### Work Routing Ladder")
@@ -1171,15 +1209,18 @@ func applyAntigravityCLIParentMutations(content string) string {
 	content = replaceAntigravityCLILineContaining(content, "Mandatory Delegation Triggers — once fired", "Mandatory Delegation Triggers — once fired, delegate through Antigravity's native `invoke_subagent` and use `send_message` for follow-up guidance:")
 	content = replaceAntigravityCLILineContaining(content, "This package injects the mirrored provider-bundle", "This package injects the canonical native review execution contract into the Antigravity parent prompt. Follow that contract exactly; this package owns no separate review lifecycle route.")
 	content = replaceAntigravityCLILineContaining(content, "- An eligible interactive Pi host", "- For a provider-owned consent envelope, use `ask_question` only when the complete envelope is representable; otherwise relay it losslessly and stop. Never infer a continuation.")
+	content = replaceAntigravityCLILineContaining(content, "A child must be able to do the task it is given.", "A child must be able to do the task it is given. Read its installed agent definition and declared tools before launching; never assume the parent's tools transfer. With no qualified role, report the capability gap; a fired trigger is never replaced by inline work.")
 	content = replaceAntigravityCLILineContaining(content, "Use the configured subagent runtime when available", "Use Antigravity's native subagent runtime. Prefer `invoke_subagent` for a fresh delegated context and `send_message` for follow-up guidance; do not invent a background or model-routing contract.")
 	content = replaceAntigravityCLILineContaining(content, "Delegate generic non-SDD verification", "Delegate generic verification with `invoke_subagent` to `gentle-ai-verify`; keep only a small read-only check inline. The parent owns the native review lifecycle and all delivery decisions.")
 	content = replaceAntigravityCLILineContaining(content, "For delegation other than bounded multi-file writes", "For delegation other than bounded multi-file writes, use the generic fallback: if `invoke_subagent` or `send_message` is unavailable, stop and explain the blocker. The delegation trigger remains mandatory; do not silently continue inline.")
 	content = replaceAntigravityCLILineContaining(content, "Never search for, request, or invoke review tools", "The parent owns candidate review disposition and lifecycle. Never search for, request, or invoke review tools.")
 	content = replaceAntigravityCLILineContaining(content, "When RDD is enabled, first use native candidate risk assessment", "When RDD is enabled, follow the projected `#### Review Execution Contract` exactly: use only the native review operations returned by that contract, preserve provider-owned bindings, and never infer authority or delivery from model judgment or task size. When RDD is disabled, ordinary checks remain.")
-	content = replaceAntigravityCLILineContaining(content, "5. **Verification rule**", "5. **Verification rule**: executing or delegating verification commands routes to `gentle-ai-verify`; only a small read-only check stays inline.")
+	content = replaceAntigravityCLILineContaining(content, "5. **Verification rule**", "5. **Verification rule**: the bounded writer always self-verifies with exact authorized checks. Follow the native risk tier and the table below in any RDD state. High risk always requires independent `gentle-ai-verify` before native review; medium adds it for a small-model writer, and failed assessment is treated as high. Native review never replaces or skips verification and never authorizes delivery.")
 	content = replaceAntigravityCLILineContaining(content, "{{GENTLE_PI_BACKGROUND_POLICY}}", "Use Antigravity's native `invoke_subagent` and keep delegated work foreground until the result returns")
 	content = replaceAntigravityCLILineContaining(content, "| Native `nextRecommended` | Pi executor |", "| Native `nextRecommended` | Antigravity executor |")
 	content = replaceAntigravityCLILineContaining(content, "the provider host-relay capture path never loads this chain", "> Manual/compat-lane only: this chain exists solely for explicit manual 4R invocation; native review lifecycle captures do not load it.")
+	content = strings.ReplaceAll(content, "Use `web_enable` if activation is needed; headless sessions may activate the web tools at startup.", "Use native `search_web` and `read_url_content` directly; no Pi activation step is needed.")
+	content = replaceAntigravityCLILineContaining(content, "Waiting on CI, a build, or a server is not delegation:", "Waiting on CI, a build, or a server is not delegation: use native `run_command` and its documented completion mechanism. Do not invent Pi background tools, poll, sleep, or delegate an idle waiter; report an unavailable completion mechanism.")
 	content = strings.ReplaceAll(content, "`fetch_content`", "`read_url_content`")
 	content = strings.ReplaceAll(content, "`web_search`", "`search_web`")
 	content = strings.ReplaceAll(content, "`source_check`", "`read_url_content`")
@@ -1364,7 +1405,7 @@ func writeDeterministicFile(path, content string) error {
 	return nil
 }
 
-func runCheckGate(outputDir, sourceDir, sourceRepo string) error {
+func runCheckGate(outputDir, sourceDir, sourceRepo string, strict ...bool) error {
 	// The drift gate compares against the tree COMMITTED at HEAD, not the
 	// on-disk output: a dirty worktree must not make the local gate pass
 	// trivially. In CI the checkout is clean, so HEAD and disk coincide.
@@ -1380,7 +1421,7 @@ func runCheckGate(outputDir, sourceDir, sourceRepo string) error {
 
 	if sourceDir != "" {
 		// Check if local source HEAD matches the pinned commit
-		localSHA, err := getGitHEAD(sourceDir)
+		localSHA, err := getSourceHEAD(sourceDir)
 		if err != nil {
 			return fmt.Errorf("get local source HEAD: %w", err)
 		}
@@ -1432,6 +1473,10 @@ func runCheckGate(outputDir, sourceDir, sourceRepo string) error {
 
 	if err := transpileAll(sourceRoot, tempOutDir); err != nil {
 		return fmt.Errorf("transpile for check: %w", err)
+	}
+
+	if len(strict) > 0 && strict[0] && len(unmappedToolWarnings) > 0 {
+		return errors.New("Strict mode: unmapped tools detected during drift check.")
 	}
 
 	// Write provenance to temp output (deterministic, so it should match)
