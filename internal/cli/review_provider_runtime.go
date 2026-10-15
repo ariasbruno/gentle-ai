@@ -155,6 +155,7 @@ func reviewProviderAdapterWithRouting(role string, agent model.AgentID, routingK
 		}
 		adapter := reviewerprovider.NewAntigravityCLIAdapter()
 		adapter.Model = route.Model
+		adapter.Effort = route.Effort
 		return adapter, nil
 	}
 	return reviewProviderAdapter(role, agent, routingKey)

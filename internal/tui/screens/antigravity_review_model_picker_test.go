@@ -63,6 +63,12 @@ func TestAntigravityReviewModelPickerOptionCount(t *testing.T) {
 	if count := AntigravityReviewModelPickerOptionCount(state); count != 8 {
 		t.Errorf("role list option count = %d, want 8", count)
 	}
+
+	state.CustomMode = AntigravityReviewCustomModeEffortSelect
+	// Effort select: inherit option + 5 effort tiers = 6
+	if count := AntigravityReviewModelPickerOptionCount(state); count != 6 {
+		t.Errorf("effort select option count = %d, want 6", count)
+	}
 }
 
 func TestHandleAntigravityPresetNav(t *testing.T) {
@@ -137,23 +143,35 @@ func TestHandleAntigravityCustomNavFlow(t *testing.T) {
 		t.Errorf("CustomModelSearch after ctrl+u = %q, want empty", state.CustomModelSearch)
 	}
 
-	// Select first option in list (which is "(default / inherit)") -> directly assigns empty model and returns to RoleList
+	// Select first option (leave model on inherit) -> transitions to EffortSelect
+	HandleAntigravityReviewModelPickerNav("enter", &state, 0)
+	if state.CustomMode != AntigravityReviewCustomModeEffortSelect {
+		t.Fatalf("expected transition to EffortSelect, got %v", state.CustomMode)
+	}
+
+	// In EffortSelect: pick "low" (cursor 1) -> back to RoleList
+	state.CustomEffortCursor = 1
 	HandleAntigravityReviewModelPickerNav("enter", &state, 0)
 	if state.CustomMode != AntigravityReviewCustomModeRoleList {
 		t.Fatalf("expected return to RoleList, got %v", state.CustomMode)
 	}
 	assigned := state.CustomAssignments[reviewerprovider.ReviewRoutingKeyRisk]
-	if assigned.Model != "" {
-		t.Errorf("assigned model = %q, want empty for inherit", assigned.Model)
+	if assigned.Model != "" || assigned.Effort != "low" {
+		t.Errorf("assigned = %+v, want inherit model with effort low", assigned)
 	}
 
-	// Enter ModelSelect again for first role and pick cursor 1 (a concrete model)
+	// Enter ModelSelect again for first role, pick cursor 1 (a concrete model), keeping its effort
 	HandleAntigravityReviewModelPickerNav("enter", &state, 0)
 	state.CustomModelCursor = 1
 	HandleAntigravityReviewModelPickerNav("enter", &state, 0)
+	if state.CustomMode != AntigravityReviewCustomModeEffortSelect {
+		t.Fatalf("expected transition to EffortSelect, got %v", state.CustomMode)
+	}
+	// Select the inherit effort option (cursor 0) to clear the effort
+	HandleAntigravityReviewModelPickerNav("enter", &state, 0)
 	assigned = state.CustomAssignments[reviewerprovider.ReviewRoutingKeyRisk]
-	if assigned.Model == "" {
-		t.Errorf("assigned model is empty, want concrete model")
+	if assigned.Model == "" || assigned.Effort != "" {
+		t.Errorf("assigned = %+v, want concrete model with inherit effort", assigned)
 	}
 
 	// In RoleList: select Confirm (cursor 6)
@@ -164,8 +182,9 @@ func TestHandleAntigravityCustomNavFlow(t *testing.T) {
 	if !state.CustomConfirmed {
 		t.Error("CustomConfirmed should be true")
 	}
-	if finalAssignments[reviewerprovider.ReviewRoutingKeyRisk].Model != assigned.Model {
-		t.Errorf("final assignment model = %q, want %q", finalAssignments[reviewerprovider.ReviewRoutingKeyRisk].Model, assigned.Model)
+	final := finalAssignments[reviewerprovider.ReviewRoutingKeyRisk]
+	if final.Model != assigned.Model || final.Effort != "" {
+		t.Errorf("final assignment = %+v, want model %q with empty effort", final, assigned.Model)
 	}
 }
 
@@ -194,10 +213,39 @@ func TestRenderAntigravityReviewModelPicker(t *testing.T) {
 		t.Errorf("rendered output missing deprecated warning badge: %s", out)
 	}
 
+	// Effort display in the role list
+	state.CustomAssignments[reviewerprovider.ReviewRoutingKeyReliability] = reviewerprovider.AntigravityCLIReviewRouting{
+		Model: "gemini-3.8-flash-low", Effort: "medium",
+	}
+	out = RenderAntigravityReviewModelPicker(state, 0)
+	if !strings.Contains(out, "effort medium") {
+		t.Errorf("rendered role list missing effort label: %s", out)
+	}
+
 	// Model select render
 	state.CustomMode = AntigravityReviewCustomModeModelSelect
 	out = RenderAntigravityReviewModelPicker(state, 0)
 	if !strings.Contains(out, "Select model") {
 		t.Errorf("rendered model select missing title: %s", out)
+	}
+
+	// Effort select render
+	state.CustomMode = AntigravityReviewCustomModeEffortSelect
+	out = RenderAntigravityReviewModelPicker(state, 0)
+	if !strings.Contains(out, "Select effort") {
+		t.Errorf("rendered effort select missing title: %s", out)
+	}
+}
+
+func TestAntigravityReviewPickerExplainsInheritDefault(t *testing.T) {
+	out := RenderAntigravityReviewModelPicker(NewAntigravityReviewModelPickerState(), 0)
+	if !strings.Contains(out, "Default (Inherit)") || strings.Contains(out, "review unavailable") || strings.Contains(out, "active CLI session model") {
+		t.Fatalf("picker must present the inherit default honestly: %s", out)
+	}
+	state := NewAntigravityReviewModelPickerState()
+	state.CustomMode = AntigravityReviewCustomModeRoleList
+	custom := RenderAntigravityReviewModelPicker(state, 0)
+	if !strings.Contains(custom, "(default / inherit)") || strings.Contains(custom, "review unavailable") {
+		t.Fatalf("custom role list must label unconfigured roles as the inherit default: %s", custom)
 	}
 }

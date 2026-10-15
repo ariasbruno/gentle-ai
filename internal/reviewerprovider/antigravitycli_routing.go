@@ -8,14 +8,16 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 )
 
-// AntigravityCLIReviewRouting carries the home-owned model assignment; zero
-// values retain the antigravity-cli runtime's own defaults.
-type AntigravityCLIReviewRouting struct{ Model string }
+// AntigravityCLIReviewRouting carries the home-owned model assignment; an
+// empty or "inherit" model means the transport omits --model so the isolated
+// reviewer resolves AGY's own default in the disposable profile.
+type AntigravityCLIReviewRouting struct{ Model, Effort string }
 
 // InvalidReviewRoutingError reports a present-but-unusable home routing
 // assignment: malformed JSON, unknown fields, blank or invalid model
@@ -60,7 +62,7 @@ func ReviewRoutingKeyForLens(lens string) (string, error) {
 // assignment for the antigravity-cli in-process reviewer runtime without
 // modifying it. The assignment file grammar is: a top-level JSON object whose
 // keys are routing roles or published lenses; each entry is either a bare
-// model string, or an object with a model field.
+// model string, or an object with model and optional effort fields.
 // A JSON null entry is invalid, an empty object {} means runtime defaults,
 // model whitespace is trimmed, and model names must match the fixed identifier
 // charset [A-Za-z0-9._~:@/+%-]. Absence of the assignment file or of the named key
@@ -97,6 +99,10 @@ var DefaultAntigravityReviewModels = []string{
 	"gpt-oss-120b-medium",
 }
 
+// AntigravityReviewEfforts lists the effort tiers the antigravity CLI accepts
+// for --effort. An empty or "inherit" effort means unset (CLI default).
+var AntigravityReviewEfforts = []string{"low", "medium", "high", "xhigh", "max"}
+
 // CanonicalReviewRoles returns the 6 reviewer roles supported in review-models.json.
 func CanonicalReviewRoles() []string {
 	return []string{
@@ -122,11 +128,11 @@ const (
 
 // AntigravityPresetDescriptions provides descriptions for presets in the TUI.
 var AntigravityPresetDescriptions = map[AntigravityReviewPreset]string{
-	AntigravityPresetTypeDefault:     "Inherit CLI session default: omit --model flag so all reviewers use your Antigravity settings",
+	AntigravityPresetTypeDefault:     "Inherit default: omit --model so the isolated reviewer uses AGY's own default model resolution",
 	AntigravityPresetTypeRecommended: "Claude Opus 4.6 for Risk & Refuter, Gemini Pro for Reliability & Validator, Flash for Resilience & Readability",
 	AntigravityPresetTypePerformance: "Frontier reasoning models: Opus 4.6, Gemini 3.1 Pro, and Sonnet 4.6 across all review roles",
 	AntigravityPresetTypeEconomy:     "Budget-conscious: Gemini 3.8 Flash high/medium/low tiers for fast review turns",
-	AntigravityPresetTypeCustom:      "Assign a model to each of the 6 review roles individually",
+	AntigravityPresetTypeCustom:      "Assign a model and effort to each of the 6 review roles individually",
 }
 
 // AntigravityPresetOrder specifies the order in which presets appear in the TUI picker.
@@ -138,7 +144,7 @@ var AntigravityPresetOrder = []AntigravityReviewPreset{
 	AntigravityPresetTypeCustom,
 }
 
-// AntigravityPresetDefault returns empty model routing so all roles inherit CLI defaults.
+// AntigravityPresetDefault leaves every role on the inherit default (no --model).
 func AntigravityPresetDefault() map[string]AntigravityCLIReviewRouting {
 	m := make(map[string]AntigravityCLIReviewRouting, len(CanonicalReviewRoles()))
 	for _, role := range CanonicalReviewRoles() {
@@ -209,7 +215,15 @@ func AntigravityReviewRoutingsEqual(a, b map[string]AntigravityCLIReviewRouting)
 		if strings.EqualFold(modelB, "inherit") {
 			modelB = ""
 		}
-		if !ok || modelA != modelB {
+		effortA := strings.TrimSpace(va.Effort)
+		if strings.EqualFold(effortA, "inherit") {
+			effortA = ""
+		}
+		effortB := strings.TrimSpace(vb.Effort)
+		if strings.EqualFold(effortB, "inherit") {
+			effortB = ""
+		}
+		if !ok || modelA != modelB || effortA != effortB {
 			return false
 		}
 	}
@@ -332,7 +346,20 @@ func SaveAntigravityCLIReviewRouting(assignments map[string]AntigravityCLIReview
 			continue
 		}
 		model := strings.TrimSpace(route.Model)
-		if model == "" || strings.EqualFold(model, "inherit") {
+		if strings.EqualFold(model, "inherit") {
+			model = ""
+		}
+		effort := strings.TrimSpace(route.Effort)
+		if strings.EqualFold(effort, "inherit") {
+			effort = ""
+		}
+		if effort != "" {
+			savedModel := model
+			if savedModel == "" {
+				savedModel = "inherit"
+			}
+			config[key] = map[string]any{"model": savedModel, "effort": effort}
+		} else if model == "" {
 			config[key] = "inherit"
 		} else {
 			config[key] = model
@@ -350,11 +377,13 @@ func SaveAntigravityCLIReviewRouting(assignments map[string]AntigravityCLIReview
 // assignment for the antigravity-cli in-process reviewer runtime without
 // modifying it. The assignment file grammar is: a top-level JSON object whose
 // keys are routing roles or published lenses; each entry is either a bare
-// model string, or an object with a model field.
+// model string, or an object with model and optional effort fields.
 // A JSON null entry is invalid, an empty object {} means runtime defaults,
 // model whitespace is trimmed, and model names must match the fixed identifier
 // charset [A-Za-z0-9._~:@/+%-]. The sentinel value "inherit" resolves to the
-// zero route (empty model, invoking agy without --model to inherit session defaults).
+// zero route (empty model: the transport omits --model and the isolated
+// reviewer resolves AGY's own default). An effort is trimmed and must be one
+// of low, medium, high, xhigh or max, with "inherit" meaning unset.
 // Absence of the assignment file or of the named key resolves to the zero route,
 // never an error and never written, with assignmentKeyMissing true only when the
 // file exists but the key does not (the likely-typo case callers surface as a
@@ -406,13 +435,16 @@ func ResolveAntigravityCLIReviewRouting(key string) (route AntigravityCLIReviewR
 					return invalid()
 				}
 			case "effort":
-				// Effort is tolerated for backward compatibility with legacy configuration,
-				// but is no longer validated or emitted.
+				var effort string
+				if json.Unmarshal(value, &effort) != nil {
+					return invalid()
+				}
+				route.Effort = strings.TrimSpace(effort)
 			default:
 				return invalid()
 			}
 		}
-		if len(fields) > 0 && route.Model == "" {
+		if len(fields) > 0 && route.Model == "" && route.Effort == "" {
 			return invalid()
 		}
 	}
@@ -420,6 +452,12 @@ func ResolveAntigravityCLIReviewRouting(key string) (route AntigravityCLIReviewR
 		route.Model = ""
 	}
 	if route.Model != "" && !reviewModelIdentifierPattern.MatchString(route.Model) {
+		return invalid()
+	}
+	if strings.EqualFold(route.Effort, "inherit") {
+		route.Effort = ""
+	}
+	if route.Effort != "" && !slices.Contains(AntigravityReviewEfforts, route.Effort) {
 		return invalid()
 	}
 	return route, false, nil

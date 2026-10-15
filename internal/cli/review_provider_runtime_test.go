@@ -56,14 +56,14 @@ func TestReviewProviderAdapterWithRoutingCanonicalKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	cases := []struct {
-		key, model string
+		key, model, effort string
 	}{
-		{reviewerprovider.ReviewRoutingKeyRefuter, "refuter/model"},
-		{reviewerprovider.ReviewRoutingKeyValidator, "validator/model"},
-		{reviewerprovider.ReviewRoutingKeyRisk, "risk/model"},
-		{reviewerprovider.ReviewRoutingKeyResilience, "resilience/model"},
-		{reviewerprovider.ReviewRoutingKeyReadability, "readability/model"},
-		{reviewerprovider.ReviewRoutingKeyReliability, "reliability/model"},
+		{reviewerprovider.ReviewRoutingKeyRefuter, "refuter/model", ""},
+		{reviewerprovider.ReviewRoutingKeyValidator, "validator/model", ""},
+		{reviewerprovider.ReviewRoutingKeyRisk, "risk/model", ""},
+		{reviewerprovider.ReviewRoutingKeyResilience, "resilience/model", ""},
+		{reviewerprovider.ReviewRoutingKeyReadability, "readability/model", "high"},
+		{reviewerprovider.ReviewRoutingKeyReliability, "reliability/model", ""},
 	}
 	for _, tc := range cases {
 		adapter, err := reviewProviderAdapterWithRouting(reviewProviderRoleLens, model.AgentAntigravityCLI, tc.key)
@@ -74,8 +74,8 @@ func TestReviewProviderAdapterWithRoutingCanonicalKeys(t *testing.T) {
 		if !ok {
 			t.Fatalf("adapter for %q = %T, want *reviewerprovider.AntigravityCLIAdapter", tc.key, adapter)
 		}
-		if agy.Model != tc.model {
-			t.Fatalf("adapter routing for %q = %q, want %q", tc.key, agy.Model, tc.model)
+		if agy.Model != tc.model || agy.Effort != tc.effort {
+			t.Fatalf("adapter routing for %q = model %q effort %q, want model %q effort %q", tc.key, agy.Model, agy.Effort, tc.model, tc.effort)
 		}
 	}
 }

@@ -17,9 +17,12 @@ const (
 	AntigravityReviewCustomModeNone AntigravityReviewCustomMode = iota
 	AntigravityReviewCustomModeRoleList
 	AntigravityReviewCustomModeModelSelect
+	AntigravityReviewCustomModeEffortSelect
 )
 
-// AntigravityInheritModelOption is the display label for inheriting the CLI session model.
+// AntigravityInheritModelOption labels a role left on the inherit default:
+// the transport omits --model and AGY resolves its own default model in the
+// disposable profile.
 const AntigravityInheritModelOption = "(default / inherit)"
 
 // AntigravityReviewRoleLabels maps canonical reviewer roles to descriptive UI labels.
@@ -34,14 +37,15 @@ var AntigravityReviewRoleLabels = map[string]string{
 
 // AntigravityReviewModelPickerState holds navigation state for the Antigravity review model picker.
 type AntigravityReviewModelPickerState struct {
-	Preset            reviewerprovider.AntigravityReviewPreset
-	CustomAssignments map[string]reviewerprovider.AntigravityCLIReviewRouting
-	CustomMode        AntigravityReviewCustomMode
-	CustomRoleIdx     int
-	CustomModelSearch string
-	CustomModelCursor int
-	AvailableModels   []string
-	CustomConfirmed   bool
+	Preset             reviewerprovider.AntigravityReviewPreset
+	CustomAssignments  map[string]reviewerprovider.AntigravityCLIReviewRouting
+	CustomMode         AntigravityReviewCustomMode
+	CustomRoleIdx      int
+	CustomModelSearch  string
+	CustomModelCursor  int
+	CustomEffortCursor int
+	AvailableModels    []string
+	CustomConfirmed    bool
 }
 
 // NewAntigravityReviewModelPickerState returns the default state: Default (Inherit) preset.
@@ -85,7 +89,7 @@ func filteredAntigravityModels(state AntigravityReviewModelPickerState) []string
 	}
 	query := strings.ToLower(strings.TrimSpace(state.CustomModelSearch))
 	var filtered []string
-	if query == "" || strings.Contains("(default / inherit)", query) || strings.Contains("inherit", query) || strings.Contains("default", query) {
+	if query == "" || strings.Contains(AntigravityInheritModelOption, query) || strings.Contains("inherit", query) || strings.Contains("default", query) {
 		filtered = append(filtered, AntigravityInheritModelOption)
 	}
 	for _, m := range models {
@@ -104,6 +108,8 @@ func AntigravityReviewModelPickerOptionCount(state AntigravityReviewModelPickerS
 	case AntigravityReviewCustomModeModelSelect:
 		models := filteredAntigravityModels(state)
 		return len(models)
+	case AntigravityReviewCustomModeEffortSelect:
+		return len(antigravityEffortOptions())
 	}
 	return len(reviewerprovider.AntigravityPresetOrder) + 1 // presets + Back
 }
@@ -134,6 +140,7 @@ func HandleAntigravityReviewModelPickerNav(
 		state.CustomRoleIdx = 0
 		state.CustomModelSearch = ""
 		state.CustomModelCursor = 0
+		state.CustomEffortCursor = 0
 		if state.CustomAssignments == nil {
 			state.CustomAssignments = reviewerprovider.AntigravityPresetDefault()
 		}
@@ -163,6 +170,8 @@ func handleAntigravityCustomNav(
 		return handleAntigravityRoleListNav(key, state, cursor)
 	case AntigravityReviewCustomModeModelSelect:
 		return handleAntigravityModelSelectNav(key, state)
+	case AntigravityReviewCustomModeEffortSelect:
+		return handleAntigravityEffortSelectNav(key, state)
 	}
 	return false, nil
 }
@@ -243,13 +252,16 @@ func handleAntigravityModelSelectNav(
 			if state.CustomAssignments == nil {
 				state.CustomAssignments = make(map[string]reviewerprovider.AntigravityCLIReviewRouting)
 			}
+			existing := state.CustomAssignments[role]
 			state.CustomAssignments[role] = reviewerprovider.AntigravityCLIReviewRouting{
-				Model: selected,
+				Model:  selected,
+				Effort: existing.Effort,
 			}
 		}
-		state.CustomMode = AntigravityReviewCustomModeRoleList
+		state.CustomMode = AntigravityReviewCustomModeEffortSelect
 		state.CustomModelSearch = ""
 		state.CustomModelCursor = 0
+		state.CustomEffortCursor = 0
 		return true, nil
 	case "backspace":
 		if state.CustomModelSearch != "" {
@@ -277,6 +289,54 @@ func handleAntigravityModelSelectNav(
 	return false, nil
 }
 
+// antigravityEffortOptions lists the effort picker rows: the inherit-default
+// option first, then the CLI's effort tiers.
+func antigravityEffortOptions() []string {
+	return append([]string{AntigravityInheritModelOption}, reviewerprovider.AntigravityReviewEfforts...)
+}
+
+func handleAntigravityEffortSelectNav(
+	key string,
+	state *AntigravityReviewModelPickerState,
+) (bool, map[string]reviewerprovider.AntigravityCLIReviewRouting) {
+	options := antigravityEffortOptions()
+	state.CustomEffortCursor = min(max(0, state.CustomEffortCursor), len(options)-1)
+	switch key {
+	case "up", "k":
+		if state.CustomEffortCursor > 0 {
+			state.CustomEffortCursor--
+		}
+		return true, nil
+	case "down", "j":
+		if state.CustomEffortCursor < len(options)-1 {
+			state.CustomEffortCursor++
+		}
+		return true, nil
+	case "enter":
+		selected := options[state.CustomEffortCursor]
+		if selected == AntigravityInheritModelOption {
+			selected = ""
+		}
+		roles := reviewerprovider.CanonicalReviewRoles()
+		if state.CustomRoleIdx < len(roles) {
+			role := roles[state.CustomRoleIdx]
+			existing := state.CustomAssignments[role]
+			state.CustomAssignments[role] = reviewerprovider.AntigravityCLIReviewRouting{
+				Model:  existing.Model,
+				Effort: selected,
+			}
+		}
+		state.CustomMode = AntigravityReviewCustomModeRoleList
+		state.CustomEffortCursor = 0
+		return true, nil
+	case "esc":
+		state.CustomMode = AntigravityReviewCustomModeRoleList
+		state.CustomEffortCursor = 0
+		return true, nil
+	}
+	return false, nil
+}
+
 func isAntigravitySearchInput(key string) bool {
 	runes := []rune(key)
 	if len(runes) != 1 {
@@ -292,6 +352,8 @@ func RenderAntigravityReviewModelPicker(state AntigravityReviewModelPickerState,
 		return renderAntigravityCustomRoleList(state, cursor)
 	case AntigravityReviewCustomModeModelSelect:
 		return renderAntigravityCustomModelSelect(state)
+	case AntigravityReviewCustomModeEffortSelect:
+		return renderAntigravityCustomEffortSelect(state)
 	}
 	return renderAntigravityMainPicker(state, cursor)
 }
@@ -310,7 +372,7 @@ func renderAntigravityMainPicker(state AntigravityReviewModelPickerState, cursor
 		label := string(preset)
 		switch preset {
 		case reviewerprovider.AntigravityPresetTypeDefault:
-			label = "Default (Inherit) — use active CLI session model"
+			label = "Default (Inherit)"
 		case reviewerprovider.AntigravityPresetTypeRecommended:
 			label = "Recommended"
 		case reviewerprovider.AntigravityPresetTypePerformance:
@@ -318,7 +380,7 @@ func renderAntigravityMainPicker(state AntigravityReviewModelPickerState, cursor
 		case reviewerprovider.AntigravityPresetTypeEconomy:
 			label = "Economy"
 		case reviewerprovider.AntigravityPresetTypeCustom:
-			label = "Custom — per-role model assignment"
+			label = "Custom — per-role model and effort assignment"
 		}
 		b.WriteString(renderRadio(label, isSelected, focused))
 		b.WriteString(styles.SubtextStyle.Render("    "+reviewerprovider.AntigravityPresetDescriptions[preset]) + "\n")
@@ -337,7 +399,7 @@ func renderAntigravityCustomRoleList(state AntigravityReviewModelPickerState, cu
 
 	b.WriteString(styles.TitleStyle.Render("Custom Antigravity CLI Review Models"))
 	b.WriteString("\n\n")
-	b.WriteString(styles.SubtextStyle.Render("Assign a model to each of the 6 reviewer roles. Deprecated or unknown models are flagged."))
+	b.WriteString(styles.SubtextStyle.Render("Assign a model and an effort to each of the 6 reviewer roles. Deprecated or unknown models are flagged."))
 	b.WriteString("\n\n")
 
 	roles := reviewerprovider.CanonicalReviewRoles()
@@ -358,7 +420,10 @@ func renderAntigravityCustomRoleList(state AntigravityReviewModelPickerState, cu
 				modelInfo = styles.SuccessStyle.Render(assignment.Model)
 			}
 		} else {
-			modelInfo = styles.SubtextStyle.Render("(default / inherit)")
+			modelInfo = styles.SubtextStyle.Render(AntigravityInheritModelOption)
+		}
+		if ok && assignment.Effort != "" && !strings.EqualFold(assignment.Effort, "inherit") {
+			modelInfo += styles.SubtextStyle.Render(fmt.Sprintf(" · effort %s", assignment.Effort))
 		}
 
 		label := fmt.Sprintf("%-36s %s", AntigravityReviewRoleLabels[role], modelInfo)
@@ -422,6 +487,38 @@ func renderAntigravityCustomModelSelect(state AntigravityReviewModelPickerState)
 
 	b.WriteString("\n")
 	b.WriteString(styles.HelpStyle.Render("j/k: navigate • type: search • backspace: delete • ctrl+u: clear • enter: select • esc: back"))
+
+	return b.String()
+}
+
+func renderAntigravityCustomEffortSelect(state AntigravityReviewModelPickerState) string {
+	var b strings.Builder
+
+	roles := reviewerprovider.CanonicalReviewRoles()
+	roleLabel := "reviewer"
+	if state.CustomRoleIdx < len(roles) {
+		roleLabel = AntigravityReviewRoleLabels[roles[state.CustomRoleIdx]]
+	}
+
+	b.WriteString(styles.TitleStyle.Render(fmt.Sprintf("Select effort for %s:", roleLabel)))
+	b.WriteString("\n\n")
+
+	options := antigravityEffortOptions()
+	cursor := state.CustomEffortCursor
+	if cursor >= len(options) {
+		cursor = len(options) - 1
+	}
+	for i, option := range options {
+		focused := i == cursor
+		if focused {
+			b.WriteString(styles.SelectedStyle.Render(styles.Cursor+option) + "\n")
+		} else {
+			b.WriteString(styles.UnselectedStyle.Render("  "+option) + "\n")
+		}
+	}
+
+	b.WriteString("\n")
+	b.WriteString(styles.HelpStyle.Render("j/k: navigate • enter: select • esc: back"))
 
 	return b.String()
 }

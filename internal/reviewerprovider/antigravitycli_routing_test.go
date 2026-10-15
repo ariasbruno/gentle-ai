@@ -14,26 +14,30 @@ import (
 
 func TestResolveAntigravityCLIReviewRouting(t *testing.T) {
 	for _, tc := range []struct {
-		name, config, model  string
-		invalid              bool
-		assignmentKeyMissing bool
+		name, config, model, effort string
+		invalid                     bool
+		assignmentKeyMissing        bool
 	}{
-		{"string", `{"review-refuter":"provider/model"}`, "provider/model", false, false},
-		{"model", `{"review-refuter":{"model":" provider/model "}}`, "provider/model", false, false},
-		{"inherit string", `{"review-refuter":"inherit"}`, "", false, false},
-		{"inherit object", `{"review-refuter":{"model":"inherit"}}`, "", false, false},
-		{"inherit uppercase", `{"review-refuter":{"model":"INHERIT"}}`, "", false, false},
-		{"independent", `{"review-refuter":{"model":"a","effort":"high"},"review-validator":{"model":"b"}}`, "a", false, false},
-		{"empty", `{"review-refuter":{}}`, "", false, false},
-		{"missing", `{"unrelated":false}`, "", false, true},
-		{"syntax", `{`, "", true, false},
-		{"array", `[]`, "", true, false},
-		{"null", `null`, "", true, false},
-		{"null entry", `{"review-refuter":null}`, "", true, false},
-		{"bad selected", `{"review-refuter":false}`, "", true, false},
-		{"bad model", `{"review-refuter":{"model":"bad model"}}`, "", true, false},
-		{"bad effort with no model", `{"review-refuter":{"effort":"huge"}}`, "", true, false},
-		{"unknown field", `{"review-refuter":{"typo":"a"}}`, "", true, false},
+		{"string", `{"review-refuter":"provider/model"}`, "provider/model", "", false, false},
+		{"model", `{"review-refuter":{"model":" provider/model "}}`, "provider/model", "", false, false},
+		{"inherit string", `{"review-refuter":"inherit"}`, "", "", false, false},
+		{"inherit object", `{"review-refuter":{"model":"inherit"}}`, "", "", false, false},
+		{"inherit uppercase", `{"review-refuter":{"model":"INHERIT"}}`, "", "", false, false},
+		{"independent", `{"review-refuter":{"model":"a","effort":"high"},"review-validator":{"model":"b"}}`, "a", "high", false, false},
+		{"effort inherit", `{"review-refuter":{"model":"a","effort":"inherit"}}`, "a", "", false, false},
+		{"effort only", `{"review-refuter":{"effort":"medium"}}`, "", "medium", false, false},
+		{"effort trimmed", `{"review-refuter":{"model":"a","effort":" xhigh "}}`, "a", "xhigh", false, false},
+		{"empty", `{"review-refuter":{}}`, "", "", false, false},
+		{"missing", `{"unrelated":false}`, "", "", false, true},
+		{"syntax", `{`, "", "", true, false},
+		{"array", `[]`, "", "", true, false},
+		{"null", `null`, "", "", true, false},
+		{"null entry", `{"review-refuter":null}`, "", "", true, false},
+		{"bad selected", `{"review-refuter":false}`, "", "", true, false},
+		{"bad model", `{"review-refuter":{"model":"bad model"}}`, "", "", true, false},
+		{"bad effort with no model", `{"review-refuter":{"effort":"huge"}}`, "", "", true, false},
+		{"bad effort value", `{"review-refuter":{"model":"a","effort":"turbo"}}`, "", "", true, false},
+		{"unknown field", `{"review-refuter":{"typo":"a"}}`, "", "", true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			home := t.TempDir()
@@ -53,8 +57,8 @@ func TestResolveAntigravityCLIReviewRouting(t *testing.T) {
 			if assignmentKeyMissing != tc.assignmentKeyMissing {
 				t.Fatalf("assignmentKeyMissing = %v, want %v", assignmentKeyMissing, tc.assignmentKeyMissing)
 			}
-			if !tc.invalid && got.Model != tc.model {
-				t.Fatalf("routing = %+v, want model %q", got, tc.model)
+			if !tc.invalid && (got.Model != tc.model || got.Effort != tc.effort) {
+				t.Fatalf("routing = %+v, want model %q effort %q", got, tc.model, tc.effort)
 			}
 		})
 	}
@@ -74,7 +78,7 @@ func TestResolveAntigravityCLIReviewRoutingCoversRolesAndLenses(t *testing.T) {
 		ReviewRoutingKeyValidator:   {Model: "validator/model"},
 		ReviewRoutingKeyRisk:        {Model: "risk/model"},
 		ReviewRoutingKeyResilience:  {Model: "resilience/model"},
-		ReviewRoutingKeyReadability: {Model: "readability/model"},
+		ReviewRoutingKeyReadability: {Model: "readability/model", Effort: "high"},
 		ReviewRoutingKeyReliability: {Model: "reliability/model"},
 	}
 	keys := []string{
@@ -105,16 +109,20 @@ func TestResolveAntigravityCLIReviewRoutingCoversRolesAndLenses(t *testing.T) {
 	}
 }
 
-func TestResolveAntigravityCLIReviewRoutingLegacyEffortTolerated(t *testing.T) {
+func TestResolveAntigravityCLIReviewRoutingCarriesEffort(t *testing.T) {
 	config := `{
 		"review-risk":{"model":"a","effort":"low"},
 		"review-resilience":{"model":"b","effort":"medium"},
-		"review-readability":{"model":"c","effort":"high"}
+		"review-readability":{"model":"c","effort":"high"},
+		"review-reliability":{"effort":"xhigh"},
+		"review-refuter":{"model":"d","effort":"max"}
 	}`
 	want := []AntigravityCLIReviewRouting{
-		{Model: "a"},
-		{Model: "b"},
-		{Model: "c"},
+		{Model: "a", Effort: "low"},
+		{Model: "b", Effort: "medium"},
+		{Model: "c", Effort: "high"},
+		{Model: "", Effort: "xhigh"},
+		{Model: "d", Effort: "max"},
 	}
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -126,7 +134,7 @@ func TestResolveAntigravityCLIReviewRoutingLegacyEffortTolerated(t *testing.T) {
 	if err := os.WriteFile(path, []byte(config), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	for index, key := range []string{ReviewRoutingKeyRisk, ReviewRoutingKeyResilience, ReviewRoutingKeyReadability} {
+	for index, key := range []string{ReviewRoutingKeyRisk, ReviewRoutingKeyResilience, ReviewRoutingKeyReadability, ReviewRoutingKeyReliability, ReviewRoutingKeyRefuter} {
 		got, assignmentKeyMissing, err := ResolveAntigravityCLIReviewRouting(key)
 		if err != nil {
 			t.Fatalf("routing %q error = %v", key, err)
@@ -218,7 +226,7 @@ func TestSaveAndLoadAllAntigravityCLIReviewRouting(t *testing.T) {
 
 	assignments := map[string]AntigravityCLIReviewRouting{
 		ReviewRoutingKeyRisk:        {Model: "claude-opus-4-6-thinking"},
-		ReviewRoutingKeyReadability: {Model: "gemini-3.8-flash-medium"},
+		ReviewRoutingKeyReadability: {Model: "gemini-3.8-flash-medium", Effort: "low"},
 		ReviewRoutingKeyValidator:   {Model: "gemini-3.1-pro-high"},
 	}
 
@@ -241,7 +249,7 @@ func TestSaveAndLoadAllAntigravityCLIReviewRouting(t *testing.T) {
 			t.Errorf("missing key %q in loaded routing", k)
 			continue
 		}
-		if got.Model != want.Model {
+		if got.Model != want.Model || got.Effort != want.Effort {
 			t.Errorf("key %q = %+v, want %+v", k, got, want)
 		}
 	}
@@ -293,8 +301,10 @@ func TestSaveAntigravityCLIReviewRoutingSerializesInherit(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 
 	assignments := map[string]AntigravityCLIReviewRouting{
-		ReviewRoutingKeyRisk:      {Model: ""},
-		ReviewRoutingKeyValidator: {Model: "inherit"},
+		ReviewRoutingKeyRisk:        {Model: ""},
+		ReviewRoutingKeyValidator:   {Model: "inherit"},
+		ReviewRoutingKeyRefuter:     {Model: "provider/model", Effort: "low"},
+		ReviewRoutingKeyReadability: {Effort: "high"},
 	}
 
 	if err := SaveAntigravityCLIReviewRouting(assignments); err != nil {
@@ -312,6 +322,12 @@ func TestSaveAntigravityCLIReviewRoutingSerializesInherit(t *testing.T) {
 	if !strings.Contains(content, `"review-validator": "inherit"`) {
 		t.Errorf("expected review-validator to be saved as inherit, got: %s", content)
 	}
+	if !strings.Contains(content, `"effort": "low"`) {
+		t.Errorf("expected review-refuter to serialize its effort, got: %s", content)
+	}
+	if !strings.Contains(content, `"review-readability": {`) {
+		t.Errorf("expected effort-only review-readability to serialize as an object, got: %s", content)
+	}
 
 	loaded, err := LoadAllAntigravityCLIReviewRouting()
 	if err != nil {
@@ -322,6 +338,12 @@ func TestSaveAntigravityCLIReviewRoutingSerializesInherit(t *testing.T) {
 	}
 	if loaded[ReviewRoutingKeyValidator].Model != "" {
 		t.Errorf("loaded review-validator model = %q, want empty", loaded[ReviewRoutingKeyValidator].Model)
+	}
+	if loaded[ReviewRoutingKeyRefuter].Model != "provider/model" || loaded[ReviewRoutingKeyRefuter].Effort != "low" {
+		t.Errorf("loaded review-refuter = %+v, want provider/model with effort low", loaded[ReviewRoutingKeyRefuter])
+	}
+	if loaded[ReviewRoutingKeyReadability].Model != "" || loaded[ReviewRoutingKeyReadability].Effort != "high" {
+		t.Errorf("loaded review-readability = %+v, want inherit model with effort high", loaded[ReviewRoutingKeyReadability])
 	}
 }
 
@@ -339,6 +361,17 @@ func TestAntigravityReviewRoutingsEqual(t *testing.T) {
 
 	if AntigravityReviewRoutingsEqual(a, nil) {
 		t.Error("non-nil compared to nil reported equal")
+	}
+
+	c := AntigravityPresetRecommended()
+	c[ReviewRoutingKeyReadability] = AntigravityCLIReviewRouting{Model: "gemini-3.8-flash-medium", Effort: "low"}
+	if AntigravityReviewRoutingsEqual(a, c) {
+		t.Error("effort difference reported equal")
+	}
+	d := AntigravityPresetRecommended()
+	d[ReviewRoutingKeyReadability] = AntigravityCLIReviewRouting{Model: "gemini-3.8-flash-medium", Effort: "inherit"}
+	if !AntigravityReviewRoutingsEqual(a, d) {
+		t.Error("inherit effort should compare equal to unset effort")
 	}
 }
 

@@ -18,8 +18,8 @@ const agyAdapterHelperModeArgument = "--agy-adapter-helper-mode="
 const agyAdapterHelperOutputPathArgument = "--agy-adapter-helper-output-path="
 
 func TestAntigravityCLIAdapterPassesOnlyRuntimeEnvironment(t *testing.T) {
+	home := prepareAntigravityReviewerAuth(t)
 	t.Setenv("PATH", "/runtime/path")
-	t.Setenv("HOME", "/runtime/home")
 	t.Setenv("OPENAI_API_KEY", "sentinel-api-key")
 	t.Setenv("UNRELATED_ENVIRONMENT", "sentinel-unrelated")
 	t.Setenv("GENTLE_ARBITRARY_ENVIRONMENT", "sentinel-gentle")
@@ -27,6 +27,7 @@ func TestAntigravityCLIAdapterPassesOnlyRuntimeEnvironment(t *testing.T) {
 	environmentPath := filepath.Join(t.TempDir(), "environment")
 	var command *exec.Cmd
 	adapter := &AntigravityCLIAdapter{
+		Model:    "explicit-model",
 		LookPath: func(string) (string, error) { return "agy", nil },
 		commandContext: func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
 			command = exec.CommandContext(ctx, os.Args[0], "-test.run=^TestAntigravityCLIAdapterHelperProcess$", "--",
@@ -42,8 +43,8 @@ func TestAntigravityCLIAdapterPassesOnlyRuntimeEnvironment(t *testing.T) {
 		t.Fatal("agy command Env is nil; want an explicit allowlist")
 	}
 	explicit := environmentMap([]byte(strings.Join(command.Env, "\x00")))
-	if explicit["PATH"] != "/runtime/path" || explicit["HOME"] != "/runtime/home" {
-		t.Errorf("explicit environment = %q, want runtime PATH and HOME", command.Env)
+	if explicit["PATH"] != "/runtime/path" || explicit["HOME"] == "" || explicit["HOME"] == home {
+		t.Errorf("explicit environment = %q, want runtime PATH and isolated HOME", command.Env)
 	}
 	for _, name := range []string{"OPENAI_API_KEY", "UNRELATED_ENVIRONMENT", "GENTLE_ARBITRARY_ENVIRONMENT"} {
 		if _, found := explicit[name]; found {
@@ -75,7 +76,7 @@ func TestAntigravityCLIAdapterPassesOnlyRuntimeEnvironment(t *testing.T) {
 }
 
 func TestAntigravityCLIAdapterReturnsNoBytesWhenUnavailable(t *testing.T) {
-	adapter := &AntigravityCLIAdapter{LookPath: func(string) (string, error) { return "", errors.New("not found") }}
+	adapter := &AntigravityCLIAdapter{Model: "explicit-model", LookPath: func(string) (string, error) { return "", errors.New("not found") }}
 	raw, err := adapter.Review(context.Background(), NewInvocation([]byte("provider prompt")))
 	if err == nil || !strings.Contains(err.Error(), "antigravity-cli reviewer transport unavailable") || raw != nil {
 		t.Fatalf("Review() = %q, %v; want unavailable transport error and no bytes", raw, err)
@@ -83,6 +84,7 @@ func TestAntigravityCLIAdapterReturnsNoBytesWhenUnavailable(t *testing.T) {
 }
 
 func TestAntigravityCLIAdapterUsesStdinLockedDownArgumentsAndReturnsUntouchedRawOutput(t *testing.T) {
+	prepareAntigravityReviewerAuth(t)
 	if runtime.GOOS == "windows" {
 		t.Skip("the helper process uses POSIX argument handling")
 	}
@@ -90,6 +92,7 @@ func TestAntigravityCLIAdapterUsesStdinLockedDownArgumentsAndReturnsUntouchedRaw
 	var commandArguments []string
 	var command *exec.Cmd
 	adapter := &AntigravityCLIAdapter{
+		Model:    "explicit-model",
 		LookPath: func(string) (string, error) { return "agy", nil },
 		commandContext: func(ctx context.Context, _ string, arguments ...string) *exec.Cmd {
 			commandArguments = append([]string(nil), arguments...)
@@ -109,7 +112,7 @@ func TestAntigravityCLIAdapterUsesStdinLockedDownArgumentsAndReturnsUntouchedRaw
 	if got, err := os.ReadFile(promptPath); err != nil || !bytes.Equal(got, prompt) {
 		t.Fatalf("reviewer stdin = %q, %v; want %q", got, err, prompt)
 	}
-	if want := []string{"--sandbox", "--output-format", "text"}; !slices.Equal(commandArguments, want) {
+	if want := []string{"--sandbox", "--output-format", "text", "--model", "explicit-model"}; !slices.Equal(commandArguments, want) {
 		t.Fatalf("agy arguments = %q, want %q", commandArguments, want)
 	}
 	if command.WaitDelay != agyReviewerWaitDelay {
@@ -118,11 +121,13 @@ func TestAntigravityCLIAdapterUsesStdinLockedDownArgumentsAndReturnsUntouchedRaw
 }
 
 func TestAntigravityCLIAdapterFailsClosedOnProcessFailureAndEmptyOutput(t *testing.T) {
+	prepareAntigravityReviewerAuth(t)
 	if runtime.GOOS == "windows" {
 		t.Skip("the helper process uses POSIX argument handling")
 	}
 	for name, want := range map[string]string{"fail": "antigravity-cli reviewer transport failed", "empty": "produced no final message"} {
 		adapter := &AntigravityCLIAdapter{
+			Model:    "explicit-model",
 			LookPath: func(string) (string, error) { return "agy", nil },
 			commandContext: func(ctx context.Context, _ string, arguments ...string) *exec.Cmd {
 				helperArguments := append([]string{"-test.run=^TestAntigravityCLIAdapterHelperProcess$", "--", agyAdapterHelperModeArgument + name}, arguments...)
@@ -177,10 +182,20 @@ func TestAntigravityCLIAdapterHelperProcess(t *testing.T) {
 }
 
 func TestAntigravityCLIAdapterRoutingArguments(t *testing.T) {
-	for _, route := range []struct{ model string }{{""}, {"provider/model"}, {"other/model"}} {
-		t.Run(route.model, func(t *testing.T) {
+	for _, route := range []struct{ model, effort string }{
+		{"provider/model", ""},
+		{"other/model", ""},
+		{"inherit", ""},
+		{" InHeRiT ", ""},
+		{"  ", ""},
+		{"provider/model", "low"},
+		{"inherit", "high"},
+		{"other/model", "inherit"},
+	} {
+		t.Run(route.model+"|"+route.effort, func(t *testing.T) {
+			prepareAntigravityReviewerAuth(t)
 			path := filepath.Join(t.TempDir(), "argv")
-			adapter := &AntigravityCLIAdapter{Model: route.model,
+			adapter := &AntigravityCLIAdapter{Model: route.model, Effort: route.effort,
 				LookPath: func(string) (string, error) { return "agy", nil },
 				commandContext: func(ctx context.Context, _ string, args ...string) *exec.Cmd {
 					return exec.CommandContext(ctx, os.Args[0], append([]string{"-test.run=^TestAntigravityCLIAdapterHelperProcess$", "--", agyAdapterHelperModeArgument + "arguments", agyAdapterHelperOutputPathArgument + path}, args...)...)
@@ -195,8 +210,11 @@ func TestAntigravityCLIAdapterRoutingArguments(t *testing.T) {
 			}
 			got := strings.Split(string(raw), "\x00")[5:]
 			want := []string{"--sandbox", "--output-format", "text"}
-			if route.model != "" {
+			if model := strings.TrimSpace(route.model); model != "" && !strings.EqualFold(model, "inherit") {
 				want = append(want, "--model", route.model)
+			}
+			if effort := strings.TrimSpace(route.effort); effort != "" && !strings.EqualFold(effort, "inherit") {
+				want = append(want, "--effort", route.effort)
 			}
 			if !slices.Equal(got, want) {
 				t.Fatalf("child argv = %q, want %q", got, want)
@@ -217,10 +235,12 @@ func agyAdapterHelperOption(prefix string) string {
 // A agy child that prints its reason to stdout and exits non-zero must
 // surface that reason instead of an empty tail after the exit status.
 func TestAntigravityCLIAdapterFailureNamesStdoutReasonWhenStderrIsEmpty(t *testing.T) {
+	prepareAntigravityReviewerAuth(t)
 	if runtime.GOOS == "windows" {
 		t.Skip("the helper process uses POSIX argument handling")
 	}
 	adapter := &AntigravityCLIAdapter{
+		Model:    "explicit-model",
 		LookPath: func(string) (string, error) { return "agy", nil },
 		commandContext: func(ctx context.Context, _ string, arguments ...string) *exec.Cmd {
 			helperArguments := append([]string{"-test.run=^TestAntigravityCLIAdapterHelperProcess$", "--", agyAdapterHelperModeArgument + "stdout-failure"}, arguments...)

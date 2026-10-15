@@ -52,8 +52,8 @@ padre/controlador
 Go: validar rol/capacidad/routing y construir Invocation opaca
   │ stdin: prompt materializado por proveedor
   ▼
-agy --sandbox --output-format text [--model <asignación>]
-  cwd: scratch vacío; HOME: usuario; contexto cancelable
+agy --sandbox --output-format text [--model <asignación>] [--effort <asignación>]
+  cwd: workspace vacío; HOME: perfil auth-only temporal; contexto cancelable
   │ stdout: bytes sin interpretación en el adaptador
   ▼
 Go: admisión de esquema/binding/completitud

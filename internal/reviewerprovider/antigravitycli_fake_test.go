@@ -33,11 +33,14 @@ import (
 // JSON object echoing the binding's subject_hash.
 const fakeAntigravityCLIScript = `#!/bin/sh
 expected_model="$FAKE_AGY_EXPECTED_MODEL"
+expected_effort="$FAKE_AGY_EXPECTED_EFFORT"
 
 sandbox_seen=0
 output_format_seen=0
 model_seen=0
 model_value=""
+effort_seen=0
+effort_value=""
 previous=""
 
 for argument in "$@"; do
@@ -50,6 +53,10 @@ for argument in "$@"; do
   if [ "$previous" = "--model" ]; then
     model_seen=1
     model_value="$argument"
+  fi
+  if [ "$previous" = "--effort" ]; then
+    effort_seen=1
+    effort_value="$argument"
   fi
   previous="$argument"
 done
@@ -66,6 +73,15 @@ if [ -n "$expected_model" ]; then
 elif [ "$model_seen" -eq 1 ]; then
   echo "fake agy: unexpected --model in argv" >&2
   exit 5
+fi
+if [ -n "$expected_effort" ]; then
+  if [ "$effort_seen" -ne 1 ] || [ "$effort_value" != "$expected_effort" ]; then
+    echo "fake agy: expected --effort $expected_effort in argv" >&2
+    exit 6
+  fi
+elif [ "$effort_seen" -eq 1 ]; then
+  echo "fake agy: unexpected --effort in argv" >&2
+  exit 7
 fi
 
 stdin=$(cat)
@@ -92,16 +108,22 @@ func TestAntigravityCLIAdapterFakeRoundTrip(t *testing.T) {
 		t.Skip("the fake agy executable is a POSIX sh script")
 	}
 	for _, test := range []struct {
-		name  string
-		model string
+		name   string
+		model  string
+		effort string
 	}{
-		{name: "sandboxed invocation without routing", model: ""},
+		{name: "sandboxed explicit model", model: "provider/model"},
 		{name: "model routing", model: "fake-model"},
+		{name: "inherit default omits --model", model: ""},
+		{name: "effort routing", model: "fake-model", effort: "low"},
+		{name: "inherit default with effort", model: "", effort: "high"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			prepareAntigravityReviewerAuth(t)
 			adapter := &AntigravityCLIAdapter{
 				Model:    test.model,
-				Env:      []string{"FAKE_AGY_EXPECTED_MODEL=" + test.model},
+				Effort:   test.effort,
+				Env:      []string{"FAKE_AGY_EXPECTED_MODEL=" + test.model, "FAKE_AGY_EXPECTED_EFFORT=" + test.effort},
 				LookPath: func(string) (string, error) { return writeFakeAntigravityCLI(t), nil },
 			}
 			raw, err := adapter.Review(context.Background(), NewInvocation(fakeAntigravityCLILensPrompt(fakeAntigravityCLITargetHash)))
@@ -131,7 +153,7 @@ func TestAntigravityCLIAdapterFakeRoundTrip(t *testing.T) {
 }
 
 func TestAntigravityCLIAdapterFakeFailsClosedOnMissingBinary(t *testing.T) {
-	adapter := &AntigravityCLIAdapter{LookPath: func(string) (string, error) { return "", errors.New("agy not installed") }}
+	adapter := &AntigravityCLIAdapter{Model: "explicit-model", LookPath: func(string) (string, error) { return "", errors.New("agy not installed") }}
 	raw, err := adapter.Review(context.Background(), NewInvocation([]byte("sealed prompt")))
 	if err == nil || raw != nil || !strings.Contains(err.Error(), "antigravity-cli reviewer transport unavailable") {
 		t.Fatalf("Review() = %q, %v; want typed transport-unavailable error and no bytes", raw, err)
