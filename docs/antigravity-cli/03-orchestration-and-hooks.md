@@ -87,10 +87,10 @@ El plugin registra cinco eventos. No registra `SessionStart`. La página oficial
 | Evento | Timeout en hooks.json | Handler | Efecto |
 |---|---:|---|---|
 | `PreInvocation` | 30 s | `handleAntigravityPreInvocation` | Primera invocación: refresh/baseline best-effort; salida `{}` |
-| `PreToolUse` | 10 s | `handleAntigravityPreToolUse` | Formato de delegación y circuit breaker; allow/deny |
+| `PreToolUse` | 10 s | `handleAntigravityPreToolUse` | Delegación, circuit breaker y guard de rutas sensibles; allow/deny |
 | `PostToolUse` | 10 s | `handleAntigravityPostToolUse` | No-op portable: `{}` |
 | `PostInvocation` | 30 s | `handleAntigravityPostInvocation` | No-op portable: `{}` |
-| `Stop` | 60 s | `handleAntigravityStop` | Solo stop idle/model: evaluar recordatorio de revisión |
+| `Stop` | 60 s | `handleAntigravityStop` | Solo stop idle/model: bloquea el cierre ante revisión pendiente |
 
 Definición: [`antigravityCLIPluginHooksJSON`](../../internal/agents/antigravitycli/adapter.go#L407-L470); dispatch y handlers: [antigravity_hook.go, líneas 88–172](../../internal/cli/antigravity_hook.go#L88-L172), [Stop](../../internal/cli/antigravity_hook.go#L212-L282). Timeouts son configuración solicitada al cliente, no medición de ejecución.
 
@@ -105,6 +105,7 @@ El comando registrado llama directamente `gentle-ai hook run --agent=antigravity
 - Cada entrada requiere strings no vacíos `TypeName`, `Role`, `Prompt`.
 - `Workspace`, si aparece, debe ser `inherit`, `branch` o `share`.
 - Una herramienta distinta no recibe esa validación especial.
+- Las tools de archivo y búsqueda (`view_file`, `write_to_file`, `replace_file_content`, `multi_replace_file_content`, `grep_search`) reciben el guard de rutas sensibles: los patrones que el `settings.json` no puede expresar (el esquema del proveedor no tiene globs de archivo) se evalúan sobre la ruta concreta a cualquier profundidad y devuelven `deny`.
 
 [`RunAntigravityCLIHook`](../../internal/cli/antigravity_hook.go#L88-L108), [`validateAntigravityCLIInvokeSubagentArgs`](../../internal/cli/antigravity_hook.go#L344-L383), [`antigravityCLIValidWorkspace`](../../internal/cli/antigravity_hook.go#L394-L401).
 
@@ -142,7 +143,7 @@ Con `conversationId` y herramienta válida:
 
 [`handleAntigravityPreToolUse`](../../internal/cli/antigravity_hook.go#L405-L476). Se persiste bajo `.gentle-ai/circuit-breaker/v1/<sha256(conversationId)>.json`, con fallback temporal si HOME no está disponible. El orden de claves de JSON no evade identidad: [`PreToolUseKeyOrdering`](../../internal/cli/antigravity_hook_test.go#L301-L339).
 
-Sin conversationId, toolCall o nombre, retorna allow y no puede seguir repetición: [líneas 409–411](../../internal/cli/antigravity_hook.go#L409-L411). No es un detector de todos los loops ni de equivalencia semántica de comandos; solo repetición consecutiva de nombre/args. Persistencia fallida puede debilitar seguimiento entre invocaciones; no se trata de garantía universal anti-loop.
+Sin conversationId, toolCall o nombre, el circuit breaker retorna allow — el guard de rutas sensibles se evalúa antes y no depende de conversationId: [líneas 409–411](../../internal/cli/antigravity_hook.go#L409-L411). No es un detector de todos los loops ni de equivalencia semántica de comandos; solo repetición consecutiva de nombre/args. Persistencia fallida puede debilitar seguimiento entre invocaciones; no se trata de garantía universal anti-loop.
 
 ## `PreInvocation`: inicialización de sesión
 
@@ -151,17 +152,17 @@ Cuando inicia una nueva interacción (`InvocationNum == 0`), el hook ejecuta tar
 - Asegura la exclusión de metadatos de sincronización (`.atl`).
 - Registra el punto base (baseline) del repositorio si RDD está activo.
 
-## `Stop`: recordatorio de revisión pendiente
+## `Stop`: cierre bloqueado ante revisión pendiente
 
 Si el modelo finaliza su turno (`model_stop`) y el sistema queda desocupado (`fullyIdle == true`), el hook comprueba si existen cambios de código sin revisar:
-- Si detecta cambios pendientes en un repositorio con RDD activo, emite una respuesta `continue` recordando ejecutar la revisión formal:
+- Si detecta cambios pendientes en un repositorio con RDD activo, emite `decision: "continue"`. Según el contrato oficial de hooks, `continue` **impide que el agente termine y lo reinserta en el loop de ejecución**, con el `reason` inyectado como mensaje de sistema — es un bloqueo del cierre, no un recordatorio decorativo:
   ```json
   {
     "decision": "continue",
     "reason": "Receipt-Driven Development: unreviewed candidate changes detected since session baseline. Please run gentle-ai review status preflight before completing."
   }
   ```
-- Si no hay cambios nuevos o la revisión ya fue abordada, emite `{}` permitiendo que la sesión cierre con normalidad.
+- Si no hay cambios nuevos o la revisión ya fue abordada (baseline comparable o record previo del mismo target), emite `{}` permitiendo que la sesión cierre con normalidad.
 
 ## Política de seguridad y respuestas de los hooks
 
@@ -171,10 +172,11 @@ Los hooks de Gentle AI operan con un enfoque de seguridad estricto (*fail-closed
 |---|---|---|
 | Carga malformada o inválida en `PreToolUse` | `deny` | Bloquea la llamada a la herramienta para evitar fallos inesperados |
 | Delegación a subagente sin campos requeridos | `deny` | Exige `TypeName`, `Role` y `Prompt` obligatorios |
+| Ruta sensible en tools de archivo/búsqueda | `deny` | Guard sobre la ruta concreta: `.env` y variantes, `.ssh`, `.credentials`, `.aws/credentials`, `.pem`/`.key`, `hosts.yml`, Keychains, `secrets/` a cualquier profundidad |
 | 3 llamadas consecutivas idénticas (Circuit Breaker) | `deny` | Interrumpe bucles infinitos repetitivos del modelo |
 | Ejecución normal de herramientas | `{}` o `allow` | Permite la ejecución de la herramienta por parte de `agy` |
 | Eventos posteriores (`PostToolUse`, `PostInvocation`) | `{}` | No bloqueantes, no interfieren con la respuesta del agente |
-| Cierre con cambios pendientes de revisión | `continue` | Solicita al modelo recordar el preflight de revisión antes de terminar |
+| Cierre con cambios pendientes de revisión | `continue` | Bloquea el cierre: el loop continúa con el reason inyectado como mensaje de sistema; un record previo del mismo target de-silencia la repetición (dedup), sin certificar revisión completada |
 | Cierre estándar sin pendientes | `{}` | Permite el cierre normal de la interacción |
 
 ---

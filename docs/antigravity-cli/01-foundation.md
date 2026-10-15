@@ -165,15 +165,14 @@ No hace falta inspeccionar carpetas a mano. Podés validar la instalación direc
 
 ## Permisos: overlay de seguridad en settings.json
 
-Para evitar comandos destructivos accidentales o fuga de secretos en sesiones automáticas, Gentle AI inyecta en `settings.json` el overlay completo [`antigravityCLIOverlayJSON`](../../internal/components/permissions/inject.go#L132-L159):
+Para evitar comandos destructivos accidentales o fuga de secretos en sesiones automáticas, Gentle AI inyecta en `settings.json` el overlay construido por [`antigravityCLIOverlayForHome`](../../internal/components/permissions/inject.go#L132-L199). El esquema del proveedor no tiene globs de archivo y los nombres pelados resuelven solo contra el workspace, así que la protección tiene tres capas: prefijos de comando amplios, variantes `.env` enumeradas y **paths absolutos derivados del HOME real** para los almacenes sensibles (ejemplo con `/home/user`):
 
 ```json
 {
   "permissions": {
     "deny": [
-      "command(sudo rm -rf /)",
-      "command(rm -rf ~)",
-      "command(sudo rm -rf ~)",
+      "command(rm -rf)",
+      "command(sudo rm -rf)",
       "command(git reset --hard)",
       "command(git clean -fd)",
       "command(git push --force)",
@@ -181,12 +180,38 @@ Para evitar comandos destructivos accidentales o fuga de secretos en sesiones au
       "command(chown -R)",
       "read_file(.env)",
       "write_file(.env)",
+      "read_file(.env.local)",
+      "write_file(.env.local)",
+      "read_file(.env.development)",
+      "write_file(.env.development)",
+      "read_file(.env.dev)",
+      "write_file(.env.dev)",
+      "read_file(.env.production)",
+      "write_file(.env.production)",
+      "read_file(.env.prod)",
+      "write_file(.env.prod)",
+      "read_file(.env.test)",
+      "write_file(.env.test)",
+      "read_file(.env.staging)",
+      "write_file(.env.staging)",
+      "read_file(.env.qa)",
+      "write_file(.env.qa)",
       "read_file(.ssh)",
       "write_file(.ssh)",
       "read_file(.credentials)",
       "write_file(.credentials)",
       "read_file(.aws)",
-      "write_file(.aws)"
+      "write_file(.aws)",
+      "read_file(/home/user/.ssh)",
+      "write_file(/home/user/.ssh)",
+      "read_file(/home/user/.credentials)",
+      "write_file(/home/user/.credentials)",
+      "read_file(/home/user/.aws)",
+      "write_file(/home/user/.aws)",
+      "read_file(/home/user/.config/gh/hosts.yml)",
+      "write_file(/home/user/.config/gh/hosts.yml)",
+      "read_file(/home/user/Library/Keychains)",
+      "write_file(/home/user/Library/Keychains)"
     ],
     "allow": [
       "command(gentle-ai codegraph init)",
@@ -197,7 +222,8 @@ Para evitar comandos destructivos accidentales o fuga de secretos en sesiones au
 }
 ```
 
-- **Bloqueos preventivos (`deny`):** 8 comandos de terminal destructivos o irreversibles y 8 operaciones de lectura/escritura sobre archivos sensibles (`.env`, `.ssh`, `.credentials`, `.aws`).
+- **Bloqueos preventivos (`deny`):** prefijos amplios de comandos destructivos (`rm -rf` con y sin sudo cubre todas las variantes de palabra), las variantes `.env` de las herramientas comunes y denies absolutos del HOME: `.ssh`, `.credentials`, `.aws`, el token de GitHub (`hosts.yml`) y los Keychains de macOS. Deny de lectura implica deny de escritura según el contrato del proveedor; ambos se escriben explícitos.
+- **Complemento dinámico del hook:** los patrones que el esquema estático no puede expresar (`.env.*` a cualquier profundidad, `*.pem`/`*.key`, directorios `secrets/`) los evalúa el guard de `PreToolUse` sobre la ruta concreta de cada tool de archivo/búsqueda: [hooks](03-orchestration-and-hooks.md#pretooluse-condiciones-fail-closed).
 - **Comandos permitidos (`allow`):** Comandos internos indispensables para la navegación de código y la revisión RDD.
 - **Fusión inteligente:** Gentle AI combina estas listas con tu configuración previa sin pisar preferencias de usuario.
 - **Backup previo:** Antes de cualquier escritura en `settings.json`, se genera un respaldo automático recuperable.
