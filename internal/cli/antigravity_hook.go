@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -402,9 +403,50 @@ func antigravityCLIValidWorkspace(workspace string) bool {
 	}
 }
 
+// antigravityCLISensitivePathPattern is the sensitive-path deny set the
+// settings schema cannot express: the vendor file targets support no globs,
+// so these Claude-parity patterns are evaluated on the concrete tool-call
+// path at any depth by the PreToolUse guard.
+var antigravityCLISensitivePathPattern = regexp.MustCompile(`(?:^|/)\.env(?:\.[^/]+)?$|(?:^|/)\.ssh(?:/|$)|(?:^|/)\.credentials(?:/|$)|(?:^|/)\.aws/credentials$|\.(?:pem|key)$|(?:^|/)\.config/gh/hosts\.yml$|(?:^|/)Library/Keychains(?:/|$)|(?:^|/)secrets(?:/|$)`)
+
+// antigravityCLISensitiveToolPath extracts the concrete path targeted by a
+// file or search tool call and reports whether it matches the sensitive
+// deny set. run_command stays out of scope: the permission engine and the
+// settings command rules gate commands.
+func antigravityCLISensitiveToolPath(call *AntigravityCLIToolCall) (string, bool) {
+	if call == nil {
+		return "", false
+	}
+	argument := ""
+	switch call.Name {
+	case "view_file":
+		argument = "AbsolutePath"
+	case "write_to_file", "replace_file_content", "multi_replace_file_content":
+		argument = "TargetFile"
+	case "grep_search":
+		argument = "SearchPath"
+	default:
+		return "", false
+	}
+	path, _ := antigravityCLIRequiredString(call.Args, argument)
+	if path == "" {
+		return "", false
+	}
+	if antigravityCLISensitivePathPattern.MatchString(filepath.ToSlash(path)) {
+		return path, true
+	}
+	return "", false
+}
+
 func handleAntigravityPreToolUse(payload AntigravityCLIHookPayload, _ string, stdout io.Writer) error {
 	if decision, reason, applies := evaluateAntigravityCLIToolCall(payload.ToolCall); applies && decision != "allow" {
 		return writeAntigravityPreToolUseDecision(stdout, decision, reason)
+	}
+	// The settings deny lists cannot express these patterns: the vendor file
+	// targets support no globs. Like the invoke_subagent denials, the guard
+	// returns before the circuit breaker, so denials never write breaker state.
+	if path, blocked := antigravityCLISensitiveToolPath(payload.ToolCall); blocked {
+		return writeAntigravityPreToolUseDecision(stdout, "deny", "Sensitive file path is blocked by the Gentle AI permissions guard: "+path)
 	}
 	if payload.ConversationID == "" || payload.ToolCall == nil || payload.ToolCall.Name == "" {
 		return allowPreToolUse(stdout)

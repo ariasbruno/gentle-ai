@@ -633,3 +633,63 @@ func TestAntigravityHookPreToolUseInvokeSubagentValidation(t *testing.T) {
 		})
 	}
 }
+
+// TestAntigravityPreToolUseDeniesSensitiveFilePaths pins the dynamic guard
+// for the sensitive-path deny set the settings schema cannot express: the
+// vendor file targets support no globs, so the Claude-parity patterns are
+// evaluated on the concrete tool-call path at any depth, for the file and
+// search tools only. HOME is isolated so circuit-breaker records from the
+// allow cases never leak to the real home.
+func TestAntigravityPreToolUseDeniesSensitiveFilePaths(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	for _, test := range []struct {
+		name     string
+		tool     string
+		args     map[string]any
+		wantDeny bool
+	}{
+		{"view env", "view_file", map[string]any{"AbsolutePath": "/project/.env"}, true},
+		{"view nested env variant", "view_file", map[string]any{"AbsolutePath": "/project/backend/.env.production"}, true},
+		{"view relative env", "view_file", map[string]any{"AbsolutePath": ".env"}, true},
+		{"view ssh key", "view_file", map[string]any{"AbsolutePath": "/home/u/.ssh/id_ed25519"}, true},
+		{"view credentials", "view_file", map[string]any{"AbsolutePath": "/home/u/.credentials/token"}, true},
+		{"view aws credentials", "view_file", map[string]any{"AbsolutePath": "/home/u/.aws/credentials"}, true},
+		{"view pem", "view_file", map[string]any{"AbsolutePath": "/project/certs/server.pem"}, true},
+		{"view key", "view_file", map[string]any{"AbsolutePath": "/project/keys/tls.key"}, true},
+		{"view gh hosts", "view_file", map[string]any{"AbsolutePath": "/home/u/.config/gh/hosts.yml"}, true},
+		{"view keychain", "view_file", map[string]any{"AbsolutePath": "/Users/u/Library/Keychains/login.keychain-db"}, true},
+		{"view secrets dir file", "view_file", map[string]any{"AbsolutePath": "/project/secrets/token"}, true},
+		{"write env variant", "write_to_file", map[string]any{"TargetFile": "/project/.env.local"}, true},
+		{"replace env", "replace_file_content", map[string]any{"TargetFile": "/project/app/.env"}, true},
+		{"multi replace pem", "multi_replace_file_content", map[string]any{"TargetFile": "/project/cert.pem"}, true},
+		{"grep ssh dir", "grep_search", map[string]any{"SearchPath": "/home/u/.ssh"}, true},
+		{"view ordinary file", "view_file", map[string]any{"AbsolutePath": "/project/src/main.go"}, false},
+		{"view envish name", "view_file", map[string]any{"AbsolutePath": "/project/ENV.txt"}, false},
+		{"view pemx", "view_file", map[string]any{"AbsolutePath": "/project/server.pemx"}, false},
+		{"view secretsmith", "view_file", map[string]any{"AbsolutePath": "/project/secretsmith.go"}, false},
+		{"command unaffected", "run_command", map[string]any{"CommandLine": "cat .env"}, false},
+		{"file tool without path", "view_file", map[string]any{}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			payload := fmtAntigravityToolCallPayload("conv-sensitive-paths", test.tool, test.args, 1)
+			var stdout bytes.Buffer
+			if err := RunAntigravityCLIHook("PreToolUse", strings.NewReader(payload), &stdout, ""); err != nil {
+				t.Fatalf("RunAntigravityCLIHook() error = %v", err)
+			}
+			var output AntigravityCLIHookOutput
+			if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
+				t.Fatalf("decode hook output %q: %v", stdout.String(), err)
+			}
+			if test.wantDeny {
+				if output.Decision != "deny" {
+					t.Fatalf("decision = %q, want deny (output %q)", output.Decision, stdout.String())
+				}
+				if !strings.Contains(output.Reason, "Sensitive file path") {
+					t.Fatalf("reason = %q, want the sensitive-path guard explanation", output.Reason)
+				}
+			} else if output.Decision == "deny" {
+				t.Fatalf("decision = deny for an ordinary call (output %q)", stdout.String())
+			}
+		})
+	}
+}
