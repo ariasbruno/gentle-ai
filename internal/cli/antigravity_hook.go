@@ -411,8 +411,8 @@ var antigravityCLISensitivePathPattern = regexp.MustCompile(`(?:^|/)\.env(?:\.[^
 
 // antigravityCLISensitiveToolPath extracts the concrete path targeted by a
 // file or search tool call and reports whether it matches the sensitive
-// deny set. run_command stays out of scope: the permission engine and the
-// settings command rules gate commands.
+// deny set. run_command is handled by the ask layer below; the permission
+// engine and the settings command rules gate the rest of the commands.
 func antigravityCLISensitiveToolPath(call *AntigravityCLIToolCall) (string, bool) {
 	if call == nil {
 		return "", false
@@ -438,6 +438,34 @@ func antigravityCLISensitiveToolPath(call *AntigravityCLIToolCall) (string, bool
 	return "", false
 }
 
+// antigravityCLISensitiveCommandPattern is the run_command variant of the
+// sensitive set: command lines are tokenized on whitespace and each token
+// is matched like a path, with .aws broadened from the credentials file to
+// the whole directory. A match asks for approval instead of denying,
+// because a sensitive-looking substring inside a shell string (a commit
+// message, a documentation grep) is a plausible false positive the operator
+// can dismiss, and ask respects the user's Always Allow choices.
+var antigravityCLISensitiveCommandPattern = regexp.MustCompile(`(?:^|/)\.env(?:\.[^/]+)?$|(?:^|/)\.ssh(?:/|$)|(?:^|/)\.credentials(?:/|$)|(?:^|/)\.aws(?:/|$)|\.(?:pem|key)$|(?:^|/)\.config/gh/hosts\.yml$|(?:^|/)Library/Keychains(?:/|$)|(?:^|/)secrets(?:/|$)`)
+
+// antigravityCLISensitiveCommandLine reports whether a run_command line
+// references a sensitive path. The line is split on whitespace and each
+// token is matched like a file path; a match surfaces an ask decision.
+func antigravityCLISensitiveCommandLine(call *AntigravityCLIToolCall) (string, bool) {
+	if call == nil || call.Name != "run_command" {
+		return "", false
+	}
+	line, _ := antigravityCLIRequiredString(call.Args, "CommandLine")
+	if line == "" {
+		return "", false
+	}
+	for _, token := range strings.Fields(line) {
+		if antigravityCLISensitiveCommandPattern.MatchString(filepath.ToSlash(token)) {
+			return token, true
+		}
+	}
+	return "", false
+}
+
 func handleAntigravityPreToolUse(payload AntigravityCLIHookPayload, _ string, stdout io.Writer) error {
 	if decision, reason, applies := evaluateAntigravityCLIToolCall(payload.ToolCall); applies && decision != "allow" {
 		return writeAntigravityPreToolUseDecision(stdout, decision, reason)
@@ -447,6 +475,12 @@ func handleAntigravityPreToolUse(payload AntigravityCLIHookPayload, _ string, st
 	// returns before the circuit breaker, so denials never write breaker state.
 	if path, blocked := antigravityCLISensitiveToolPath(payload.ToolCall); blocked {
 		return writeAntigravityPreToolUseDecision(stdout, "deny", "Sensitive file path is blocked by the Gentle AI permissions guard: "+path)
+	}
+	// Command lines mentioning sensitive paths ask instead of denying: a
+	// sensitive-looking substring in a shell string is a plausible false
+	// positive, and ask respects the user's Always Allow choices.
+	if token, sensitive := antigravityCLISensitiveCommandLine(payload.ToolCall); sensitive {
+		return writeAntigravityPreToolUseDecision(stdout, "ask", "Sensitive file path in the command line requires your approval: "+token)
 	}
 	if payload.ConversationID == "" || payload.ToolCall == nil || payload.ToolCall.Name == "" {
 		return allowPreToolUse(stdout)

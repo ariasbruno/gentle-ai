@@ -106,6 +106,7 @@ El comando registrado llama directamente `gentle-ai hook run --agent=antigravity
 - `Workspace`, si aparece, debe ser `inherit`, `branch` o `share`.
 - Una herramienta distinta no recibe esa validación especial.
 - Las tools de archivo y búsqueda (`view_file`, `write_to_file`, `replace_file_content`, `multi_replace_file_content`, `grep_search`) reciben el guard de rutas sensibles: los patrones que el `settings.json` no puede expresar (el esquema del proveedor no tiene globs de archivo) se evalúan sobre la ruta concreta a cualquier profundidad y devuelven `deny`.
+- Los comandos (`run_command`) reciben una capa análoga con decisión `ask`: la línea se tokeniza por espacios y cada token se evalúa contra el mismo conjunto ampliado (`.aws` como directorio completo); un match pide tu aprobación en vez de denegar — un substring sensible en un string de shell puede ser un falso positivo, y `ask` respeta tus elecciones de Always Allow.
 
 [`RunAntigravityCLIHook`](../../internal/cli/antigravity_hook.go#L88-L108), [`validateAntigravityCLIInvokeSubagentArgs`](../../internal/cli/antigravity_hook.go#L344-L383), [`antigravityCLIValidWorkspace`](../../internal/cli/antigravity_hook.go#L394-L401).
 
@@ -173,6 +174,7 @@ Los hooks de Gentle AI operan con un enfoque de seguridad estricto (*fail-closed
 | Carga malformada o inválida en `PreToolUse` | `deny` | Bloquea la llamada a la herramienta para evitar fallos inesperados |
 | Delegación a subagente sin campos requeridos | `deny` | Exige `TypeName`, `Role` y `Prompt` obligatorios |
 | Ruta sensible en tools de archivo/búsqueda | `deny` | Guard sobre la ruta concreta: `.env` y variantes, `.ssh`, `.credentials`, `.aws/credentials`, `.pem`/`.key`, `hosts.yml`, Keychains, `secrets/` a cualquier profundidad |
+| Comando con ruta sensible | `ask` | La línea de `run_command` se tokeniza y cada token se evalúa contra el conjunto ampliado (`.aws` completo); pide aprobación y respeta Always Allow |
 | 3 llamadas consecutivas idénticas (Circuit Breaker) | `deny` | Interrumpe bucles infinitos repetitivos del modelo |
 | Ejecución normal de herramientas | `{}` o `allow` | Permite la ejecución de la herramienta por parte de `agy` |
 | Eventos posteriores (`PostToolUse`, `PostInvocation`) | `{}` | No bloqueantes, no interfieren con la respuesta del agente |

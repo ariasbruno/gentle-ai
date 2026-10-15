@@ -667,7 +667,7 @@ func TestAntigravityPreToolUseDeniesSensitiveFilePaths(t *testing.T) {
 		{"view envish name", "view_file", map[string]any{"AbsolutePath": "/project/ENV.txt"}, false},
 		{"view pemx", "view_file", map[string]any{"AbsolutePath": "/project/server.pemx"}, false},
 		{"view secretsmith", "view_file", map[string]any{"AbsolutePath": "/project/secretsmith.go"}, false},
-		{"command unaffected", "run_command", map[string]any{"CommandLine": "cat .env"}, false},
+		{"command asks instead of denying", "run_command", map[string]any{"CommandLine": "cat .env"}, false}, // the ask layer is tested separately
 		{"file tool without path", "view_file", map[string]any{}, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -689,6 +689,56 @@ func TestAntigravityPreToolUseDeniesSensitiveFilePaths(t *testing.T) {
 				}
 			} else if output.Decision == "deny" {
 				t.Fatalf("decision = deny for an ordinary call (output %q)", stdout.String())
+			}
+		})
+	}
+}
+
+// TestAntigravityPreToolUseAsksForSensitiveCommandLines pins the run_command
+// layer of the guard: shell command lines referencing sensitive paths
+// surface an ask decision (an approval prompt) instead of a hard deny,
+// because sensitive-looking substrings inside shell strings (a commit
+// message, a documentation grep) are plausible false positives the operator
+// can dismiss, and ask respects the user's Always Allow choices. File tools
+// keep their hard deny.
+func TestAntigravityPreToolUseAsksForSensitiveCommandLines(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	for _, test := range []struct {
+		name    string
+		command string
+		wantAsk bool
+	}{
+		{"cat env", "cat .env", true},
+		{"grep ssh key", "grep token ~/.ssh/id_rsa", true},
+		{"tar whole aws dir", "tar czf backup.tar.gz ~/.aws", true},
+		{"pem path", "openssl x509 -in certs/server.pem -text", true},
+		{"quoted env mention", "git commit -m \"fix .env example\"", true}, // accepted false positive
+		{"hosts.yml", "cat ~/.config/gh/hosts.yml", true},
+		{"keychain", "security dump-keychain ~/Library/Keychains/login.keychain-db", true},
+		{"ordinary command", "ls -la", false},
+		{"pemx not pem", "cat report.pemx", false},
+		{"build command", "go build ./...", false},
+		{"empty command", "", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			payload := fmtAntigravityToolCallPayload("conv-sensitive-commands", "run_command", map[string]any{"CommandLine": test.command}, 1)
+			var stdout bytes.Buffer
+			if err := RunAntigravityCLIHook("PreToolUse", strings.NewReader(payload), &stdout, ""); err != nil {
+				t.Fatalf("RunAntigravityCLIHook() error = %v", err)
+			}
+			var output AntigravityCLIHookOutput
+			if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
+				t.Fatalf("decode hook output %q: %v", stdout.String(), err)
+			}
+			if test.wantAsk {
+				if output.Decision != "ask" {
+					t.Fatalf("decision = %q, want ask (output %q)", output.Decision, stdout.String())
+				}
+				if !strings.Contains(output.Reason, "Sensitive") {
+					t.Fatalf("reason = %q, want the sensitive-path guard explanation", output.Reason)
+				}
+			} else if output.Decision == "ask" || output.Decision == "deny" {
+				t.Fatalf("decision = %q for an ordinary command (output %q)", output.Decision, stdout.String())
 			}
 		})
 	}
