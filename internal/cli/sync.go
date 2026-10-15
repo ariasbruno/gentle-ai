@@ -192,7 +192,7 @@ func ParseSyncFlags(args []string) (SyncFlags, error) {
 	fs.BoolVar(&opts.StrictTDD, "strict-tdd", false, "retired: ODD uses applicable test-first development by default")
 	fs.BoolVar(&opts.IncludePermissions, "include-permissions", false, "include permissions component in sync")
 	fs.BoolVar(&opts.IncludeTheme, "include-theme", false, "include theme component in sync")
-	fs.StringVar(&opts.Scope, "scope", "", "sync scope: global (default) or workspace — env: GENTLE_AI_INSTALL_SCOPE")
+	fs.StringVar(&opts.Scope, "scope", "", "sync scope: global (default) or workspace — env: GENTLE_AI_INSTALL_SCOPE; Antigravity CLI rejects linked plugin paths below the selected home/workspace root")
 	fs.StringVar(&opts.OpenCodeBackgroundSubagents, "opencode-background-subagents", "", "--opencode-background-subagents=auto|on|off; env: GENTLE_AI_OPENCODE_BACKGROUND_SUBAGENTS; eligible versions use a managed launcher")
 	fs.StringVar(&opts.PiBackgroundSubagents, "pi-background-subagents", "", "--pi-background-subagents=auto|on|off; env: GENTLE_AI_PI_BACKGROUND_SUBAGENTS; the resolved policy is projected for gentle-pi")
 	fs.BoolVar(&opts.DryRun, "dry-run", false, "preview plan without executing")
@@ -251,6 +251,7 @@ FLAGS
   --include-theme                    Include theme component
   --scope global|workspace           Sync scope (env: GENTLE_AI_INSTALL_SCOPE)
                                      workspace refreshes only workspace-scoped files and never mutates global state, telemetry, backups, plugins, or routing guidance; components managed only globally are skipped
+                                     Antigravity CLI rejects linked plugin paths below the selected home/workspace root
   --opencode-background-subagents=auto|on|off
                                      Resolve OpenCode capability and manage a launcher when eligible; env: GENTLE_AI_OPENCODE_BACKGROUND_SUBAGENTS
                                      auto inherits managed on/off, unsupported/unknown stays foreground, off removes only owned launchers
@@ -2117,9 +2118,14 @@ func runSyncWithSelectionScope(homeDir string, selection model.Selection, scope 
 	}
 	rt.piBackgroundProjection = piBackground.projectionPlan
 
+	pluginBefore, err := antigravitySyncReportPaths(homeDir, rt.workspaceDir, scope, agentIDs)
+	if err != nil {
+		return result, fmt.Errorf("enumerate pre-sync Antigravity plugin files: %w", err)
+	}
 	stagePlan := syncStagePlan(rt)
 	result.Plan = stagePlan
-	before, err := snapshotSyncFiles(rt.managedPaths)
+	reportPaths := append(append([]string(nil), rt.managedPaths...), pluginBefore...)
+	before, err := snapshotSyncFiles(reportPaths)
 	if err != nil {
 		return result, err
 	}
@@ -2147,7 +2153,12 @@ func runSyncWithSelectionScope(homeDir string, selection model.Selection, scope 
 	// Capture how many managed assets were actually changed.
 	// Deduplicate paths — multiple components may touch the same file
 	// (e.g. Engram and Context7 both merge into settings.json).
-	result.ChangedFiles, err = compareChangedSyncFiles(rt.changedFiles, before)
+	pluginAfter, err := antigravitySyncReportPaths(homeDir, rt.workspaceDir, scope, agentIDs)
+	if err != nil {
+		return result, rollbackPostApplyError(orchestrator, result.Execution, err)
+	}
+	candidates := append(append(append([]string(nil), rt.changedFiles...), pluginBefore...), pluginAfter...)
+	result.ChangedFiles, err = compareChangedSyncFiles(candidates, before)
 	if err != nil {
 		return result, rollbackPostApplyError(orchestrator, result.Execution, err)
 	}

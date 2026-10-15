@@ -232,6 +232,16 @@ func TestRunArgsSyncUnknownFlagReturnsError(t *testing.T) {
 	}
 }
 
+func TestRunArgsSyncHelpExplainsAntigravityLinkedPathRefusal(t *testing.T) {
+	var buf bytes.Buffer
+	if err := RunArgs([]string{"sync", "--help"}, &buf); err != nil {
+		t.Fatalf("sync help returned error: %v", err)
+	}
+	if !strings.Contains(buf.String(), "Antigravity CLI rejects linked plugin paths below the selected home/workspace root") {
+		t.Fatalf("public sync help omits linked-path refusal: %s", buf.String())
+	}
+}
+
 func TestRunArgsSyncHelpIncludesBackgroundFlag(t *testing.T) {
 	var buf bytes.Buffer
 	if err := RunArgs([]string{"sync", "--help"}, &buf); err != nil {
