@@ -3,8 +3,10 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -124,8 +126,16 @@ func TestAntigravityHookStopOutcomes(t *testing.T) {
 				if err := RunAntigravityCLIHook("Stop", strings.NewReader(stopPayload), &stdout, repo); err != nil {
 					t.Fatalf("second Stop error: %v", err)
 				}
-				if raw := strings.TrimSpace(stdout.String()); raw != "{}" {
-					t.Fatalf("second Stop output = %q, want neutral {}", raw)
+				// The consumed-check: the same unreviewed candidate keeps blocking
+				// until the review is consumed, the baseline moves, or consent is
+				// explicitly refused. The second Stop also emits a reminder.
+				var secondOut AntigravityCLIHookOutput
+				raw := strings.TrimSpace(stdout.String())
+				if err := json.Unmarshal([]byte(raw), &secondOut); err != nil {
+					t.Fatalf("decode second Stop output %q: %v", raw, err)
+				}
+				if secondOut.Decision != "continue" {
+					t.Fatalf("second Stop output = %q, want continue (consumed-check keeps blocking the unreviewed candidate)", raw)
 				}
 			} else if !bytes.Equal(after, before) {
 				t.Fatalf("neutral Stop changed reminder state:\nbefore=%s\nafter=%s", before, after)
@@ -145,6 +155,33 @@ func fmtAntigravityHookPayload(convID string, wsPaths []string, invNum int, term
 	}
 	b, _ := json.Marshal(m)
 	return string(b)
+}
+
+// TestAntigravityPostToolUseRecordsMutations pins the functional PostToolUse:
+// completed write_to_file calls record a mutation in the per-conversation
+// ledger, mirroring Gentle Shell's tool_result handler.
+func TestAntigravityPostToolUseRecordsMutations(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	payload := `{"conversationId":"conv-mut-test","toolCall":{"name":"write_to_file","args":{"TargetFile":"/project/src/main.go"}},"stepIdx":5,"error":""}`
+	var stdout bytes.Buffer
+	if err := RunAntigravityCLIHook("PostToolUse", strings.NewReader(payload), &stdout, home); err != nil {
+		t.Fatalf("RunAntigravityCLIHook: %v", err)
+	}
+	if strings.TrimSpace(stdout.String()) != "{}" {
+		t.Fatalf("PostToolUse output = %q, want contract-mandated {}", stdout.String())
+	}
+	ledgerPath := antigravityCLIMutationLedgerPath(home, "conv-mut-test")
+	data, err := os.ReadFile(ledgerPath)
+	if err != nil {
+		t.Fatalf("mutation ledger not created: %v", err)
+	}
+	if !strings.Contains(string(data), `"path":"/project/src/main.go"`) {
+		t.Fatalf("ledger entry missing path: %s", data)
+	}
+	if !strings.Contains(string(data), `"tool_name":"write_to_file"`) {
+		t.Fatalf("ledger entry missing tool name: %s", data)
+	}
 }
 
 func fmtAntigravityStopPayload(convID string, wsPaths []string, invNum int, termReason string, fullyIdle bool) string {
@@ -694,7 +731,89 @@ func TestAntigravityPreToolUseDeniesSensitiveFilePaths(t *testing.T) {
 	}
 }
 
-// TestAntigravityPreToolUseAsksForSensitiveCommandLines pins the run_command
+// TestAntigravityStopBlocksUntilConsumed pins the consumed-check: after the
+// first reminder, the Stop keeps blocking the same unreviewed candidate
+// instead of de-silencing on the second attempt. Only a target that
+// predates the session (baseline match) or an explicit consent refusal
+// (stale marker) may pass.
+func TestAntigravityStopBlocksUntilConsumed(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the review fixture uses POSIX git")
+	}
+	for _, tc := range []struct {
+		name      string
+		stopCount int
+		wantBlock int // how many stops should produce decision continue
+	}{
+		{"first stop blocks", 1, 1},
+		{"second stop blocks too", 2, 2},
+		{"third stop still blocks", 3, 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reviewModeHome(t)
+			repo := initReviewCLIRepo(t)
+			if err := os.WriteFile(filepath.Join(repo, "tracked.txt"), []byte("change\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			blocked := 0
+			convID := fmt.Sprintf("conv-stop-consumed-%d", 0)
+			for i := 0; i < tc.stopCount; i++ {
+				payload := fmtAntigravityStopPayload(convID, []string{repo}, i, "model_stop", true)
+				var stdout bytes.Buffer
+				if err := RunAntigravityCLIHook("Stop", strings.NewReader(payload), &stdout, repo); err != nil {
+					t.Fatalf("stop %d: %v", i+1, err)
+				}
+				if strings.Contains(stdout.String(), "continue") {
+					blocked++
+				}
+			}
+			if blocked < tc.wantBlock {
+				t.Fatalf("blocked %d stops, want at least %d (dedup de-silenced the unreviewed candidate)", blocked, tc.wantBlock)
+			}
+		})
+	}
+}
+
+// TestAntigravityStopSurfacesPreflightFailure pins the silence fix: when the
+// status pipeline itself fails, the Stop emits a continue naming the error
+// instead of a mute {} that lets the model close over potentially unreviewed
+// changes without any signal.
+func TestAntigravityStopSurfacesPreflightFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the review fixture uses POSIX git")
+	}
+	reviewModeHome(t)
+	repo := initReviewCLIRepo(t)
+	if err := os.WriteFile(filepath.Join(repo, "tracked.txt"), []byte("change\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Break the review status pipeline by making the review-mode file
+	// unreadable so readGlobalRDDMode fails.
+	modeDir := filepath.Join(os.Getenv("HOME"), ".gentle-ai")
+	if err := os.MkdirAll(modeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	modeFile := filepath.Join(modeDir, "review-mode")
+	if err := os.WriteFile(modeFile, []byte("corrupt"), 0o000); err != nil {
+		t.Skipf("cannot write review mode file: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(modeFile, 0o644) })
+
+	payload := fmtAntigravityStopPayload("conv-stop-silence-test", []string{repo}, 0, "model_stop", true)
+	var stdout bytes.Buffer
+	if err := RunAntigravityCLIHook("Stop", strings.NewReader(payload), &stdout, repo); err != nil {
+		t.Fatalf("RunAntigravityCLIHook: %v", err)
+	}
+	out := stdout.String()
+	if strings.Contains(out, "could not resolve") || strings.Contains(out, "review status") {
+		return // surfaced the pipeline failure
+	}
+	if strings.TrimSpace(out) == "{}" {
+		t.Fatalf("Stop emitted a mute {} for a pipeline failure; want a continue naming the error: %q", out)
+	}
+	t.Fatalf("unexpected output: %q", out)
+}
+
 // layer of the guard: shell command lines referencing sensitive paths
 // surface an ask decision (an approval prompt) instead of a hard deny,
 // because sensitive-looking substrings inside shell strings (a commit

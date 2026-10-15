@@ -134,8 +134,60 @@ func RunAntigravityCLIHook(event string, stdin io.Reader, stdout io.Writer, cwdO
 	}
 }
 
-// PostToolUse and PostInvocation are transport-only in the portable integration.
-func handleAntigravityPostToolUse(_ AntigravityCLIHookPayload, _ string, stdout io.Writer) error {
+// antigravityCLIMutationRecord is one observed file write in the per-conversation
+// mutation ledger. The ledger mirrors what Gentle Shell's tool_result handler
+// records: every write_to_file/replace_file_content/multi_replace_file_content
+// that completed without error feeds the review evidence even when the
+// status pipeline itself is unavailable.
+type antigravityCLIMutationRecord struct {
+	ToolName  string `json:"tool_name"`
+	Path      string `json:"path"`
+	Timestamp int64  `json:"timestamp"`
+}
+
+// antigravityCLIMutationLedgerPath returns the per-conversation mutation
+// ledger file, co-located with the circuit-breaker records.
+func antigravityCLIMutationLedgerPath(home, conversationID string) string {
+	sum := sha256.Sum256([]byte(conversationID))
+	return filepath.Join(home, ".gentle-ai", "antigravity-mutations", "v1", hex.EncodeToString(sum[:16])+".jsonl")
+}
+
+// recordAntigravityCLIMutation appends one write observation to the ledger.
+// The append is best-effort: a ledger failure never blocks the tool result.
+func recordAntigravityCLIMutation(home, conversationID, toolName, path string) {
+	if conversationID == "" || path == "" {
+		return
+	}
+	record := antigravityCLIMutationRecord{ToolName: toolName, Path: path, Timestamp: time.Now().Unix()}
+	encoded, err := json.Marshal(record)
+	if err != nil {
+		return
+	}
+	ledgerPath := antigravityCLIMutationLedgerPath(home, conversationID)
+	if err := os.MkdirAll(filepath.Dir(ledgerPath), 0o755); err != nil {
+		return
+	}
+	file, err := os.OpenFile(ledgerPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+	_, _ = file.Write(append(encoded, '\n'))
+}
+
+// PostToolUse records completed file writes in the per-conversation mutation
+// ledger (the Gentle Shell tool_result equivalent) and returns the
+// contract-mandated {} — PostToolUse has no decision vocabulary.
+func handleAntigravityPostToolUse(payload AntigravityCLIHookPayload, _ string, stdout io.Writer) error {
+	if payload.ToolCall != nil && payload.Error == "" {
+		switch payload.ToolCall.Name {
+		case "write_to_file", "replace_file_content", "multi_replace_file_content":
+			if path, ok := antigravityCLIRequiredString(payload.ToolCall.Args, "TargetFile"); ok {
+				home, _ := os.UserHomeDir()
+				recordAntigravityCLIMutation(home, payload.ConversationID, payload.ToolCall.Name, path)
+			}
+		}
+	}
 	_, _ = fmt.Fprintln(stdout, "{}")
 	return nil
 }
@@ -214,7 +266,20 @@ func handleAntigravityStop(payload AntigravityCLIHookPayload, workspace string, 
 
 	ctx := context.Background()
 	root, targetIdentity, status, ok, err := antigravityResolveTargetIdentity(ctx, workspace)
-	if err != nil || !ok {
+	// The pipeline failure stays visible: the model sees why the preflight
+	// could not resolve and can surface the problem instead of closing
+	// silently over potentially unreviewed changes. The !ok && err == nil
+	// cases (no workspace, no repository, RDD off) remain silent by design.
+	if err != nil {
+		out := AntigravityCLIHookOutput{
+			Decision: "continue",
+			Reason:   "Receipt-Driven Development: the review preflight could not resolve the review state. Run gentle-ai review status to see the problem before completing.",
+		}
+		enc, _ := json.Marshal(out)
+		_, _ = fmt.Fprintln(stdout, string(enc))
+		return nil
+	}
+	if !ok {
 		_, _ = fmt.Fprintln(stdout, "{}")
 		return nil
 	}
@@ -231,6 +296,13 @@ func handleAntigravityStop(payload AntigravityCLIHookPayload, workspace string, 
 		return nil
 	}
 
+	// The reminder record de-silences only when the candidate predates the
+	// session (baseline match) or the operator explicitly refused consent
+	// (stale marker). The same-target reminder record no longer silences:
+	// a candidate that still reports Action=start has not been reviewed, so
+	// the Stop keeps blocking until the review is consumed and the status
+	// moves past start. This is the consumed-check: the model cannot close
+	// over an unreviewed candidate by ignoring the first reminder.
 	if payload.ConversationID != "" && reviewStopHookSessionIDPattern.MatchString(payload.ConversationID) {
 		home, herr := os.UserHomeDir()
 		if herr != nil {
@@ -242,8 +314,7 @@ func handleAntigravityStop(payload AntigravityCLIHookPayload, workspace string, 
 			_, _ = fmt.Fprintln(stdout, "{}")
 			return nil
 		}
-		if hadRecord && ((record.BaselineTargetIdentity != "" && record.BaselineTargetIdentity == targetIdentity) ||
-			(record.TargetIdentity != "" && record.TargetIdentity == targetIdentity)) {
+		if hadRecord && record.BaselineTargetIdentity != "" && record.BaselineTargetIdentity == targetIdentity {
 			_, _ = fmt.Fprintln(stdout, "{}")
 			return nil
 		}
