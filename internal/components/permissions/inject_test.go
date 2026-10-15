@@ -44,7 +44,7 @@ func TestSelectedPermissionsRefuseNestedCommentsAndLockedMode(t *testing.T) {
 			if err := os.Chmod(path, tc.mode); err != nil {
 				t.Fatal(err)
 			}
-			_, err := InjectAtPath(path, opencode.NewAdapter())
+			_, err := InjectAtPath(path, "", opencode.NewAdapter())
 			if err == nil || !strings.Contains(err.Error(), "refuse") {
 				t.Fatalf("want actionable refusal, got %v", err)
 			}
@@ -112,7 +112,7 @@ func TestSelectedPermissionsRefuseSymlink(t *testing.T) {
 	if err := os.Symlink(target, selected); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
-	if _, err := InjectAtPath(selected, opencodeAdapter()); err == nil || !strings.Contains(err.Error(), "select a regular settings file") {
+	if _, err := InjectAtPath(selected, "", opencodeAdapter()); err == nil || !strings.Contains(err.Error(), "select a regular settings file") {
 		t.Fatalf("InjectAtPath() error = %v; want OpenCode symlink refusal", err)
 	}
 }
@@ -122,7 +122,7 @@ func TestSelectedPermissionsPreservePrivateMode(t *testing.T) {
 	if err := os.WriteFile(path, []byte("{\"permission\":{}}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := InjectAtPath(path, opencode.NewAdapter()); err != nil {
+	if _, err := InjectAtPath(path, "", opencode.NewAdapter()); err != nil {
 		t.Fatal(err)
 	}
 	if runtime.GOOS == "windows" {
@@ -145,7 +145,7 @@ func TestSelectedPermissionsNeverWidenLockedMode(t *testing.T) {
 	if err := os.Chmod(path, 0); err != nil {
 		t.Fatal(err)
 	}
-	_, _ = InjectAtPath(path, opencode.NewAdapter()) // Refusal is safe when unreadable.
+	_, _ = InjectAtPath(path, "", opencode.NewAdapter()) // Refusal is safe when unreadable.
 	info, err := os.Stat(path)
 	if err != nil {
 		t.Fatal(err)
@@ -741,9 +741,56 @@ func TestInjectCursorSkipsPermissions(t *testing.T) {
 }
 
 func TestInjectAntigravitySkipsPermissions(t *testing.T) {
-	overlay := agentOverlay(model.AgentAntigravity)
+	overlay := agentOverlay(model.AgentAntigravity, "")
 	if overlay != nil {
 		t.Errorf("expected nil overlay for Antigravity, got %s", overlay)
+	}
+}
+
+// TestInjectAntigravityCLIDeniesAbsoluteSensitiveHomePaths pins the
+// home-absolute deny rules: the vendor schema resolves bare file targets
+// against workspace roots only, so the user's real .ssh/.credentials/.aws,
+// the GitHub hosts token file and the macOS Keychains are protected only
+// when the overlay names them by absolute path derived from the injected
+// home directory.
+func TestInjectAntigravityCLIDeniesAbsoluteSensitiveHomePaths(t *testing.T) {
+	home := t.TempDir()
+	adapter := antigravitycli.NewAdapter()
+	if _, err := Inject(home, adapter); err != nil {
+		t.Fatalf("Inject() error = %v", err)
+	}
+	raw, err := os.ReadFile(adapter.SettingsPath(home))
+	if err != nil {
+		t.Fatalf("read settings file: %v", err)
+	}
+	var settings struct {
+		Permissions struct {
+			Deny []string `json:"deny"`
+		} `json:"permissions"`
+	}
+	if err := json.Unmarshal(raw, &settings); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	deniedSet := make(map[string]bool, len(settings.Permissions.Deny))
+	for _, rule := range settings.Permissions.Deny {
+		deniedSet[rule] = true
+	}
+	slashHome := strings.TrimSuffix(filepath.ToSlash(home), "/")
+	for _, target := range []string{
+		slashHome + "/.ssh",
+		slashHome + "/.credentials",
+		slashHome + "/.aws",
+		slashHome + "/.config/gh/hosts.yml",
+		slashHome + "/Library/Keychains",
+	} {
+		t.Run(target, func(t *testing.T) {
+			if !deniedSet["read_file("+target+")"] {
+				t.Errorf("deny missing read_file(%s); got %v", target, settings.Permissions.Deny)
+			}
+			if !deniedSet["write_file("+target+")"] {
+				t.Errorf("deny missing write_file(%s); got %v", target, settings.Permissions.Deny)
+			}
+		})
 	}
 }
 
@@ -1166,9 +1213,8 @@ func TestInjectAntigravityCLIPreservesUserSettingsAndInjectsDeniedResources(t *t
 	}
 
 	requiredDenies := []string{
-		"command(sudo rm -rf /)",
-		"command(rm -rf ~)",
-		"command(sudo rm -rf ~)",
+		"command(rm -rf)",
+		"command(sudo rm -rf)",
 		"command(git reset --hard)",
 		"command(git clean -fd)",
 		"command(git push --force)",
@@ -1176,6 +1222,22 @@ func TestInjectAntigravityCLIPreservesUserSettingsAndInjectsDeniedResources(t *t
 		"command(chown -R)",
 		"read_file(.env)",
 		"write_file(.env)",
+		"read_file(.env.local)",
+		"write_file(.env.local)",
+		"read_file(.env.development)",
+		"write_file(.env.development)",
+		"read_file(.env.dev)",
+		"write_file(.env.dev)",
+		"read_file(.env.production)",
+		"write_file(.env.production)",
+		"read_file(.env.prod)",
+		"write_file(.env.prod)",
+		"read_file(.env.test)",
+		"write_file(.env.test)",
+		"read_file(.env.staging)",
+		"write_file(.env.staging)",
+		"read_file(.env.qa)",
+		"write_file(.env.qa)",
 		"read_file(.ssh)",
 		"write_file(.ssh)",
 		"read_file(.credentials)",

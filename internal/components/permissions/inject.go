@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/filemerge"
@@ -20,7 +22,7 @@ type InjectionResult struct {
 // permission injection target. Codex has no target: gentle-ai relies on Codex's
 // built-in default permissions and does not write its permissions config at all.
 func TargetPath(homeDir string, adapter agents.Adapter) string {
-	if agentOverlay(adapter.Agent()) == nil {
+	if agentOverlay(adapter.Agent(), homeDir) == nil {
 		return ""
 	}
 	return adapter.SettingsPath(homeDir)
@@ -83,45 +85,72 @@ var vscodeCopilotOverlayJSON = []byte(`{
 }
 `)
 
-// antigravityCLIOverlayJSON sets hard deny rules for Antigravity CLI in
+// antigravityCLIEnvVariants lists the common .env suffixes: the vendor file
+// targets support no globs, so .env.* cannot be expressed as a single rule.
+var antigravityCLIEnvVariants = []string{".env.local", ".env.development", ".env.dev", ".env.production", ".env.prod", ".env.test", ".env.staging", ".env.qa"}
+
+// antigravityCLIOverlayForHome builds the Antigravity CLI permission overlay
+// for a concrete home directory, written to
 // ~/.gemini/antigravity-cli/settings.json. The Antigravity CLI permission
 // schema defines three lists — deny, ask, allow — whose entries are
 // action(target) resources. command targets match word-by-word command
-// prefixes (a trailing "*" would be a literal character, never a wildcard);
-// file targets are absolute or workspace-relative paths, and a directory
-// target covers its whole subtree.
-var antigravityCLIOverlayJSON = []byte(`{
-  "permissions": {
-    "deny": [
-      "command(sudo rm -rf /)",
-      "command(rm -rf ~)",
-      "command(sudo rm -rf ~)",
-      "command(git reset --hard)",
-      "command(git clean -fd)",
-      "command(git push --force)",
-      "command(chmod -R 777)",
-      "command(chown -R)",
-      "read_file(.env)",
-      "write_file(.env)",
-      "read_file(.ssh)",
-      "write_file(.ssh)",
-      "read_file(.credentials)",
-      "write_file(.credentials)",
-      "read_file(.aws)",
-      "write_file(.aws)"
-    ],
-    "allow": [
-      "command(gentle-ai codegraph init)",
-      "command(gentle-ai review assess)",
-      "command(gentle-ai review status)"
-    ]
-  }
+// prefixes; file targets are absolute or workspace-relative paths, a
+// directory target covers its whole subtree, and the bare "*" is the only
+// wildcard. Because bare file targets resolve against workspace roots only,
+// the home-sensitive stores are denied by absolute path derived from the
+// injected home directory; the deny-read rules also imply deny-write.
+func antigravityCLIOverlayForHome(homeDir string) []byte {
+	deny := []string{
+		"command(rm -rf)",
+		"command(sudo rm -rf)",
+		"command(git reset --hard)",
+		"command(git clean -fd)",
+		"command(git push --force)",
+		"command(chmod -R 777)",
+		"command(chown -R)",
+	}
+	for _, name := range append([]string{".env"}, antigravityCLIEnvVariants...) {
+		deny = append(deny, "read_file("+name+")", "write_file("+name+")")
+	}
+	for _, name := range []string{".ssh", ".credentials", ".aws"} {
+		deny = append(deny, "read_file("+name+")", "write_file("+name+")")
+	}
+	for _, target := range antigravityCLIHomeSensitiveTargets(homeDir) {
+		deny = append(deny, "read_file("+target+")", "write_file("+target+")")
+	}
+	encoded, err := json.MarshalIndent(map[string]any{
+		"permissions": map[string]any{
+			"deny":  deny,
+			"allow": []string{"command(gentle-ai codegraph init)", "command(gentle-ai review assess)", "command(gentle-ai review status)"},
+		},
+	}, "", "  ")
+	if err != nil {
+		// Unreachable for these value types; nil keeps the injection a no-op
+		// rather than writing malformed settings.
+		return nil
+	}
+	return encoded
 }
-`)
+
+// antigravityCLIHomeSensitiveTargets returns absolute, forward-slashed deny
+// targets for the sensitive stores under the injected home: SSH keys,
+// credentials and AWS directories, the GitHub hosts token file and the
+// macOS Keychains.
+func antigravityCLIHomeSensitiveTargets(homeDir string) []string {
+	if homeDir == "" {
+		return nil
+	}
+	home := strings.TrimSuffix(filepath.ToSlash(homeDir), "/")
+	targets := make([]string, 0, 5)
+	for _, suffix := range []string{"/.ssh", "/.credentials", "/.aws", "/Library/Keychains"} {
+		targets = append(targets, home+suffix)
+	}
+	return append(targets, home+"/.config/gh/hosts.yml")
+}
 
 // agentOverlay returns the correct permission overlay for the given agent,
 // or nil if the agent does not support permission injection via settings.json.
-func agentOverlay(id model.AgentID) []byte {
+func agentOverlay(id model.AgentID, homeDir string) []byte {
 	switch id {
 	case model.AgentClaudeCode:
 		return claudeCodeOverlayJSON
@@ -136,7 +165,7 @@ func agentOverlay(id model.AgentID) []byte {
 		// Terminal Command Auto Execution). No injectable settings.json schema.
 		return nil
 	case model.AgentAntigravityCLI:
-		return antigravityCLIOverlayJSON
+		return antigravityCLIOverlayForHome(homeDir)
 	case model.AgentVSCodeCopilot:
 		return vscodeCopilotOverlayJSON
 	case model.AgentCursor:
@@ -160,19 +189,19 @@ func agentOverlay(id model.AgentID) []byte {
 }
 
 func Inject(homeDir string, adapter agents.Adapter) (InjectionResult, error) {
-	return InjectAtPath(TargetPath(homeDir, adapter), adapter)
+	return InjectAtPath(TargetPath(homeDir, adapter), homeDir, adapter)
 }
 
 // InjectAtPath writes the permission overlay to the caller-selected settings
 // path while preserving each adapter's permission capability check. Only the
 // OpenCode selected settings refuse symlinked, non-regular or locked files;
 // other agents keep the shared writer behavior.
-func InjectAtPath(settingsPath string, adapter agents.Adapter) (InjectionResult, error) {
+func InjectAtPath(settingsPath, homeDir string, adapter agents.Adapter) (InjectionResult, error) {
 	if settingsPath == "" {
 		return InjectionResult{}, nil
 	}
 
-	overlay := agentOverlay(adapter.Agent())
+	overlay := agentOverlay(adapter.Agent(), homeDir)
 	if overlay == nil {
 		return InjectionResult{}, nil
 	}

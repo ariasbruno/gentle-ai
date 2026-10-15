@@ -3372,7 +3372,7 @@ func (s componentApplyStep) Run() error {
 		for _, adapter := range adapters {
 			var err error
 			if adapter.Agent() == model.AgentOpenCode {
-				_, err = permissions.InjectAtPath(openCodeLoadedSettingsPath(s.homeDir, s.workspaceDir, adapter), adapter)
+				_, err = permissions.InjectAtPath(openCodeLoadedSettingsPath(s.homeDir, s.workspaceDir, adapter), s.homeDir, adapter)
 			} else {
 				_, err = permissions.Inject(s.homeDir, adapter)
 			}

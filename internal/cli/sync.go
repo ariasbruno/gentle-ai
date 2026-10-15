@@ -1602,7 +1602,7 @@ func (s componentSyncStep) Run() error {
 			var res permissions.InjectionResult
 			var err error
 			if adapter.Agent() == model.AgentOpenCode {
-				res, err = permissions.InjectAtPath(syncOpenCodeSettingsPath(s.homeDir, s.workspaceDir, s.scope, adapter), adapter)
+				res, err = permissions.InjectAtPath(syncOpenCodeSettingsPath(s.homeDir, s.workspaceDir, s.scope, adapter), s.homeDir, adapter)
 			} else {
 				res, err = permissions.Inject(s.homeDir, adapter)
 			}
