@@ -330,8 +330,19 @@ func handleAntigravityStop(payload AntigravityCLIHookPayload, workspace string, 
 
 	out := AntigravityCLIHookOutput{
 		Decision: "continue",
-		Reason:   "Receipt-Driven Development: unreviewed candidate changes detected since session baseline. Please run gentle-ai review status preflight before completing.",
 	}
+	// The reminder carries the exact commands the model needs: the STATUS
+	// preflight and, when available, the provider-issued START. This mirrors
+	// the Claude stop hook's reason text so AGY models get the same actionable
+	// detail instead of a generic "run preflight" that they may not act on.
+	statusCommand := fmt.Sprintf("gentle-ai review status --cwd %s --contract %s --agent antigravity-cli --next-transition", root, ReviewIntegrationContractV2)
+	reason := "Receipt-Driven Development: unreviewed candidate changes detected since session baseline (target " + targetIdentity + ")."
+	reason += " Run the STATUS preflight: " + statusCommand
+	if status.NextTransition != nil && status.NextTransition.Execute != nil && status.NextTransition.Execute.Command != "" {
+		reason += ". Then run the provider-issued START unchanged: " + status.NextTransition.Execute.Command
+	}
+	reason += ". This Stop keeps blocking until the review is consumed."
+	out.Reason = reason
 	enc, _ := json.Marshal(out)
 	_, _ = fmt.Fprintln(stdout, string(enc))
 
