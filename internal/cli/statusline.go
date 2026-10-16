@@ -81,6 +81,9 @@ func runStatusLine(args []string, stdin io.Reader, stdout io.Writer, homeDir str
 	if config.Visibility.Changes {
 		extras.Changes = statusLineGitChanges(cwd)
 	}
+	if config.Visibility.Engram {
+		extras.Observations = statusLineEngramObservations(homeDir, cwd)
+	}
 
 	_, _ = fmt.Fprintln(stdout, statusline.Render(payload, config, extras))
 	return nil
