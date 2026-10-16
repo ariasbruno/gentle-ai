@@ -240,7 +240,9 @@ Para evitar comandos destructivos accidentales o fuga de secretos en sesiones au
 }
 ```
 
-La línea replica la barra compacta de Gentle Shell: marca `✿ gentle ai`, separador `⟡`, estado del agente, ubicación (rama git + dirty), modelo y modo de ejecución, gauge de contexto `▰▱` de 8 celdas (acento <80 / warning ≥80 / error ≥95, marcador `!` ≥90), costo de sesión (sufijo `sub` con plan de suscripción), ventanas de quota (`5h`/`1d`/`week`), jobs en background, subagentes, sandbox, modo vim y el interruptor RDD (`🌹 on`/`off`), con degradación por ancho de terminal (location compacta → descarte de segmentos → truncado) y `conversation_title` alineada a la derecha. El modo `--title` alimenta el título de la terminal.
+La línea replica la barra compacta de Gentle Shell: **pétalo de estado fusionado con la marca** — en reposo la flor estática `✿ gentle ai` sin label; en actividad gira por los frames `✿❀❁✾` con el pulso de tonos de GS y el label de fase ODD real (`exploring…`/`implementing…`/`checking…`/`delegating…`, inferido por el hook PreToolUse a partir de la tool call; sin registro reciente cae al label del `agent_state`: `thinking…`/`working…`/`starting…`) —, separador `⟡`, ubicación (rama git + dirty), modelo y modo de ejecución, gauge de contexto `▰▱` de 8 celdas (acento <80 / warning ≥80 / error ≥95, marcador `!` ≥90), costo de sesión plano `$X.YZ` (sin sufijo), ventanas de quota **solo del provider del modelo activo** (familia derivada del `model.id`; label derivado de la key del bucket, p. ej. `gemini-weekly` → `weekly`), jobs en background, subagentes, `mem N` con las observaciones de Engram del proyecto (cacheado 30 s, oculto ante cualquier falla), sandbox, modo vim y el interruptor RDD (`🌹 on`/`off`), con degradación por ancho de terminal (location compacta → descarte de segmentos → truncado) y `conversation_title` alineada a la derecha. El modo `--title` alimenta el título de la terminal.
+
+**Fase ODD (hook PreToolUse):** cada tool call actualiza `~/.gentle-ai/statusline-phase/<hash-conversación>.json` con la fase inferida (reads → `exploring`, edits → `implementing`, corridas de test → `checking`, dispatch de subagentes → `delegating`, resto → `working`), best-effort y sin afectar la decisión del hook; los registros se podan a la hora y la statusline los usa con una frescura de 10 minutos.
 
 **Reglas de propiedad (una por bloque):** Gentle AI administra solo `type`+`command` cuando el `command` está vacío, ya es el subcomando administrado, o es el registro legacy que apuntaba al script viejo (un sync lo re-escribe al subcomando); un comando ajeno deja el bloque intacto. Las llaves `enabled`, `padding` y `stack_with_default` son tuyas y se preservan tal cual (`stack_with_default: true` renderiza la línea debajo de la built-in de agy). Un `settings.json` ausente se crea; uno malformado falla cerrado sin modificarse; una configuración ya administrada no se reescribe. `gentle-ai uninstall` retira los bloques cuando apuntan al subcomando o al registro legacy, y el script viejo que algún sync anterior deployó se poda del árbol del plugin en el próximo sync.
 
@@ -256,12 +258,13 @@ La línea replica la barra compacta de Gentle Shell: marca `✿ gentle ai`, sepa
     "agents": true,
     "usageCost": true,
     "modelDetails": true,
-    "contextWarning": true
+    "contextWarning": true,
+    "engram": true
   }
 }
 ```
 
-`density` acepta `comfortable`/`compact`/`minimal` (minimal oculta la marca). `visibility` oculta segmentos: `modelDetails` (modelo), `usageCost` (contexto+costo+quota), `agents` (jobs+subagentes), `rdd` (interruptor de revisión) y `contextWarning` (marcador `!`). `changes: true` habilita el segmento de cambios (`±N +A/−D` vía git con deadline de 500 ms). Valores ausentes o archivo malformado → defaults. El interruptor RDD se lee in-process con el mismo resolver read-only del comando `review mode` (deadline 500 ms); cualquier falla muestra `🌹 ?` y nunca bloquea la línea.
+`density` acepta `comfortable`/`compact`/`minimal` (minimal oculta la marca en reposo). `visibility` oculta segmentos: `modelDetails` (modelo), `usageCost` (contexto+costo+quota), `agents` (jobs+subagentes), `rdd` (interruptor de revisión), `contextWarning` (marcador `!`) y `engram` (observaciones de Engram). `changes: true` habilita el segmento de cambios (`±N +A/−D` vía git con deadline de 500 ms). Valores ausentes o archivo malformado → defaults. El interruptor RDD se lee in-process con el mismo resolver read-only del comando `review mode` (deadline 500 ms); cualquier falla muestra `🌹 ?` y nunca bloquea la línea.
 
 **Sin dependencias:** el render es in-process en el binario `gentle-ai` que los hooks ya requieren — no hace falta `jq` ni bash, y funciona igual en Windows. Un payload ausente o ilegible degrada a la línea `✿ gentle ai` sin error.
 
