@@ -42,8 +42,8 @@ func TestRunStatusLineRendersPayload(t *testing.T) {
 	}`
 	line := runStatusLineTest(t, nil, payload, home)
 	for _, want := range []string{
-		"✿ gentle ai", "⟡", "⚙ working", "feat/login*", "Gemini 3.5 Pro (High) · planning",
-		"ctx", "43%", "$0.312 sub", "⧗ 2 jobs", "🌹 on", "fix login",
+		"working…", "⟡", "feat/login*", "Gemini 3.5 Pro (High) · planning",
+		"ctx", "43%", "$0.312", "⧗ 2 jobs", "🌹 on", "fix login",
 	} {
 		if !strings.Contains(line, want) {
 			t.Errorf("missing segment %q in: %s", want, line)

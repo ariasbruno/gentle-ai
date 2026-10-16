@@ -5,18 +5,24 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
 // ANSI escapes — the standard 16-color palette, matching the upstream agy
 // example's portability guidance.
 const (
-	ansiReset   = "\x1b[0m"
-	ansiAccent  = "\x1b[32m"
-	ansiWarning = "\x1b[33m"
-	ansiError   = "\x1b[31m"
-	ansiDim     = "\x1b[2m"
-	ansiBold    = "\x1b[1m"
+	ansiReset         = "\x1b[0m"
+	ansiAccent        = "\x1b[32m"
+	ansiWarning       = "\x1b[33m"
+	ansiError         = "\x1b[31m"
+	ansiDim           = "\x1b[2m"
+	ansiBold          = "\x1b[1m"
+	ansiMagenta       = "\x1b[35m"
+	ansiBrightMagenta = "\x1b[95m"
+	ansiCyan          = "\x1b[36m"
+	ansiYellow        = "\x1b[33m"
 )
 
 const (
@@ -28,6 +34,36 @@ const (
 	compactBranchWidth = 15
 	defaultWidth       = 80
 )
+
+// The animated petal, ported from Gentle Shell's prompt (lib/shell-prompt.ts):
+// idle keeps a static flower; working spins four frames while the tone walks
+// the GS pulse deep → soft → rose → bright → rose → soft → deep.
+var petalFrames = [4]string{"✿", "❀", "❁", "✾"}
+var petalTones = [8]string{
+	ansiMagenta, ansiCyan, ansiYellow, ansiBrightMagenta,
+	ansiYellow, ansiCyan, ansiMagenta, ansiMagenta,
+}
+
+// petalState builds the merged brand/state segment: idle → the static
+// brand (no label, hidden entirely in minimal density); active → the
+// animated petal plus the phase label (S12 phase when provided, otherwise
+// the agent_state fallback), like the Gentle Shell prompt frame.
+func petalState(p *Payload, config Config, extras Extras) string {
+	if p.AgentState == "" || p.AgentState == "idle" {
+		if config.Density == DensityMinimal {
+			return ""
+		}
+		return ansiBold + brandText + ansiReset
+	}
+	tick := time.Now().Unix()
+	glyph := petalFrames[tick%int64(len(petalFrames))]
+	tone := petalTones[tick%int64(len(petalTones))]
+	label := extras.Phase
+	if label == "" {
+		label = stateBadge(p.AgentState)
+	}
+	return tone + ansiBold + glyph + ansiReset + " " + label + "…"
+}
 
 // FallbackLine is the brand-only line rendered for absent, empty, or
 // unparsable payloads — graceful, never an error (S6).
@@ -49,6 +85,7 @@ const (
 	tagVim       = "vim"
 	tagRDD       = "rdd"
 	tagChanges   = "changes"
+	tagMem       = "mem"
 )
 
 // dropOrder is the degradation step-2 order (S3): changes and rdd first
@@ -62,14 +99,21 @@ type segment struct {
 }
 
 // Extras carries the values the CLI layer resolves out of band: the home
-// directory for ~ shortening, the in-process RDD review switch mode, and the
-// optional git changes summary.
+// directory for ~ shortening, the in-process RDD review switch mode, the
+// optional git changes summary, the ODD phase inferred by the PreToolUse
+// hook (S12; empty falls back to the agent_state label), and the Engram
+// observation count (S13; zero hides the segment).
 type Extras struct {
 	Home string
 	// RDDMode is "on", "off", or "?" — empty hides the segment.
 	RDDMode string
 	// Changes is a preformatted "±N +A/−D" string — empty hides the segment.
 	Changes string
+	// Phase is the hook-inferred ODD phase label ("exploring", …) — empty
+	// falls back to the agent_state label while the agent is active.
+	Phase string
+	// Observations is the Engram observation count of the payload cwd.
+	Observations int
 }
 
 var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
@@ -113,21 +157,19 @@ func roundPercent(v float64) int {
 	return int(v + 0.5)
 }
 
-// stateBadge maps the agy agent_state enum to the Gentle badge (S2).
+// stateBadge maps the agy agent_state enum to the fallback label shown while
+// the agent is active (idle shows no label — the static petal brand is the
+// whole state, Gentle Shell prompt parity).
 func stateBadge(state string) string {
 	switch state {
-	case "", "idle":
-		return "● ready"
 	case "thinking":
-		return "◆ thinking"
-	case "working":
-		return "⚙ working"
-	case "tool_use":
-		return "🔧 tool"
+		return "thinking"
+	case "working", "tool_use":
+		return "working"
 	case "initializing":
-		return "⏳ initializing"
+		return "starting"
 	default:
-		return "○ " + state
+		return "working"
 	}
 }
 
@@ -164,37 +206,70 @@ func compactLocation(cwd, home, branch string, dirty bool) string {
 }
 
 // formatCost mirrors the Gentle Shell formatCost: two decimals at or above
-// one dollar, three below, with the subscription suffix (S2).
-func formatCost(cost float64, subscription bool) string {
-	amount := fmt.Sprintf("%.2f", cost)
+// one dollar, three below — plain, with no suffix (L13: the `sub` marker
+// confused more than it informed).
+func formatCost(cost float64) string {
 	if cost < 1 {
-		amount = fmt.Sprintf("%.3f", cost)
+		return fmt.Sprintf("$%.3f", cost)
 	}
-	if subscription {
-		return "$" + amount + " sub"
-	}
-	return "$" + amount
+	return fmt.Sprintf("$%.2f", cost)
 }
 
-// quotaLabel derives the window label from reset_in_seconds: week, whole
-// days, whole hours, or rounded minutes (S2).
-func quotaLabel(resetInSeconds int64) string {
-	const (
-		minute int64 = 60
-		hour         = 60 * minute
-		day          = 24 * hour
-		week         = 7 * day
-	)
-	switch {
-	case resetInSeconds == week:
-		return "week"
-	case resetInSeconds >= day && resetInSeconds%day == 0:
-		return fmt.Sprintf("%dd", resetInSeconds/day)
-	case resetInSeconds >= hour && resetInSeconds%hour == 0:
-		return fmt.Sprintf("%dh", resetInSeconds/hour)
-	default:
-		return fmt.Sprintf("%dm", int(float64(resetInSeconds)/float64(minute)+0.5))
+// quotaLabelFromKey derives the window label from the bucket key — never
+// from reset_in_seconds, which is the countdown to the reset, not the window
+// length (L13). The active model family prefix and separators are stripped:
+// "gemini-weekly" → "weekly".
+func quotaLabelFromKey(key, family string) string {
+	label := key
+	if family != "" && strings.HasPrefix(strings.ToLower(key), strings.ToLower(family)+"-") {
+		label = key[len(family)+1:]
 	}
+	label = strings.Trim(label, "-_ ")
+	if label == "" {
+		return key
+	}
+	return strings.ToLower(label)
+}
+
+// modelFamily extracts the provider family from the active model identity —
+// the first word of the model id, lowercased, falling back to the display
+// name when the id is absent ("Gemini 3.5 Pro (High)" → "gemini").
+func modelFamily(modelID, displayName string) string {
+	for _, candidate := range []string{modelID, displayName} {
+		for _, field := range strings.Fields(candidate) {
+			var letters strings.Builder
+			for _, r := range field {
+				if !unicode.IsLetter(r) {
+					break
+				}
+				letters.WriteRune(unicode.ToLower(r))
+			}
+			if letters.Len() > 0 {
+				return letters.String()
+			}
+		}
+	}
+	return ""
+}
+
+// activeQuota returns the quota buckets of the active model's family; when
+// no bucket matches the family the full set is kept (defensive: the payload
+// shape is only confirmed by live use, L13).
+func activeQuota(p *Payload) map[string]Quota {
+	family := modelFamily(p.Model.ID, p.Model.DisplayName)
+	if family == "" || len(p.Quota) == 0 {
+		return p.Quota
+	}
+	filtered := make(map[string]Quota, len(p.Quota))
+	for key, bucket := range p.Quota {
+		if strings.Contains(strings.ToLower(key), family) {
+			filtered[key] = bucket
+		}
+	}
+	if len(filtered) == 0 {
+		return p.Quota
+	}
+	return filtered
 }
 
 // buildSegments assembles the ordered, visible segments (S2). Empty segments
@@ -207,10 +282,9 @@ func buildSegments(p *Payload, config Config, extras Extras) []segment {
 		}
 	}
 
-	if config.Density != DensityMinimal {
-		add(tagBrand, ansiBold+brandText+ansiReset)
-	}
-	add(tagState, stateBadge(p.AgentState))
+	// Brand/state petal (S2): idle → static brand, no label; active → the
+	// animated petal plus the phase label, Gentle Shell prompt parity.
+	add(tagBrand, petalState(p, config, extras))
 	location := shortenCwd(p.Cwd, extras.Home)
 	if p.VCS.Branch != "" {
 		location += " " + p.VCS.Branch
@@ -240,15 +314,17 @@ func buildSegments(p *Payload, config Config, extras Extras) []segment {
 		if p.Cost != nil {
 			cost = *p.Cost
 		}
-		add(tagCost, formatCost(cost, p.PlanTier != ""))
+		add(tagCost, formatCost(cost))
 
-		keys := make([]string, 0, len(p.Quota))
-		for key := range p.Quota {
+		quota := activeQuota(p)
+		family := modelFamily(p.Model.ID, p.Model.DisplayName)
+		keys := make([]string, 0, len(quota))
+		for key := range quota {
 			keys = append(keys, key)
 		}
 		sort.Strings(keys)
 		for _, key := range keys {
-			bucket := p.Quota[key]
+			bucket := quota[key]
 			used := roundPercent((1 - bucket.RemainingFraction) * 100)
 			if used < 0 {
 				used = 0
@@ -256,7 +332,7 @@ func buildSegments(p *Payload, config Config, extras Extras) []segment {
 			if used > 100 {
 				used = 100
 			}
-			add(tagQuota, fmt.Sprintf("%s %s%s%s %d%%", quotaLabel(bucket.ResetInSeconds), gaugeColor(used), renderGauge(used), ansiReset, used))
+			add(tagQuota, fmt.Sprintf("%s %s%s%s %d%%", quotaLabelFromKey(key, family), gaugeColor(used), renderGauge(used), ansiReset, used))
 		}
 	}
 
@@ -267,6 +343,10 @@ func buildSegments(p *Payload, config Config, extras Extras) []segment {
 		if count := p.SubagentCount(); count > 0 {
 			add(tagSubagents, fmt.Sprintf("✦ %d subagents", count))
 		}
+	}
+
+	if config.Visibility.Engram && extras.Observations > 0 {
+		add(tagMem, fmt.Sprintf("mem %d", extras.Observations))
 	}
 
 	if p.Sandbox.Enabled {

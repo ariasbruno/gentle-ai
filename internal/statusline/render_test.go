@@ -41,9 +41,9 @@ func TestRenderFullLine(t *testing.T) {
 
 	line := Render(payload, DefaultConfig(), defaultExtras())
 	for _, want := range []string{
-		brandText, "⟡", "⚙ working", "~/project/src/feature feat/login*",
-		"Gemini 3.5 Pro (High) · planning", "ctx ", "43%", "$0.312 sub",
-		"1d", "30%", "⧗ 2 jobs", "✦ 2 subagents", "⊘ sandbox·net",
+		"⟡", "working…", "~/project/src/feature feat/login*",
+		"Gemini 3.5 Pro (High) · planning", "ctx ", "43%", "$0.312",
+		"weekly", "30%", "⧗ 2 jobs", "✦ 2 subagents", "⊘ sandbox·net",
 		"vim.NORMAL", "🌹 on", "fix login",
 	} {
 		if !strings.Contains(line, want) {
@@ -60,20 +60,42 @@ func TestRenderFullLine(t *testing.T) {
 func TestRenderQuotaWindows(t *testing.T) {
 	payload := mustPayload(t, `{
 		"cwd": "/home/user/project",
+		"model": {"id": "gemini-3.5-pro", "display_name": "Gemini 3.5 Pro"},
 		"quota": {
 			"gemini-weekly": {"remaining_fraction": 0.7, "reset_in_seconds": 604800},
 			"gemini-daily": {"remaining_fraction": 0.3, "reset_in_seconds": 86400},
 			"gemini-hourly": {"remaining_fraction": 0.5, "reset_in_seconds": 3600}
 		},
 		"terminal_width": 220,
-		"context_window": {"used_percentage": 10},
-		"model": {"display_name": "Gemini 3.5 Pro"}
+		"context_window": {"used_percentage": 10}
 	}`)
 	line := Render(payload, DefaultConfig(), defaultExtras())
-	for _, want := range []string{"week", "1d", "1h", "30%", "70%", "50%"} {
+	for _, want := range []string{"weekly", "daily", "hourly", "30%", "70%", "50%"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("missing quota marker %q in: %s", want, line)
 		}
+	}
+}
+
+// TestRenderQuotaFiltersInactiveFamily pins the L13 fix: only the active
+// model's provider buckets render, never both providers at once.
+func TestRenderQuotaFiltersInactiveFamily(t *testing.T) {
+	payload := mustPayload(t, `{
+		"cwd": "/home/user/project",
+		"model": {"id": "gemini-3.5-pro", "display_name": "Gemini 3.5 Pro"},
+		"quota": {
+			"gemini-weekly": {"remaining_fraction": 0.7, "reset_in_seconds": 604800},
+			"claude-5h": {"remaining_fraction": 0.2, "reset_in_seconds": 18000}
+		},
+		"terminal_width": 220,
+		"context_window": {"used_percentage": 10}
+	}`)
+	line := Render(payload, DefaultConfig(), defaultExtras())
+	if !strings.Contains(line, "weekly") {
+		t.Errorf("active family bucket missing: %s", line)
+	}
+	if strings.Contains(line, "claude") || strings.Contains(line, "5h") {
+		t.Errorf("inactive family bucket shown: %s", line)
 	}
 }
 
@@ -140,8 +162,11 @@ func TestRenderMinimalHidesBrand(t *testing.T) {
 	if strings.Contains(line, brandText) {
 		t.Errorf("minimal density still shows the brand: %s", line)
 	}
-	if !strings.Contains(line, "● ready") {
-		t.Errorf("minimal density lost the state badge: %s", line)
+	if !strings.Contains(line, "Gemini 3.5 Pro") {
+		t.Errorf("minimal density lost the content segments: %s", line)
+	}
+	if strings.Contains(line, "…") {
+		t.Errorf("minimal idle shows an activity label: %s", line)
 	}
 }
 
@@ -164,7 +189,7 @@ func TestRenderVisibilityHiding(t *testing.T) {
 		absent []string
 	}{
 		{"modelDetails", func(c *Config) { c.Visibility.ModelDetails = false }, []string{"Gemini 3.5 Pro"}},
-		{"usageCost", func(c *Config) { c.Visibility.UsageCost = false }, []string{"ctx", "$0.312", "1d"}},
+		{"usageCost", func(c *Config) { c.Visibility.UsageCost = false }, []string{"ctx", "$0.312", "weekly"}},
 		{"agents", func(c *Config) { c.Visibility.Agents = false }, []string{"⧗ 2 jobs"}},
 	}
 	for _, testCase := range cases {
@@ -186,22 +211,41 @@ func TestRenderVisibilityHiding(t *testing.T) {
 	}
 }
 
-// TestRenderStateBadges pins the agent_state mapping.
-func TestRenderStateBadges(t *testing.T) {
-	cases := map[string]string{
-		"idle":         "● ready",
-		"":             "● ready",
-		"thinking":     "◆ thinking",
-		"working":      "⚙ working",
-		"tool_use":     "🔧 tool",
-		"initializing": "⏳ initializing",
-		"weird":        "○ weird",
+// TestRenderPetalState pins the merged brand/state petal: idle keeps the
+// static brand with no label; active spins a petal frame with the fallback
+// label; a hook-provided phase wins over the fallback.
+func TestRenderPetalState(t *testing.T) {
+	idle := mustPayload(t, `{"cwd": "/home/user/project", "terminal_width": 200, "agent_state": "idle"}`)
+	line := Render(idle, DefaultConfig(), defaultExtras())
+	if !strings.Contains(line, brandText) {
+		t.Errorf("idle lost the static brand: %s", line)
 	}
-	for state, want := range cases {
-		payload := &Payload{AgentState: state, TerminalWidth: 200}
-		if line := Render(payload, DefaultConfig(), defaultExtras()); !strings.Contains(line, want) {
-			t.Errorf("state %q: want badge %q in: %s", state, want, line)
+	if strings.Contains(line, "…") {
+		t.Errorf("idle shows an activity label: %s", line)
+	}
+
+	active := mustPayload(t, `{"cwd": "/home/user/project", "terminal_width": 200, "agent_state": "thinking"}`)
+	line = Render(active, DefaultConfig(), defaultExtras())
+	if !strings.Contains(line, "thinking…") {
+		t.Errorf("active state missing fallback label: %s", line)
+	}
+	petalSeen := false
+	for _, frame := range petalFrames {
+		if strings.Contains(line, frame) {
+			petalSeen = true
 		}
+	}
+	if !petalSeen {
+		t.Errorf("active state missing animated petal: %s", line)
+	}
+
+	phased := Extras{Home: "/home/user", Phase: "exploring"}
+	line = Render(active, DefaultConfig(), phased)
+	if !strings.Contains(line, "exploring…") {
+		t.Errorf("hook phase label missing: %s", line)
+	}
+	if strings.Contains(line, "gentle ai") {
+		t.Errorf("active state shows the idle brand: %s", line)
 	}
 }
 
@@ -275,18 +319,36 @@ func TestRenderTitleMode(t *testing.T) {
 	}
 }
 
-// TestQuotaLabel pins the window label derivation.
-func TestQuotaLabel(t *testing.T) {
-	cases := map[int64]string{
-		604800: "week",
-		172800: "2d",
-		18000:  "5h",
-		90:     "2m",
-		30:     "1m",
+// TestQuotaLabelFromKey pins the key-derived window labels (never from
+// reset_in_seconds, which is a countdown).
+func TestQuotaLabelFromKey(t *testing.T) {
+	cases := []struct{ key, family, want string }{
+		{"gemini-weekly", "gemini", "weekly"},
+		{"gemini-daily", "gemini", "daily"},
+		{"claude-5h", "claude", "5h"},
+		{"claude-5h", "gemini", "claude-5h"},
+		{"unknown-shape", "", "unknown-shape"},
+		{"-weird-", "", "weird"},
 	}
-	for seconds, want := range cases {
-		if got := quotaLabel(seconds); got != want {
-			t.Errorf("quotaLabel(%d) = %q, want %q", seconds, got, want)
+	for _, testCase := range cases {
+		if got := quotaLabelFromKey(testCase.key, testCase.family); got != testCase.want {
+			t.Errorf("quotaLabelFromKey(%q, %q) = %q, want %q", testCase.key, testCase.family, got, testCase.want)
+		}
+	}
+}
+
+// TestModelFamily pins the provider-family extraction with the display-name
+// fallback.
+func TestModelFamily(t *testing.T) {
+	cases := []struct{ id, display, want string }{
+		{"gemini-3.5-pro", "Gemini 3.5 Pro", "gemini"},
+		{"", "Gemini 3.5 Pro (High)", "gemini"},
+		{"claude-opus-4", "Claude Opus", "claude"},
+		{"", "", ""},
+	}
+	for _, testCase := range cases {
+		if got := modelFamily(testCase.id, testCase.display); got != testCase.want {
+			t.Errorf("modelFamily(%q, %q) = %q, want %q", testCase.id, testCase.display, got, testCase.want)
 		}
 	}
 }
@@ -306,16 +368,42 @@ func TestCompactLocation(t *testing.T) {
 	}
 }
 
-// TestFormatCost pins the cost formatting and subscription suffix.
+// TestFormatCost pins the plain cost formatting (no suffix, L13).
 func TestFormatCost(t *testing.T) {
-	if got := formatCost(0.312, false); got != "$0.312" {
+	if got := formatCost(0.312); got != "$0.312" {
 		t.Errorf("formatCost sub-dollar = %q", got)
 	}
-	if got := formatCost(1.5, false); got != "$1.50" {
+	if got := formatCost(1.5); got != "$1.50" {
 		t.Errorf("formatCost dollar = %q", got)
 	}
-	if got := formatCost(0.312, true); got != "$0.312 sub" {
-		t.Errorf("formatCost subscription = %q", got)
+}
+
+// TestRenderMemSegment pins the Engram observation segment.
+func TestRenderMemSegment(t *testing.T) {
+	payload := mustPayload(t, `{
+		"cwd": "/home/user/project",
+		"model": {"display_name": "M"},
+		"context_window": {"used_percentage": 10},
+		"terminal_width": 200
+	}`)
+	extras := defaultExtras()
+	extras.Observations = 918
+	line := Render(payload, DefaultConfig(), extras)
+	if !strings.Contains(line, "mem 918") {
+		t.Errorf("mem segment missing: %s", line)
+	}
+
+	noEngram := DefaultConfig()
+	noEngram.Visibility.Engram = false
+	line = Render(payload, noEngram, extras)
+	if strings.Contains(line, "mem") {
+		t.Errorf("mem segment shown while disabled: %s", line)
+	}
+
+	extras.Observations = 0
+	line = Render(payload, DefaultConfig(), extras)
+	if strings.Contains(line, "mem") {
+		t.Errorf("mem segment shown with zero observations: %s", line)
 	}
 }
 
