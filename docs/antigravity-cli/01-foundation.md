@@ -36,6 +36,7 @@ El adaptador [`antigravitycli`](../../internal/agents/antigravitycli/adapter.go)
     ├── mcp_config.json
     ├── hooks.json
     ├── hooks/{hook.sh,hook.cmd}
+    ├── statusline.sh
     ├── rules/
     │   ├── AGENTS.md
     │   ├── gentle-ai-routing.md
@@ -84,7 +85,7 @@ gentle-ai sync --agents antigravity-cli --scope workspace
 
 Las opciones `--agent`/`--agents` y `--scope` están registradas por [`ParseInstallFlags`](../../internal/cli/install.go#L53-L70) y [`ParseSyncFlags`](../../internal/cli/sync.go#L171-L193). La resolución de alcances está definida en [`ResolveInstallScope`](../../internal/cli/scope.go#L24-L44). Los comandos configuran el entorno para el agente, pero no instalan el binario `agy`: el adaptador no cuenta con autoinstalación de ejecutables externos.
 
-En alcance global, la secuencia del paso final es `DeployPluginTree → ensureAntigravityOrchestratorRule → EnsurePluginImported`: [`antigravityCLIPluginImportStep.Run`](../../internal/cli/run.go#L921-L940). En alcance workspace, se despliega el árbol en `<workspace>/.agents/plugins/gentle-ai/` y se inicializa la regla de orquestador localmente, prescindiendo del registro en el manifiesto global.
+En alcance global, la secuencia del paso final es `DeployPluginTree → ensureAntigravityOrchestratorRule → EnsurePluginImported → EnsureStatusLineSettings`: [`antigravityCLIPluginImportStep.Run`](../../internal/cli/run.go#L921-L940). En alcance workspace, se despliega el árbol en `<workspace>/.agents/plugins/gentle-ai/` y se inicializa la regla de orquestador localmente, prescindiendo del registro en el manifiesto global y del registro de status line.
 
 ### Estructura desplegada en cada alcance
 
@@ -99,6 +100,7 @@ Ambos alcances despliegan el bundle completo de assets:
     ├── mcp_config.json
     ├── hooks.json
     ├── hooks/{hook.sh,hook.cmd}
+    ├── statusline.sh
     ├── rules/
     │   ├── AGENTS.md
     │   ├── gentle-ai-routing.md
@@ -115,6 +117,7 @@ Ambos alcances despliegan el bundle completo de assets:
 ├── mcp_config.json
 ├── hooks.json
 ├── hooks/{hook.sh,hook.cmd}
+├── statusline.sh
 ├── rules/
 │   ├── AGENTS.md
 │   ├── gentle-ai-routing.md
@@ -130,6 +133,7 @@ Ambos alcances despliegan el bundle completo de assets:
 1. **Descubrimiento automático en workspace:** `agy` descubre nativamente los plugins situados en `.agents/plugins/<nombre>/`, por lo que el instalador no modifica `~/.gemini/config/import_manifest.json`.
 2. **Aislamiento de `HOME`:** En `--scope workspace`, el directorio de usuario (`HOME`) permanece completamente inalterado.
 3. **Precedencia:** Cuando existen ambos, las reglas y configuraciones del workspace tienen prioridad sobre las globales.
+4. **Status line solo en global:** el registro de `statusLine`/`title` vive en el `settings.json` de usuario (`~/.gemini/antigravity-cli/settings.json`), así que `--scope workspace` despliega el script pero no registra los bloques.
 
 ### Verificación automatizada tras la instalación o sincronización
 
@@ -227,6 +231,42 @@ Para evitar comandos destructivos accidentales o fuga de secretos en sesiones au
 - **Comandos permitidos (`allow`):** Comandos internos indispensables para la navegación de código y la revisión RDD.
 - **Fusión inteligente:** Gentle AI combina estas listas con tu configuración previa sin pisar preferencias de usuario.
 - **Backup previo:** Antes de cualquier escritura en `settings.json`, se genera un respaldo automático recuperable.
+
+## Status line personalizado: registro administrado en settings.json
+
+`agy` renderiza una status line propia ejecutando el comando del bloque `statusLine` de `~/.gemini/antigravity-cli/settings.json`, al que le pasa el payload de estado JSON por stdin en cada cambio de estado del agente (ANSI completo, multilínea). Gentle AI despliega su script — [`statusline.sh`](../../internal/assets/antigravitycli/statusline.sh) — a la raíz del plugin y registra ambos bloques con [`EnsureStatusLineSettings`](../../internal/agents/antigravitycli/statusline_settings.go):
+
+```json
+{
+  "statusLine": { "type": "command", "command": "~/.gemini/config/plugins/gentle-ai/statusline.sh" },
+  "title": { "type": "command", "command": "~/.gemini/config/plugins/gentle-ai/statusline.sh --title" }
+}
+```
+
+La línea replica la barra compacta de Gentle Shell: marca `✿ gentle ai`, separador `⟡`, estado del agente, ubicación (rama git + dirty), modelo y modo de ejecución, gauge de contexto `▰▱` de 8 celdas (acento <80 / warning ≥80 / error ≥95, marcador `!` ≥90), costo de sesión (sufijo `sub` con plan de suscripción), ventanas de quota (`5h`/`1d`/`week`), jobs en background, subagentes, sandbox, modo vim y el interruptor RDD (`🌹 on`/`off`), con degradación por ancho de terminal (location compacta → descarte de segmentos → truncado) y `conversation_title` alineada a la derecha. El modo `--title` alimenta el título de la terminal.
+
+**Reglas de propiedad (una por bloque):** Gentle AI administra solo `type`+`command` cuando el `command` está vacío o ya apunta a su script; un comando ajeno deja el bloque intacto. Las llaves `enabled`, `padding` y `stack_with_default` son tuyas y se preservan tal cual (`stack_with_default: true` renderiza la línea debajo de la built-in de agy). Un `settings.json` ausente se crea; uno malformado falla cerrado sin modificarse; una configuración ya administrada no se reescribe. `gentle-ai uninstall` retira los bloques solo cuando siguen apuntando al script administrado, y el script desaparece con el árbol del plugin.
+
+**Configuración de usuario** en `~/.gentle-ai/statusline.json` (archivo tuyo; sync nunca lo toca ni lo poda):
+
+```json
+{
+  "schema": "gentle-ai.statusline/v1",
+  "density": "comfortable",
+  "visibility": {
+    "changes": false,
+    "rdd": true,
+    "agents": true,
+    "usageCost": true,
+    "modelDetails": true,
+    "contextWarning": true
+  }
+}
+```
+
+`density` acepta `comfortable`/`compact`/`minimal` (minimal oculta la marca). `visibility` oculta segmentos: `modelDetails` (modelo), `usageCost` (contexto+costo+quota), `agents` (jobs+subagentes), `rdd` (interruptor de revisión) y `contextWarning` (marcador `!`). `changes: true` habilita el segmento de cambios (`±N +A/−D` vía git). Valores ausentes o archivo malformado → defaults. El interruptor RDD se lee con `gentle-ai review mode status --json` bajo `timeout 0.5` con caché de 30 s; cualquier falla muestra `🌹 ?` y nunca bloquea la línea.
+
+**Requisito:** `jq` en `PATH`; sin él la línea muestra exactamente `✿ gentle ai ⟡ install jq for the live status line`.
 
 ## CLI frente a IDE
 

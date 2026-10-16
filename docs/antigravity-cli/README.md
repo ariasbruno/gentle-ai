@@ -52,7 +52,7 @@ Elige el alcance según tu preferencia:
 ### 3. ¿Qué se instala y dónde?
 
 Dependiendo del alcance seleccionado, Gentle AI despliega el bundle completo del plugin en:
-- **Global:** `~/.gemini/config/plugins/gentle-ai/` (más el registro en `import_manifest.json` y el overlay de permisos en `~/.gemini/antigravity-cli/settings.json`).
+- **Global:** `~/.gemini/config/plugins/gentle-ai/` (más el registro en `import_manifest.json` y, en `~/.gemini/antigravity-cli/settings.json`, el overlay de permisos y la status line administrada).
 - **Workspace:** `<tu-proyecto>/.agents/plugins/gentle-ai/` (aislado al repositorio, sin tocar `$HOME`).
 
 **Árbol completo de archivos desplegados:**
@@ -61,6 +61,7 @@ Dependiendo del alcance seleccionado, Gentle AI despliega el bundle completo del
 ├── mcp_config.json                                                                 # Configuración de MCP (Context7, Engram, CodeGraph)
 ├── hooks.json                                                                      # Definición de hooks de eventos para agy
 ├── hooks/                                                                          # Scripts ejecutables de hooks (hook.sh / hook.cmd)
+├── statusline.sh                                                                   # Status line Gentle (payload JSON de agy por stdin; requiere jq)
 ├── rules/
 │   ├── AGENTS.md                                                                   # Reglas y persona base
 │   ├── gentle-ai-orchestrator.md                                                   # Regla principal de orquestación
