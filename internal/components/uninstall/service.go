@@ -1248,6 +1248,75 @@ func rewriteMarkdownFile(path string, mutate func(content string) (string, bool)
 	}
 }
 
+// ownedJSONBlock pairs a top-level settings key with the managed command
+// that identifies gentle-ai ownership of that block.
+type ownedJSONBlock struct {
+	key          string
+	ownedCommand string
+}
+
+// removeOwnedJSONBlocks rewrites a JSON settings file removing each listed
+// top-level object key only when its nested `command` equals the managed
+// command. User-owned blocks and every other key are preserved byte-for-byte
+// outside the removed keys; a file left as an empty object is removed.
+func removeOwnedJSONBlocks(path string, blocks ...ownedJSONBlock) operation {
+	return operation{
+		typeID: opRewriteFile,
+		path:   path,
+		apply: func(path string) (bool, bool, error) {
+			raw, err := readManagedFile(path)
+			if err != nil {
+				if os.IsNotExist(err) {
+					return false, false, nil
+				}
+				return false, false, fmt.Errorf("read json file %q: %w", path, err)
+			}
+			root, err := filemerge.UnmarshalJSONObject(raw)
+			if err != nil {
+				return false, false, fmt.Errorf("parse json file %q: %w", path, err)
+			}
+			owned := make([]jsonPath, 0, len(blocks))
+			for _, block := range blocks {
+				existing, ok := root[block.key].(map[string]any)
+				if !ok {
+					continue
+				}
+				command, _ := existing["command"].(string)
+				if command != block.ownedCommand {
+					continue
+				}
+				owned = append(owned, jsonPath{block.key})
+			}
+			if len(owned) == 0 {
+				return false, false, nil
+			}
+			updated, changed, err := removeJSONPaths(raw, owned...)
+			if err != nil {
+				return false, false, fmt.Errorf("clean json file %q: %w", path, err)
+			}
+			if !changed {
+				return false, false, nil
+			}
+			if jsonIsEmptyObject(updated) {
+				if err := removeFileIfExists(path); err != nil {
+					return false, false, err
+				}
+				return true, true, nil
+			}
+			// Preserve the file's existing mode: an uninstall rewrite must
+			// not widen permissions on a file the user or agent restricted.
+			perm := os.FileMode(0o644)
+			if info, statErr := os.Lstat(path); statErr == nil {
+				perm = info.Mode().Perm()
+			}
+			if _, err = filemerge.WriteFileAtomic(path, updated, perm); err != nil {
+				return false, false, err
+			}
+			return true, false, nil
+		},
+	}
+}
+
 func rewriteJSONFile(path string, jsonPaths ...jsonPath) operation {
 	return operation{
 		typeID: opRewriteFile,
@@ -1621,6 +1690,17 @@ func retainedAntigravityCLIPluginOperations(adapter agents.Adapter, homeDir stri
 	ops = append(ops, rewriteJSONFile(mcpPath, jsonPath{"mcpServers", "codegraph"}))
 	manifestPath := agy.ImportManifestPath(homeDir)
 	ops = append(ops, removePluginImportOperation(manifestPath))
+	// The statusline script is deployed outside BundleAssets (hooks pattern),
+	// and its registration lives in the user-level settings.json: retire both,
+	// removing only blocks whose command still points at our script.
+	statusLineScript := agy.StatusLineScriptPath(homeDir)
+	ops = append(ops,
+		removeFile(filepath.Join(pluginDir, "statusline.sh")),
+		removeOwnedJSONBlocks(agy.SettingsPath(homeDir),
+			ownedJSONBlock{key: "statusLine", ownedCommand: statusLineScript},
+			ownedJSONBlock{key: "title", ownedCommand: statusLineScript + " --title"},
+		),
+	)
 	ops = append(ops, removeDirIfEmpty(pluginDir))
 	for i := range ops {
 		ops[i].agents = []model.AgentID{model.AgentAntigravityCLI}

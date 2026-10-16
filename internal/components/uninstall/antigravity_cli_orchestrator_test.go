@@ -26,7 +26,7 @@ func TestRetainedAntigravityCLIPluginOperationsCoverOrchestratorRuleAndLegacyRoo
 	ops := retainedAntigravityCLIPluginOperations(adapter, homeDir)
 	pluginDir := agy.GlobalPluginDir(homeDir)
 	for _, op := range ops {
-		if !strings.HasPrefix(op.path, pluginDir+string(filepath.Separator)) && op.path != pluginDir && op.path != agy.ImportManifestPath(homeDir) {
+		if !strings.HasPrefix(op.path, pluginDir+string(filepath.Separator)) && op.path != pluginDir && op.path != agy.ImportManifestPath(homeDir) && op.path != agy.SettingsPath(homeDir) {
 			t.Errorf("global uninstall escaped plugin root: %s", op.path)
 		}
 	}
