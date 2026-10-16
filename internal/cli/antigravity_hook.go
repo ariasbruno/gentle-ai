@@ -82,11 +82,13 @@ func runHookCommand(args []string, stdin io.Reader, stdout io.Writer) error {
 		return fmt.Errorf("hook run requires agent %q; got %q", "antigravity-cli", *agent)
 	}
 
-	return RunAntigravityCLIHook(*event, stdin, stdout, *cwd)
+	return RunAntigravityCLIHook(*event, *agent, stdin, stdout, *cwd)
 }
 
 // RunAntigravityCLIHook handles the official Antigravity CLI lifecycle events.
-func RunAntigravityCLIHook(event string, stdin io.Reader, stdout io.Writer, cwdOverride string) error {
+// The caller states which runtime is executing; the printed reminders never
+// spell out the identity themselves (issue #2440).
+func RunAntigravityCLIHook(event, agent string, stdin io.Reader, stdout io.Writer, cwdOverride string) error {
 	raw, err := io.ReadAll(io.LimitReader(stdin, maxReviewStopHookPayloadBytes))
 	if err != nil {
 		_, _ = fmt.Fprintln(stdout, "{}")
@@ -127,7 +129,7 @@ func RunAntigravityCLIHook(event string, stdin io.Reader, stdout io.Writer, cwdO
 	case "PostInvocation":
 		return handleAntigravityPostInvocation(payload, workspace, stdout)
 	case "Stop":
-		return handleAntigravityStop(payload, workspace, stdout)
+		return handleAntigravityStop(payload, workspace, agent, stdout)
 	default:
 		_, _ = fmt.Fprintln(stdout, "{}")
 		return nil
@@ -258,7 +260,7 @@ func antigravityResolveTargetIdentity(ctx context.Context, repo string) (root, t
 	return root, result.TargetIdentity, result, true, nil
 }
 
-func handleAntigravityStop(payload AntigravityCLIHookPayload, workspace string, stdout io.Writer) error {
+func handleAntigravityStop(payload AntigravityCLIHookPayload, workspace, agent string, stdout io.Writer) error {
 	if payload.TerminationReason != "model_stop" || !payload.FullyIdle {
 		_, _ = fmt.Fprintln(stdout, "{}")
 		return nil
@@ -335,7 +337,7 @@ func handleAntigravityStop(payload AntigravityCLIHookPayload, workspace string, 
 	// preflight and, when available, the provider-issued START. This mirrors
 	// the Claude stop hook's reason text so AGY models get the same actionable
 	// detail instead of a generic "run preflight" that they may not act on.
-	statusCommand := fmt.Sprintf("gentle-ai review status --cwd %s --contract %s --agent antigravity-cli --next-transition", root, ReviewIntegrationContractV2)
+	statusCommand := fmt.Sprintf("gentle-ai review status --cwd %s --contract %s --agent %s --next-transition", root, ReviewIntegrationContractV2, agent)
 	reason := "Receipt-Driven Development: unreviewed candidate changes detected since session baseline (target " + targetIdentity + ")."
 	reason += " Run the STATUS preflight: " + statusCommand
 	if status.NextTransition != nil && status.NextTransition.Execute != nil && status.NextTransition.Execute.Command != "" {

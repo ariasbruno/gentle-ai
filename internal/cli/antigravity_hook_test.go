@@ -21,7 +21,7 @@ func TestAntigravityHookPreInvocationBaselineAndSilent(t *testing.T) {
 	payload := fmtAntigravityHookPayload(convID, []string{repo}, 0, "")
 
 	var stdout bytes.Buffer
-	err := RunAntigravityCLIHook("PreInvocation", strings.NewReader(payload), &stdout, repo)
+	err := RunAntigravityCLIHook("PreInvocation", "antigravity-cli", strings.NewReader(payload), &stdout, repo)
 	if err != nil {
 		t.Fatalf("RunAntigravityCLIHook error: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestAntigravityHookPreInvocationBaselineAndSilent(t *testing.T) {
 	// Subsequent invocation (invocationNum > 0)
 	stdout.Reset()
 	payloadSubsequent := fmtAntigravityHookPayload(convID, []string{repo}, 1, "")
-	err = RunAntigravityCLIHook("PreInvocation", strings.NewReader(payloadSubsequent), &stdout, repo)
+	err = RunAntigravityCLIHook("PreInvocation", "antigravity-cli", strings.NewReader(payloadSubsequent), &stdout, repo)
 	if err != nil {
 		t.Fatalf("subsequent PreInvocation error: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestAntigravityHookStopOutcomes(t *testing.T) {
 
 			var stdout bytes.Buffer
 			prePayload := fmtAntigravityHookPayload(convID, []string{repo}, 0, "")
-			if err := RunAntigravityCLIHook("PreInvocation", strings.NewReader(prePayload), &stdout, repo); err != nil {
+			if err := RunAntigravityCLIHook("PreInvocation", "antigravity-cli", strings.NewReader(prePayload), &stdout, repo); err != nil {
 				t.Fatalf("PreInvocation error: %v", err)
 			}
 			recordPath := filepath.Join(home, ".gentle-ai", "review-stop-hook", "v1", convID+".json")
@@ -92,7 +92,7 @@ func TestAntigravityHookStopOutcomes(t *testing.T) {
 			stageReviewStopHookCandidate(t, repo)
 			stopPayload := fmtAntigravityStopPayload(convID, []string{repo}, 5, tt.terminationReason, tt.fullyIdle)
 			stdout.Reset()
-			if err := RunAntigravityCLIHook("Stop", strings.NewReader(stopPayload), &stdout, repo); err != nil {
+			if err := RunAntigravityCLIHook("Stop", "antigravity-cli", strings.NewReader(stopPayload), &stdout, repo); err != nil {
 				t.Fatalf("Stop error: %v", err)
 			}
 
@@ -123,7 +123,7 @@ func TestAntigravityHookStopOutcomes(t *testing.T) {
 					t.Fatalf("reminder record = %q, error = %v", after, err)
 				}
 				stdout.Reset()
-				if err := RunAntigravityCLIHook("Stop", strings.NewReader(stopPayload), &stdout, repo); err != nil {
+				if err := RunAntigravityCLIHook("Stop", "antigravity-cli", strings.NewReader(stopPayload), &stdout, repo); err != nil {
 					t.Fatalf("second Stop error: %v", err)
 				}
 				// The consumed-check: the same unreviewed candidate keeps blocking
@@ -165,7 +165,7 @@ func TestAntigravityPostToolUseRecordsMutations(t *testing.T) {
 	t.Setenv("HOME", home)
 	payload := `{"conversationId":"conv-mut-test","toolCall":{"name":"write_to_file","args":{"TargetFile":"/project/src/main.go"}},"stepIdx":5,"error":""}`
 	var stdout bytes.Buffer
-	if err := RunAntigravityCLIHook("PostToolUse", strings.NewReader(payload), &stdout, home); err != nil {
+	if err := RunAntigravityCLIHook("PostToolUse", "antigravity-cli", strings.NewReader(payload), &stdout, home); err != nil {
 		t.Fatalf("RunAntigravityCLIHook: %v", err)
 	}
 	if strings.TrimSpace(stdout.String()) != "{}" {
@@ -216,7 +216,7 @@ func TestAntigravityHookPreToolUseCircuitBreaker(t *testing.T) {
 	callHook := func(toolName string, args map[string]any, stepIdx int) (AntigravityCLIHookOutput, string) {
 		payload := fmtAntigravityToolCallPayload(convID, toolName, args, stepIdx)
 		var stdout bytes.Buffer
-		err := RunAntigravityCLIHook("PreToolUse", strings.NewReader(payload), &stdout, "")
+		err := RunAntigravityCLIHook("PreToolUse", "antigravity-cli", strings.NewReader(payload), &stdout, "")
 		if err != nil {
 			t.Fatalf("RunAntigravityCLIHook returned error: %v", err)
 		}
@@ -338,7 +338,7 @@ func TestAntigravityHookPreToolUseKeyOrdering(t *testing.T) {
 	// Call 1 with args {"a": 1, "b": 2}
 	payload1 := `{"conversationId":"` + convID + `","stepIdx":1,"toolCall":{"name":"test_tool","args":{"a":1,"b":2}}}`
 	var stdout bytes.Buffer
-	if err := RunAntigravityCLIHook("PreToolUse", strings.NewReader(payload1), &stdout, ""); err != nil {
+	if err := RunAntigravityCLIHook("PreToolUse", "antigravity-cli", strings.NewReader(payload1), &stdout, ""); err != nil {
 		t.Fatalf("call 1 error: %v", err)
 	}
 	var out1 AntigravityCLIHookOutput
@@ -349,7 +349,7 @@ func TestAntigravityHookPreToolUseKeyOrdering(t *testing.T) {
 	// Call 2 with args {"b": 2, "a": 1} - should be recognized as identical arguments
 	stdout.Reset()
 	payload2 := `{"conversationId":"` + convID + `","stepIdx":2,"toolCall":{"name":"test_tool","args":{"b":2,"a":1}}}`
-	if err := RunAntigravityCLIHook("PreToolUse", strings.NewReader(payload2), &stdout, ""); err != nil {
+	if err := RunAntigravityCLIHook("PreToolUse", "antigravity-cli", strings.NewReader(payload2), &stdout, ""); err != nil {
 		t.Fatalf("call 2 error: %v", err)
 	}
 	var out2 AntigravityCLIHookOutput
@@ -359,7 +359,7 @@ func TestAntigravityHookPreToolUseKeyOrdering(t *testing.T) {
 
 	// Call 3 with args {"a": 1, "b": 2} - 3rd consecutive identical call -> deny
 	stdout.Reset()
-	if err := RunAntigravityCLIHook("PreToolUse", strings.NewReader(payload1), &stdout, ""); err != nil {
+	if err := RunAntigravityCLIHook("PreToolUse", "antigravity-cli", strings.NewReader(payload1), &stdout, ""); err != nil {
 		t.Fatalf("call 3 error: %v", err)
 	}
 	var out AntigravityCLIHookOutput
@@ -391,7 +391,7 @@ func TestAntigravityHookPreToolUseEdgeCases(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var stdout bytes.Buffer
-			if err := RunAntigravityCLIHook("PreToolUse", strings.NewReader(test.payload), &stdout, ""); err != nil {
+			if err := RunAntigravityCLIHook("PreToolUse", "antigravity-cli", strings.NewReader(test.payload), &stdout, ""); err != nil {
 				t.Fatalf("RunAntigravityCLIHook() error = %v", err)
 			}
 			var out AntigravityCLIHookOutput
@@ -472,7 +472,7 @@ func TestAntigravityHookPostEvents(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var stdout bytes.Buffer
-			if err := RunAntigravityCLIHook(tt.event, strings.NewReader(tt.payload), &stdout, t.TempDir()); err != nil {
+			if err := RunAntigravityCLIHook(tt.event, "antigravity-cli", strings.NewReader(tt.payload), &stdout, t.TempDir()); err != nil {
 				t.Fatalf("RunAntigravityCLIHook(%q) error: %v", tt.event, err)
 			}
 			if got := stdout.String(); got != "{}\n" {
@@ -523,7 +523,7 @@ func TestAntigravityHookHelpNamesOfficialEvents(t *testing.T) {
 func TestAntigravityHookPreToolUseMalformedInvokePayloadFailsClosed(t *testing.T) {
 	payload := `{"conversationId":"conv-agy-malformed","toolCall":{"name":"invoke_subagent","args":"not-an-object"}}`
 	var stdout bytes.Buffer
-	if err := RunAntigravityCLIHook("PreToolUse", strings.NewReader(payload), &stdout, ""); err != nil {
+	if err := RunAntigravityCLIHook("PreToolUse", "antigravity-cli", strings.NewReader(payload), &stdout, ""); err != nil {
 		t.Fatalf("RunAntigravityCLIHook() error = %v", err)
 	}
 	var output AntigravityCLIHookOutput
@@ -654,7 +654,7 @@ func TestAntigravityHookPreToolUseInvokeSubagentValidation(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			payload := fmtAntigravityToolCallPayload("conv-agy-validate-"+strings.ReplaceAll(test.name, " ", "-"), "invoke_subagent", test.args, 1)
 			var stdout bytes.Buffer
-			if err := RunAntigravityCLIHook("PreToolUse", strings.NewReader(payload), &stdout, ""); err != nil {
+			if err := RunAntigravityCLIHook("PreToolUse", "antigravity-cli", strings.NewReader(payload), &stdout, ""); err != nil {
 				t.Fatalf("RunAntigravityCLIHook() error = %v", err)
 			}
 			var output AntigravityCLIHookOutput
@@ -710,7 +710,7 @@ func TestAntigravityPreToolUseDeniesSensitiveFilePaths(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			payload := fmtAntigravityToolCallPayload("conv-sensitive-paths", test.tool, test.args, 1)
 			var stdout bytes.Buffer
-			if err := RunAntigravityCLIHook("PreToolUse", strings.NewReader(payload), &stdout, ""); err != nil {
+			if err := RunAntigravityCLIHook("PreToolUse", "antigravity-cli", strings.NewReader(payload), &stdout, ""); err != nil {
 				t.Fatalf("RunAntigravityCLIHook() error = %v", err)
 			}
 			var output AntigravityCLIHookOutput
@@ -760,7 +760,7 @@ func TestAntigravityStopBlocksUntilConsumed(t *testing.T) {
 			for i := 0; i < tc.stopCount; i++ {
 				payload := fmtAntigravityStopPayload(convID, []string{repo}, i, "model_stop", true)
 				var stdout bytes.Buffer
-				if err := RunAntigravityCLIHook("Stop", strings.NewReader(payload), &stdout, repo); err != nil {
+				if err := RunAntigravityCLIHook("Stop", "antigravity-cli", strings.NewReader(payload), &stdout, repo); err != nil {
 					t.Fatalf("stop %d: %v", i+1, err)
 				}
 				if strings.Contains(stdout.String(), "continue") {
@@ -801,7 +801,7 @@ func TestAntigravityStopSurfacesPreflightFailure(t *testing.T) {
 
 	payload := fmtAntigravityStopPayload("conv-stop-silence-test", []string{repo}, 0, "model_stop", true)
 	var stdout bytes.Buffer
-	if err := RunAntigravityCLIHook("Stop", strings.NewReader(payload), &stdout, repo); err != nil {
+	if err := RunAntigravityCLIHook("Stop", "antigravity-cli", strings.NewReader(payload), &stdout, repo); err != nil {
 		t.Fatalf("RunAntigravityCLIHook: %v", err)
 	}
 	out := stdout.String()
@@ -842,7 +842,7 @@ func TestAntigravityPreToolUseAsksForSensitiveCommandLines(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			payload := fmtAntigravityToolCallPayload("conv-sensitive-commands", "run_command", map[string]any{"CommandLine": test.command}, 1)
 			var stdout bytes.Buffer
-			if err := RunAntigravityCLIHook("PreToolUse", strings.NewReader(payload), &stdout, ""); err != nil {
+			if err := RunAntigravityCLIHook("PreToolUse", "antigravity-cli", strings.NewReader(payload), &stdout, ""); err != nil {
 				t.Fatalf("RunAntigravityCLIHook() error = %v", err)
 			}
 			var output AntigravityCLIHookOutput
