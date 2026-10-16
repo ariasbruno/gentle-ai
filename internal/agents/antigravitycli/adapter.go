@@ -569,8 +569,6 @@ func (a *Adapter) DeployPluginTree(homeDir string) error {
 	return a.DeployPluginTreeToDir(pluginDir)
 }
 
-
-
 // deployPluginTreeToDir is the internal implementation that deploys to a given plugin directory.
 func (a *Adapter) DeployPluginTreeToDir(pluginDir string) error {
 	legacyRules, err := a.preflightNativeRules(pluginDir)
@@ -649,6 +647,17 @@ func (a *Adapter) DeployPluginTreeToDir(pluginDir string) error {
 	if _, err := filemerge.WriteFileAtomic(hooksJSONPath, []byte(antigravityCLIPluginHooksJSON), 0o644); err != nil {
 		return err
 	}
+
+	// 3b. Deploy statusline.sh (executable script at plugin root)
+	statuslineContent, err := assets.Read("antigravitycli/statusline.sh")
+	if err != nil {
+		return fmt.Errorf("read statusline asset: %w", err)
+	}
+	statuslinePath := filepath.Join(pluginDir, "statusline.sh")
+	if _, err := filemerge.WriteFileAtomic(statuslinePath, []byte(statuslineContent), 0o755); err != nil {
+		return fmt.Errorf("write statusline.sh: %w", err)
+	}
+	_ = os.Chmod(statuslinePath, 0o755)
 
 	// 4. Deploy Bundle Skills
 	skillsDir := filepath.Join(pluginDir, "skills")
