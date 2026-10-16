@@ -61,7 +61,6 @@ Dependiendo del alcance seleccionado, Gentle AI despliega el bundle completo del
 ├── mcp_config.json                                                                 # Configuración de MCP (Context7, Engram, CodeGraph)
 ├── hooks.json                                                                      # Definición de hooks de eventos para agy
 ├── hooks/                                                                          # Scripts ejecutables de hooks (hook.sh / hook.cmd)
-├── statusline.sh                                                                   # Status line Gentle (payload JSON de agy por stdin; requiere jq)
 ├── rules/
 │   ├── AGENTS.md                                                                   # Reglas y persona base
 │   ├── gentle-ai-orchestrator.md                                                   # Regla principal de orquestación

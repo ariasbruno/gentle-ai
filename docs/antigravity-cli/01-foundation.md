@@ -36,7 +36,6 @@ El adaptador [`antigravitycli`](../../internal/agents/antigravitycli/adapter.go)
     ├── mcp_config.json
     ├── hooks.json
     ├── hooks/{hook.sh,hook.cmd}
-    ├── statusline.sh
     ├── rules/
     │   ├── AGENTS.md
     │   ├── gentle-ai-routing.md
@@ -100,7 +99,6 @@ Ambos alcances despliegan el bundle completo de assets:
     ├── mcp_config.json
     ├── hooks.json
     ├── hooks/{hook.sh,hook.cmd}
-    ├── statusline.sh
     ├── rules/
     │   ├── AGENTS.md
     │   ├── gentle-ai-routing.md
@@ -117,7 +115,6 @@ Ambos alcances despliegan el bundle completo de assets:
 ├── mcp_config.json
 ├── hooks.json
 ├── hooks/{hook.sh,hook.cmd}
-├── statusline.sh
 ├── rules/
 │   ├── AGENTS.md
 │   ├── gentle-ai-routing.md
@@ -234,18 +231,18 @@ Para evitar comandos destructivos accidentales o fuga de secretos en sesiones au
 
 ## Status line personalizado: registro administrado en settings.json
 
-`agy` renderiza una status line propia ejecutando el comando del bloque `statusLine` de `~/.gemini/antigravity-cli/settings.json`, al que le pasa el payload de estado JSON por stdin en cada cambio de estado del agente (ANSI completo, multilínea). Gentle AI despliega su script — [`statusline.sh`](../../internal/assets/antigravitycli/statusline.sh) — a la raíz del plugin y registra ambos bloques con [`EnsureStatusLineSettings`](../../internal/agents/antigravitycli/statusline_settings.go):
+`agy` renderiza una status line propia ejecutando el comando del bloque `statusLine` de `~/.gemini/antigravity-cli/settings.json`, al que le pasa el payload de estado JSON por stdin en cada cambio de estado del agente (ANSI completo, multilínea). Gentle AI registra ambos bloques con [`EnsureStatusLineSettings`](../../internal/agents/antigravitycli/statusline_settings.go) apuntando al subcomando in-process [`gentle-ai statusline`](../../internal/cli/statusline.go) — el mismo binario que los hooks ya requieren, sin script, sin `jq`, sin bash y portable a Windows:
 
 ```json
 {
-  "statusLine": { "type": "command", "command": "~/.gemini/config/plugins/gentle-ai/statusline.sh" },
-  "title": { "type": "command", "command": "~/.gemini/config/plugins/gentle-ai/statusline.sh --title" }
+  "statusLine": { "type": "command", "command": "gentle-ai statusline" },
+  "title": { "type": "command", "command": "gentle-ai statusline --title" }
 }
 ```
 
 La línea replica la barra compacta de Gentle Shell: marca `✿ gentle ai`, separador `⟡`, estado del agente, ubicación (rama git + dirty), modelo y modo de ejecución, gauge de contexto `▰▱` de 8 celdas (acento <80 / warning ≥80 / error ≥95, marcador `!` ≥90), costo de sesión (sufijo `sub` con plan de suscripción), ventanas de quota (`5h`/`1d`/`week`), jobs en background, subagentes, sandbox, modo vim y el interruptor RDD (`🌹 on`/`off`), con degradación por ancho de terminal (location compacta → descarte de segmentos → truncado) y `conversation_title` alineada a la derecha. El modo `--title` alimenta el título de la terminal.
 
-**Reglas de propiedad (una por bloque):** Gentle AI administra solo `type`+`command` cuando el `command` está vacío o ya apunta a su script; un comando ajeno deja el bloque intacto. Las llaves `enabled`, `padding` y `stack_with_default` son tuyas y se preservan tal cual (`stack_with_default: true` renderiza la línea debajo de la built-in de agy). Un `settings.json` ausente se crea; uno malformado falla cerrado sin modificarse; una configuración ya administrada no se reescribe. `gentle-ai uninstall` retira los bloques solo cuando siguen apuntando al script administrado, y el script desaparece con el árbol del plugin.
+**Reglas de propiedad (una por bloque):** Gentle AI administra solo `type`+`command` cuando el `command` está vacío, ya es el subcomando administrado, o es el registro legacy que apuntaba al script viejo (un sync lo re-escribe al subcomando); un comando ajeno deja el bloque intacto. Las llaves `enabled`, `padding` y `stack_with_default` son tuyas y se preservan tal cual (`stack_with_default: true` renderiza la línea debajo de la built-in de agy). Un `settings.json` ausente se crea; uno malformado falla cerrado sin modificarse; una configuración ya administrada no se reescribe. `gentle-ai uninstall` retira los bloques cuando apuntan al subcomando o al registro legacy, y el script viejo que algún sync anterior deployó se poda del árbol del plugin en el próximo sync.
 
 **Configuración de usuario** en `~/.gentle-ai/statusline.json` (archivo tuyo; sync nunca lo toca ni lo poda):
 
@@ -264,9 +261,9 @@ La línea replica la barra compacta de Gentle Shell: marca `✿ gentle ai`, sepa
 }
 ```
 
-`density` acepta `comfortable`/`compact`/`minimal` (minimal oculta la marca). `visibility` oculta segmentos: `modelDetails` (modelo), `usageCost` (contexto+costo+quota), `agents` (jobs+subagentes), `rdd` (interruptor de revisión) y `contextWarning` (marcador `!`). `changes: true` habilita el segmento de cambios (`±N +A/−D` vía git). Valores ausentes o archivo malformado → defaults. El interruptor RDD se lee con `gentle-ai review mode status --json` bajo `timeout 0.5` con caché de 30 s; cualquier falla muestra `🌹 ?` y nunca bloquea la línea.
+`density` acepta `comfortable`/`compact`/`minimal` (minimal oculta la marca). `visibility` oculta segmentos: `modelDetails` (modelo), `usageCost` (contexto+costo+quota), `agents` (jobs+subagentes), `rdd` (interruptor de revisión) y `contextWarning` (marcador `!`). `changes: true` habilita el segmento de cambios (`±N +A/−D` vía git con deadline de 500 ms). Valores ausentes o archivo malformado → defaults. El interruptor RDD se lee in-process con el mismo resolver read-only del comando `review mode` (deadline 500 ms); cualquier falla muestra `🌹 ?` y nunca bloquea la línea.
 
-**Requisito:** `jq` en `PATH`; sin él la línea muestra exactamente `✿ gentle ai ⟡ install jq for the live status line`.
+**Sin dependencias:** el render es in-process en el binario `gentle-ai` que los hooks ya requieren — no hace falta `jq` ni bash, y funciona igual en Windows. Un payload ausente o ilegible degrada a la línea `✿ gentle ai` sin error.
 
 ## CLI frente a IDE
 
