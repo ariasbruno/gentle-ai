@@ -128,6 +128,8 @@ func RunArgs(args []string, stdout io.Writer) error {
 			return cli.RunCodeGraph(args[1:], stdout)
 		case "telemetry":
 			return cli.RunTelemetry(args[1:], stdout)
+		case "statusline":
+			return cli.RunStatusLine(args[1:], stdout)
 		case "hook":
 			return cli.RunHook(args[1:], stdout)
 		case "review":

@@ -65,6 +65,9 @@ COMPATIBILITY COMMANDS
   telemetry <status|enable|disable|preview|trigger> [--json]
                Anonymous, opt-out usage telemetry; preview shows the exact payload without sending it;
                trigger runs the opportunistic check for hosts that never call install/update/sync
+  statusline [--title] [--cwd <dir>]
+               Render the agy (Antigravity CLI) status line from the stdin JSON payload;
+               install/sync registers it in agy settings.json (no jq, no bash required)
   restore      Restore a config backup
   doctor       Run ecosystem health diagnostics (bounded tool version probes)
   version      Print version
