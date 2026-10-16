@@ -1163,33 +1163,10 @@ func TestDeployPluginTree(t *testing.T) {
 		t.Errorf("AGENTS.md lost persona section:\n%s", string(cleanedData))
 	}
 
-	// Verify statusline script: executable, byte-identical to the embedded
-	// asset, and restored by a re-deploy (S1).
-	statuslinePath := filepath.Join(pluginDir, "statusline.sh")
-	statuslineInfo, err := os.Stat(statuslinePath)
-	if err != nil {
-		t.Errorf("missing deployed statusline.sh: %v", err)
-	} else if statuslineInfo.Mode().Perm() != 0o755 {
-		t.Errorf("statusline.sh mode = %o, want 0755", statuslineInfo.Mode().Perm())
-	}
-	wantStatusline, err := assets.Read("antigravitycli/statusline.sh")
-	if err != nil {
-		t.Fatalf("read embedded statusline asset: %v", err)
-	}
-	if data, err := os.ReadFile(statuslinePath); err != nil || string(data) != wantStatusline {
-		t.Errorf("deployed statusline.sh differs from embedded asset: %v", err)
-	}
-	if err := os.WriteFile(statuslinePath, []byte("#!/bin/bash\necho tampered\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := adapter.DeployPluginTree(homeDir); err != nil {
-		t.Fatalf("re-deploy error = %v", err)
-	}
-	if data, err := os.ReadFile(statuslinePath); err != nil || string(data) != wantStatusline {
-		t.Errorf("statusline.sh not restored by re-deploy: %v", err)
-	}
-	if info, err := os.Stat(statuslinePath); err != nil || info.Mode().Perm() != 0o755 {
-		t.Errorf("statusline.sh mode not restored to 0755: %v", err)
+	// The statusline script is no longer deployed (in-process subcommand):
+	// a stale copy from an older sync is pruned with the legacy files.
+	if _, err := os.Stat(filepath.Join(pluginDir, "statusline.sh")); !os.IsNotExist(err) {
+		t.Errorf("legacy statusline.sh was not pruned from the plugin root")
 	}
 }
 

@@ -648,17 +648,6 @@ func (a *Adapter) DeployPluginTreeToDir(pluginDir string) error {
 		return err
 	}
 
-	// 3b. Deploy statusline.sh (executable script at plugin root)
-	statuslineContent, err := assets.Read("antigravitycli/statusline.sh")
-	if err != nil {
-		return fmt.Errorf("read statusline asset: %w", err)
-	}
-	statuslinePath := filepath.Join(pluginDir, "statusline.sh")
-	if _, err := filemerge.WriteFileAtomic(statuslinePath, []byte(statuslineContent), 0o755); err != nil {
-		return fmt.Errorf("write statusline.sh: %w", err)
-	}
-	_ = os.Chmod(statuslinePath, 0o755)
-
 	// 4. Deploy Bundle Skills
 	skillsDir := filepath.Join(pluginDir, "skills")
 	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
@@ -720,6 +709,9 @@ func (a *Adapter) DeployPluginTreeToDir(pluginDir string) error {
 		filepath.Join(pluginDir, "chains", "sdd-verify.chain.md"),
 		filepath.Join(pluginDir, "rules", "gentle-ai-codegraph.md"),
 		filepath.Join(pluginDir, "rules", "gentle-ai-orchestrator-details.md"),
+		// The status line renders in-process (`gentle-ai statusline`); the
+		// legacy bash script an older sync deployed is pruned here.
+		filepath.Join(pluginDir, "statusline.sh"),
 		// The Pi-runtime review ledger shipped in _shared before the canon-first
 		// split; its content describes Pi's extension system (SessionManager,
 		// globalThis[Symbol.for], host relay) and is removed from the bundle.

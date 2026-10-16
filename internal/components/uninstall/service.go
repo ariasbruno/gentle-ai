@@ -1248,17 +1248,19 @@ func rewriteMarkdownFile(path string, mutate func(content string) (string, bool)
 	}
 }
 
-// ownedJSONBlock pairs a top-level settings key with the managed command
-// that identifies gentle-ai ownership of that block.
+// ownedJSONBlock pairs a top-level settings key with the managed commands
+// that identify gentle-ai ownership of that block (the current subcommand
+// plus any legacy registration identity).
 type ownedJSONBlock struct {
-	key          string
-	ownedCommand string
+	key           string
+	ownedCommands []string
 }
 
 // removeOwnedJSONBlocks rewrites a JSON settings file removing each listed
-// top-level object key only when its nested `command` equals the managed
-// command. User-owned blocks and every other key are preserved byte-for-byte
-// outside the removed keys; a file left as an empty object is removed.
+// top-level object key only when its nested `command` equals one of the
+// managed commands. User-owned blocks and every other key are preserved
+// byte-for-byte outside the removed keys; a file left as an empty object is
+// removed.
 func removeOwnedJSONBlocks(path string, blocks ...ownedJSONBlock) operation {
 	return operation{
 		typeID: opRewriteFile,
@@ -1282,7 +1284,7 @@ func removeOwnedJSONBlocks(path string, blocks ...ownedJSONBlock) operation {
 					continue
 				}
 				command, _ := existing["command"].(string)
-				if command != block.ownedCommand {
+				if !slices.Contains(block.ownedCommands, command) {
 					continue
 				}
 				owned = append(owned, jsonPath{block.key})
@@ -1690,15 +1692,16 @@ func retainedAntigravityCLIPluginOperations(adapter agents.Adapter, homeDir stri
 	ops = append(ops, rewriteJSONFile(mcpPath, jsonPath{"mcpServers", "codegraph"}))
 	manifestPath := agy.ImportManifestPath(homeDir)
 	ops = append(ops, removePluginImportOperation(manifestPath))
-	// The statusline script is deployed outside BundleAssets (hooks pattern),
-	// and its registration lives in the user-level settings.json: retire both,
-	// removing only blocks whose command still points at our script.
+	// The statusline renders in-process (`gentle-ai statusline`); the legacy
+	// deployed script is no longer shipped but still cleaned up here, and the
+	// registration is retired for both identities: the subcommand and the
+	// legacy script path an older sync registered.
 	statusLineScript := agy.StatusLineScriptPath(homeDir)
 	ops = append(ops,
 		removeFile(filepath.Join(pluginDir, "statusline.sh")),
 		removeOwnedJSONBlocks(agy.SettingsPath(homeDir),
-			ownedJSONBlock{key: "statusLine", ownedCommand: statusLineScript},
-			ownedJSONBlock{key: "title", ownedCommand: statusLineScript + " --title"},
+			ownedJSONBlock{key: "statusLine", ownedCommands: []string{antigravitycli.ManagedStatusLineCommand, statusLineScript}},
+			ownedJSONBlock{key: "title", ownedCommands: []string{antigravitycli.ManagedTitleCommand, statusLineScript + " --title"}},
 		),
 	)
 	ops = append(ops, removeDirIfEmpty(pluginDir))

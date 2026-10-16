@@ -66,7 +66,7 @@ func TestEnsureStatusLineSettings_FillsEmptyStub(t *testing.T) {
 	if !ok {
 		t.Fatalf("statusLine block missing or not an object: %s", raw)
 	}
-	wantCmd := adapter.StatusLineScriptPath(homeDir)
+	wantCmd := "gentle-ai statusline"
 	if statusLine["type"] != "command" {
 		t.Errorf("statusLine.type = %v, want command", statusLine["type"])
 	}
@@ -87,8 +87,8 @@ func TestEnsureStatusLineSettings_FillsEmptyStub(t *testing.T) {
 	if title["type"] != "command" {
 		t.Errorf("title.type = %v, want command", title["type"])
 	}
-	if title["command"] != wantCmd+" --title" {
-		t.Errorf("title.command = %v, want %s --title", title["command"], wantCmd)
+	if title["command"] != "gentle-ai statusline --title" {
+		t.Errorf("title.command = %v, want gentle-ai statusline --title", title["command"])
 	}
 }
 
@@ -127,7 +127,7 @@ func TestEnsureStatusLineSettings_PreservesForeignBlocks(t *testing.T) {
 func TestEnsureStatusLineSettings_ReownsOursAndPreservesUserKnobs(t *testing.T) {
 	homeDir := t.TempDir()
 	adapter := NewAdapter()
-	ourCmd := adapter.StatusLineScriptPath(homeDir)
+	ourCmd := "gentle-ai statusline"
 	settings := `{
   "statusLine": {
     "type": "broken",
@@ -179,11 +179,11 @@ func TestEnsureStatusLineSettings_CreatesMissingFile(t *testing.T) {
 	_, raw := readAGYSettings(t, homeDir)
 	root := decodeAGYSettings(t, raw)
 	statusLine, ok := root["statusLine"].(map[string]any)
-	if !ok || statusLine["command"] != adapter.StatusLineScriptPath(homeDir) {
+	if !ok || statusLine["command"] != "gentle-ai statusline" {
 		t.Errorf("statusLine block not registered on fresh settings: %s", raw)
 	}
 	title, ok := root["title"].(map[string]any)
-	if !ok || title["command"] != adapter.StatusLineScriptPath(homeDir)+" --title" {
+	if !ok || title["command"] != "gentle-ai statusline --title" {
 		t.Errorf("title block not registered on fresh settings: %s", raw)
 	}
 }
@@ -232,16 +232,15 @@ func TestEnsureStatusLineSettings_NonObjectBlockLeftUntouched(t *testing.T) {
 func TestEnsureStatusLineSettings_NoChangeKeepsBytes(t *testing.T) {
 	homeDir := t.TempDir()
 	adapter := NewAdapter()
-	ourCmd := adapter.StatusLineScriptPath(homeDir)
 	settings := `{
   "statusLine": {
-    "command": "` + ourCmd + `",
+    "command": "gentle-ai statusline",
     "type": "command",
     "enabled": true
   },
   "title": {
     "type": "command",
-    "command": "` + ourCmd + ` --title"
+    "command": "gentle-ai statusline --title"
   }
 }`
 	writeAGYSettings(t, homeDir, settings)
@@ -283,7 +282,52 @@ func TestEnsureStatusLineSettings_TitleManagedIndependently(t *testing.T) {
 	if !ok {
 		t.Fatalf("managed title block missing: %s", raw)
 	}
-	if title["command"] != adapter.StatusLineScriptPath(homeDir)+" --title" {
+	if title["command"] != "gentle-ai statusline --title" {
 		t.Errorf("title.command = %v, want managed path", title["command"])
+	}
+}
+
+// TestEnsureStatusLineSettings_ReownsLegacyScriptPath verifies an upgrade: a
+// registration pointing at the legacy deployed script is rewritten to the
+// in-process subcommand, preserving user keys.
+func TestEnsureStatusLineSettings_ReownsLegacyScriptPath(t *testing.T) {
+	homeDir := t.TempDir()
+	adapter := NewAdapter()
+	legacyCmd := adapter.StatusLineScriptPath(homeDir)
+	settings := `{
+  "statusLine": {
+    "type": "command",
+    "command": "` + legacyCmd + `",
+    "enabled": false
+  },
+  "title": {
+    "type": "command",
+    "command": "` + legacyCmd + ` --title"
+  }
+}`
+	writeAGYSettings(t, homeDir, settings)
+
+	if err := adapter.EnsureStatusLineSettings(homeDir); err != nil {
+		t.Fatalf("EnsureStatusLineSettings() error = %v", err)
+	}
+
+	_, raw := readAGYSettings(t, homeDir)
+	root := decodeAGYSettings(t, raw)
+	statusLine, ok := root["statusLine"].(map[string]any)
+	if !ok {
+		t.Fatalf("statusLine block missing: %s", raw)
+	}
+	if statusLine["command"] != "gentle-ai statusline" {
+		t.Errorf("legacy statusLine not re-owned to the subcommand: %s", raw)
+	}
+	if statusLine["enabled"] != false {
+		t.Errorf("statusLine.enabled = %v, want preserved false", statusLine["enabled"])
+	}
+	title, ok := root["title"].(map[string]any)
+	if !ok {
+		t.Fatalf("title block missing: %s", raw)
+	}
+	if title["command"] != "gentle-ai statusline --title" {
+		t.Errorf("legacy title not re-owned to the subcommand: %s", raw)
 	}
 }

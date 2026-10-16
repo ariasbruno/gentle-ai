@@ -67,7 +67,7 @@ func readStatusLineSettings(t *testing.T, agy *antigravitycli.Adapter, homeDir s
 func TestRetainedAntigravityCLIUninstallRemovesManagedStatusLine(t *testing.T) {
 	homeDir := t.TempDir()
 	agy, ops := statusLineOps(t, homeDir)
-	ourCmd := agy.StatusLineScriptPath(homeDir)
+	ourCmd := "gentle-ai statusline"
 	settings := `{
   "allowNonWorkspaceAccess": true,
   "statusLine": {
@@ -77,7 +77,7 @@ func TestRetainedAntigravityCLIUninstallRemovesManagedStatusLine(t *testing.T) {
   },
   "title": {
     "type": "command",
-    "command": "` + ourCmd + ` --title"
+    "command": "gentle-ai statusline --title"
   }
 }`
 	writeStatusLineSettings(t, agy, homeDir, settings)
@@ -147,7 +147,7 @@ func TestRetainedAntigravityCLIUninstallPreservesUserStatusLine(t *testing.T) {
 func TestRetainedAntigravityCLIUninstallMixedOwnership(t *testing.T) {
 	homeDir := t.TempDir()
 	agy, ops := statusLineOps(t, homeDir)
-	ourCmd := agy.StatusLineScriptPath(homeDir)
+	ourCmd := "gentle-ai statusline"
 	writeStatusLineSettings(t, agy, homeDir, `{
   "statusLine": {
     "type": "command",
@@ -181,7 +181,7 @@ func TestRetainedAntigravityCLIUninstallMixedOwnership(t *testing.T) {
 func TestRetainedAntigravityCLIUninstallRemovesEmptySettingsFile(t *testing.T) {
 	homeDir := t.TempDir()
 	agy, ops := statusLineOps(t, homeDir)
-	ourCmd := agy.StatusLineScriptPath(homeDir)
+	ourCmd := "gentle-ai statusline"
 	writeStatusLineSettings(t, agy, homeDir, `{
   "statusLine": {
     "command": "`+ourCmd+`"
@@ -255,5 +255,37 @@ func TestRetainedAntigravityCLIUninstallRemovesStatuslineScript(t *testing.T) {
 	script := filepath.Join(agy.GlobalPluginDir(homeDir), "statusline.sh")
 	if op := findOperationByPath(ops, script); op == nil {
 		t.Errorf("retained operations missing statusline.sh removal (%s)", script)
+	}
+}
+
+// TestRetainedAntigravityCLIUninstallRemovesLegacyScriptRegistration verifies
+// a registration left by an older sync (the deployed script path) is retired
+// by uninstall, including its user-owned extras surviving nothing else.
+func TestRetainedAntigravityCLIUninstallRemovesLegacyScriptRegistration(t *testing.T) {
+	homeDir := t.TempDir()
+	agy, ops := statusLineOps(t, homeDir)
+	legacyCmd := agy.StatusLineScriptPath(homeDir)
+	writeStatusLineSettings(t, agy, homeDir, `{
+  "statusLine": {
+    "type": "command",
+    "command": "`+legacyCmd+`",
+    "enabled": false
+  }
+}`)
+
+	op := findOperationByPath(ops, agy.SettingsPath(homeDir))
+	if op == nil {
+		t.Fatal("retained operations missing the settings.json statusline cleanup")
+	}
+	changed, _, err := op.apply(op.path)
+	if err != nil {
+		t.Fatalf("apply statusline cleanup: %v", err)
+	}
+	if !changed {
+		t.Fatal("legacy script registration was not removed")
+	}
+	// The settings file held only the managed block: it is removed entirely.
+	if _, statErr := os.Stat(agy.SettingsPath(homeDir)); !os.IsNotExist(statErr) {
+		t.Errorf("empty settings.json was not removed after retiring the legacy block")
 	}
 }
