@@ -551,6 +551,9 @@ func antigravityCLISensitiveCommandLine(call *AntigravityCLIToolCall) (string, b
 }
 
 func handleAntigravityPreToolUse(payload AntigravityCLIHookPayload, _ string, stdout io.Writer) error {
+	// Statusline phase (S12): best-effort activity record; it never changes
+	// the decision below.
+	recordAntigravityStatusLinePhase(payload)
 	if decision, reason, applies := evaluateAntigravityCLIToolCall(payload.ToolCall); applies && decision != "allow" {
 		return writeAntigravityPreToolUseDecision(stdout, decision, reason)
 	}

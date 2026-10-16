@@ -72,6 +72,9 @@ func runStatusLine(args []string, stdin io.Reader, stdout io.Writer, homeDir str
 	}
 
 	extras := statusline.Extras{Home: homeDir}
+	if payload.AgentState != "" && payload.AgentState != "idle" {
+		extras.Phase = readStatusLinePhase(homeDir, payload.ConversationID)
+	}
 	if config.Visibility.RDD {
 		extras.RDDMode = resolveStatusLineRDD(cwd)
 	}
