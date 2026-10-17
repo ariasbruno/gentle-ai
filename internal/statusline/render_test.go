@@ -513,9 +513,10 @@ func TestRenderTasklistSegment(t *testing.T) {
 	}
 }
 
-// TestRenderCycleMode pins the L23 mode resolution: cycle_mode wins, the
-// canonical execution_mode is the fallback, and an absent mode renders the
-// agy default (auto) — the mode is always visible.
+// TestRenderCycleMode pins the mode resolution: cycle_mode wins, the
+// canonical execution_mode is the fallback, and an absent mode renders
+// `default` — auto is a distinct account-gated mode (L24), so absence
+// never means auto.
 func TestRenderCycleMode(t *testing.T) {
 	base := `"model": {"display_name": "Gemini 3.5 Pro (High)"}, "terminal_width": 200`
 	cases := []struct {
@@ -523,9 +524,10 @@ func TestRenderCycleMode(t *testing.T) {
 	}{
 		{"cycle_mode plan", `{` + base + `, "cycle_mode": "plan"}`, "plan · Gemini 3.5 Pro (High)"},
 		{"cycle_mode accept-edits", `{` + base + `, "cycle_mode": "accept-edits"}`, "accept-edits · Gemini 3.5 Pro (High)"},
-		{"default is auto", `{` + base + `}`, "auto · Gemini 3.5 Pro (High)"},
+		{"absent means default", `{` + base + `}`, "default · Gemini 3.5 Pro (High)"},
 		{"execution_mode fallback", `{` + base + `, "execution_mode": "planning"}`, "planning · Gemini 3.5 Pro (High)"},
 		{"cycle wins over execution", `{` + base + `, "execution_mode": "planning", "cycle_mode": "plan"}`, "plan · Gemini 3.5 Pro (High)"},
+		{"cycle_mode auto passes through", `{` + base + `, "cycle_mode": "auto"}`, "auto · Gemini 3.5 Pro (High)"},
 	}
 	for _, testCase := range cases {
 		payload := mustPayload(t, testCase.raw)

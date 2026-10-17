@@ -273,15 +273,18 @@ func buildSegments(p *Payload, config Config, extras Extras) []segment {
 	}
 
 	// Block 1 (never drops): bare petal + `mode · model` (L18/L19). The
-	// mode is always visible (L23): agy 1.4.1 sends cycle_mode when a mode
-	// is set and omits it in the default (auto) mode; the canonical docs
-	// name execution_mode, kept as a fallback.
+	// mode is always visible (L23/L24): agy sends cycle_mode when a mode is
+	// set ("plan", "accept-edits", and presumably "auto" where available)
+	// and omits it in the default mode — auto is a distinct, account-gated
+	// mode ("--mode auto is not available for this account; continuing in
+	// the default mode"), so the absent key means default, not auto. The
+	// canonical execution_mode is kept as a fallback.
 	mode := p.CycleMode
 	if mode == "" {
 		mode = p.ExecutionMode
 	}
 	if mode == "" {
-		mode = "auto"
+		mode = "default"
 	}
 	petalText := petalGlyph(p)
 	if config.Visibility.ModelDetails {
