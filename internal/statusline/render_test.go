@@ -15,11 +15,12 @@ func mustPayload(t *testing.T, raw string) *Payload {
 }
 
 func defaultExtras() Extras {
-	return Extras{Home: "/home/user", RDDMode: "on"}
+	return Extras{RDDMode: "on"}
 }
 
-// TestRenderFullLine pins the comfortable full line: every visible segment
-// and the right-aligned conversation title.
+// TestRenderFullLine pins the comfortable full line: the bare petal with the
+// mode·model block first, then ctx, cost, quota, jobs, subagents, engram,
+// rdd, and changes — and nothing that L19 removed.
 func TestRenderFullLine(t *testing.T) {
 	payload := mustPayload(t, `{
 		"agent_state": "working",
@@ -38,20 +39,20 @@ func TestRenderFullLine(t *testing.T) {
 		"plan_tier": "Pro",
 		"vim": {"mode": "NORMAL"}
 	}`)
-
 	line := Render(payload, DefaultConfig(), defaultExtras())
+	plain := stripANSI(line)
 	for _, want := range []string{
-		"⟡", "working…", "~/project/src/feature feat/login*",
-		"Gemini 3.5 Pro (High) · planning", "ctx ", "43%", "$0.312",
-		"weekly", "30%", "⧗ 2 jobs", "✦ 2 subagents", "⊘ sandbox·net",
-		"vim.NORMAL", "🌹 on", "fix login",
+		"planning · Gemini 3.5 Pro (High)", "ctx ", "43%", "$0.312",
+		"1d0h", "30%", "⧗ 2 jobs", "✦ 2 subagents", "🌹 on",
 	} {
-		if !strings.Contains(stripANSI(line), want) {
+		if !strings.Contains(plain, want) {
 			t.Errorf("missing segment %q in: %s", want, line)
 		}
 	}
-	if got := visibleWidth(line); got != 220 {
-		t.Errorf("right-aligned line width = %d, want exactly the terminal width 220", got)
+	for _, banned := range []string{"gentle ai", "feat/login", "~/", "⊘ sandbox", "vim.NORMAL", "fix login", "…"} {
+		if strings.Contains(plain, banned) {
+			t.Errorf("removed segment %q still rendered: %s", banned, line)
+		}
 	}
 }
 
@@ -70,7 +71,7 @@ func TestRenderQuotaWindows(t *testing.T) {
 		"context_window": {"used_percentage": 10}
 	}`)
 	line := Render(payload, DefaultConfig(), defaultExtras())
-	for _, want := range []string{"weekly", "daily", "hourly", "30%", "70%", "50%"} {
+	for _, want := range []string{"7d0h", "1d0h", "1h0m", "30%", "70%", "50%"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("missing quota marker %q in: %s", want, line)
 		}
@@ -91,7 +92,7 @@ func TestRenderQuotaFiltersInactiveFamily(t *testing.T) {
 		"context_window": {"used_percentage": 10}
 	}`)
 	line := Render(payload, DefaultConfig(), defaultExtras())
-	if !strings.Contains(line, "weekly") {
+	if !strings.Contains(line, "7d0h") {
 		t.Errorf("active family bucket missing: %s", line)
 	}
 	if strings.Contains(line, "claude") || strings.Contains(line, "5h") {
@@ -123,50 +124,99 @@ func TestRenderHighContextWarning(t *testing.T) {
 	}
 }
 
-// TestRenderDegradationNarrow pins the width-driven cascade: compact location
-// with a clipped branch, then dropped auxiliary segments.
-func TestRenderDegradationNarrow(t *testing.T) {
+// TestRenderCascade pins the L18 cascade: quota compacts then drops first,
+// then cost, then ctx; the petal block always survives and the line always
+// fits the terminal width.
+func TestRenderCascade(t *testing.T) {
 	payload := mustPayload(t, `{
-		"cwd": "/home/user/dev/very/deep/project/directory",
-		"conversation_title": "fix login",
+		"agent_state": "working",
 		"model": {"display_name": "Gemini 3.5 Pro (High)"},
 		"context_window": {"used_percentage": 42.5},
 		"cost": 0.312,
-		"plan_tier": "Pro",
 		"quota": {"gemini-weekly": {"remaining_fraction": 0.7, "reset_in_seconds": 604800}},
-		"vcs": {"branch": "chore/agy-integration-ai-v4.1.1-shell-v4.2.0", "dirty": true},
 		"task_count": 2,
-		"terminal_width": 110,
-		"vim": {"mode": "NORMAL"}
+		"subagents": [{"name": "a"}, {"name": "b"}],
+		"terminal_width": 200,
+		"execution_mode": "planning"
 	}`)
-	line := Render(payload, DefaultConfig(), defaultExtras())
-	if !strings.Contains(line, "directory chore/agy-inte…*") {
-		t.Errorf("location not compacted with clipped branch: %s", line)
+	extras := defaultExtras()
+	extras.Observations = 918
+	extras.EngramProject = "gentle-ai"
+
+	full := Render(payload, DefaultConfig(), extras)
+	plainFull := stripANSI(full)
+	for _, want := range []string{"7d0h", "$0.312", "ctx ", "⧗ 2 jobs", "✦ 2 subagents", "🧠 gentle-ai · 918", "🌹 on"} {
+		if !strings.Contains(plainFull, want) {
+			t.Fatalf("wide line missing %q: %s", want, full)
+		}
 	}
-	if visibleWidth(line) > 110 {
-		t.Errorf("degraded line still overflows: %d cols: %s", visibleWidth(line), line)
+
+	// Narrow enough that the quota bars overflow: quota drops, everything
+	// above it in priority survives, and the line fits.
+	narrow := *payload
+	narrow.TerminalWidth = 60
+	line := Render(&narrow, DefaultConfig(), extras)
+	plain := stripANSI(line)
+	if strings.Contains(plain, "7d0h") || strings.Contains(plain, "▰") {
+		t.Errorf("quota survived the cascade at 60 cols: %s", line)
+	}
+	if strings.Contains(plain, "$0.312") || strings.Contains(plain, "ctx ") {
+		t.Errorf("cost/ctx should drop after quota: %s", line)
+	}
+	if !strings.Contains(plain, "🌹 on") || !strings.Contains(plain, "🧠 918") {
+		t.Errorf("rdd/engram dropped before usage segments: %s", line)
+	}
+	if !strings.Contains(plain, "planning · Gemini 3.5 Pro (High)") {
+		t.Errorf("petal block did not survive: %s", line)
+	}
+	if visibleWidth(line) > 60 {
+		t.Errorf("cascaded line overflows: %d cols: %s", visibleWidth(line), line)
+	}
+
+	// Extremely narrow: only the petal block survives, truncated.
+	tiny := narrow
+	tiny.TerminalWidth = 20
+	line = Render(&tiny, DefaultConfig(), extras)
+	if visibleWidth(line) > 20 {
+		t.Errorf("tiny line overflows: %d cols: %s", visibleWidth(line), line)
+	}
+	tinyPlain := stripANSI(line)
+	petalSeen := false
+	for _, frame := range petalFrames {
+		if strings.Contains(tinyPlain, frame) {
+			petalSeen = true
+		}
+	}
+	if !petalSeen {
+		t.Errorf("tiny line lost the petal: %s", line)
 	}
 }
 
-// TestRenderMinimalHidesBrand pins the minimal density behavior.
-func TestRenderMinimalHidesBrand(t *testing.T) {
+// TestRenderMinimal pins the minimal density: only the petal block, tasklist,
+// rdd, and engram survive; usage segments and agents never render.
+func TestRenderMinimal(t *testing.T) {
 	payload := mustPayload(t, `{
-		"cwd": "/home/user/project",
+		"agent_state": "working",
 		"model": {"display_name": "Gemini 3.5 Pro"},
 		"context_window": {"used_percentage": 10},
+		"cost": 0.312,
+		"quota": {"gemini-weekly": {"remaining_fraction": 0.7, "reset_in_seconds": 86400}},
+		"task_count": 2,
 		"terminal_width": 200
 	}`)
+	extras := defaultExtras()
+	extras.Observations = 918
 	config := DefaultConfig()
 	config.Density = DensityMinimal
-	line := Render(payload, config, defaultExtras())
-	if strings.Contains(line, brandText) {
-		t.Errorf("minimal density still shows the brand: %s", line)
+	line := Render(payload, config, extras)
+	plain := stripANSI(line)
+	if !strings.Contains(plain, "Gemini 3.5 Pro") || !strings.Contains(plain, "🌹 on") || !strings.Contains(plain, "🧠 918") {
+		t.Errorf("minimal lost the priority segments: %s", line)
 	}
-	if !strings.Contains(line, "Gemini 3.5 Pro") {
-		t.Errorf("minimal density lost the content segments: %s", line)
-	}
-	if strings.Contains(stripANSI(line), "…") {
-		t.Errorf("minimal idle shows an activity label: %s", line)
+	for _, banned := range []string{"ctx", "$0.312", "1d0h", "⧗ 2 jobs", "gentle ai"} {
+		if strings.Contains(plain, banned) {
+			t.Errorf("minimal shows %q: %s", banned, line)
+		}
 	}
 }
 
@@ -189,7 +239,7 @@ func TestRenderVisibilityHiding(t *testing.T) {
 		absent []string
 	}{
 		{"modelDetails", func(c *Config) { c.Visibility.ModelDetails = false }, []string{"Gemini 3.5 Pro"}},
-		{"usageCost", func(c *Config) { c.Visibility.UsageCost = false }, []string{"ctx", "$0.312", "weekly"}},
+		{"usageCost", func(c *Config) { c.Visibility.UsageCost = false }, []string{"ctx", "$0.312", "1d0h"}},
 		{"agents", func(c *Config) { c.Visibility.Agents = false }, []string{"⧗ 2 jobs"}},
 	}
 	for _, testCase := range cases {
@@ -211,27 +261,29 @@ func TestRenderVisibilityHiding(t *testing.T) {
 	}
 }
 
-// TestRenderPetalState pins the merged brand/state petal: idle keeps the
-// static brand with no label; active spins a petal frame with the fallback
-// label; a hook-provided phase wins over the fallback.
+// TestRenderPetalState pins the bare petal (L19): idle is the static flower
+// alone, active is the animated frame with no label, no brand, and no
+// scanner; modelDetails only hides the mode·model text.
 func TestRenderPetalState(t *testing.T) {
 	idle := mustPayload(t, `{"cwd": "/home/user/project", "terminal_width": 200, "agent_state": "idle"}`)
 	line := Render(idle, DefaultConfig(), defaultExtras())
-	if !strings.Contains(line, brandText) {
-		t.Errorf("idle lost the static brand: %s", line)
+	plain := stripANSI(line)
+	if !strings.HasPrefix(plain, "✿") {
+		t.Errorf("idle lost the static petal: %s", line)
 	}
-	if strings.Contains(stripANSI(line), "…") {
-		t.Errorf("idle shows an activity label: %s", line)
+	if strings.Contains(plain, "gentle ai") || strings.Contains(plain, "…") {
+		t.Errorf("idle shows brand or label: %s", line)
 	}
 
-	active := mustPayload(t, `{"cwd": "/home/user/project", "terminal_width": 200, "agent_state": "thinking"}`)
+	active := mustPayload(t, `{"cwd": "/home/user/project", "terminal_width": 200, "agent_state": "thinking", "model": {"display_name": "M"}}`)
 	line = Render(active, DefaultConfig(), defaultExtras())
-	if !strings.Contains(stripANSI(line), "thinking…") {
-		t.Errorf("active state missing fallback label: %s", line)
+	plain = stripANSI(line)
+	if strings.Contains(plain, "…") || strings.Contains(plain, "thinking") || strings.Contains(plain, "gentle ai") {
+		t.Errorf("active petal carries a label or brand: %s", line)
 	}
 	petalSeen := false
 	for _, frame := range petalFrames {
-		if strings.Contains(line, frame) {
+		if strings.Contains(plain, frame) {
 			petalSeen = true
 		}
 	}
@@ -239,13 +291,23 @@ func TestRenderPetalState(t *testing.T) {
 		t.Errorf("active state missing animated petal: %s", line)
 	}
 
-	phased := Extras{Home: "/home/user", Phase: "exploring"}
-	line = Render(active, DefaultConfig(), phased)
-	if !strings.Contains(stripANSI(line), "exploring…") {
-		t.Errorf("hook phase label missing: %s", line)
+	noModel := DefaultConfig()
+	noModel.Visibility.ModelDetails = false
+	noModel.Visibility.UsageCost = false
+	noModel.Visibility.RDD = false
+	line = Render(active, noModel, defaultExtras())
+	plain = stripANSI(line)
+	if strings.Contains(plain, "M") {
+		t.Errorf("modelDetails:false still shows the model: %s", line)
 	}
-	if strings.Contains(stripANSI(line), "gentle ai") {
-		t.Errorf("active state shows the idle brand: %s", line)
+	petalSeen = false
+	for _, frame := range petalFrames {
+		if strings.Contains(plain, frame) {
+			petalSeen = true
+		}
+	}
+	if !petalSeen {
+		t.Errorf("modelDetails:false lost the petal: %s", line)
 	}
 }
 
@@ -254,27 +316,8 @@ func TestRenderFallback(t *testing.T) {
 	if got := Render(nil, DefaultConfig(), defaultExtras()); got != FallbackLine {
 		t.Errorf("Render(nil) = %q, want %q", got, FallbackLine)
 	}
-	if FallbackLine != "✿ gentle ai" {
+	if FallbackLine != "✿" {
 		t.Errorf("FallbackLine = %q", FallbackLine)
-	}
-}
-
-// TestRenderTitleRightAligned pins the exact-width padding of the title.
-func TestRenderTitleRightAligned(t *testing.T) {
-	payload := mustPayload(t, `{
-		"cwd": "/home/user/project",
-		"model": {"display_name": "M"},
-		"context_window": {"used_percentage": 10},
-		"conversation_title": "fix login",
-		"terminal_width": 120
-	}`)
-	line := Render(payload, DefaultConfig(), defaultExtras())
-	plain := stripANSI(line)
-	if !strings.HasSuffix(plain, "fix login") {
-		t.Fatalf("title not right-aligned at the end: %q", plain)
-	}
-	if got := visibleWidth(line); got != 120 {
-		t.Errorf("aligned width = %d, want 120", got)
 	}
 }
 
@@ -288,13 +331,13 @@ func TestRenderChangesSegment(t *testing.T) {
 	}`)
 	config := DefaultConfig()
 	config.Visibility.Changes = true
-	line := Render(payload, config, Extras{Home: "/home/user", Changes: "±3 +10/−2"})
+	line := Render(payload, config, Extras{Changes: "±3 +10/−2"})
 	if !strings.Contains(line, "±3 +10/−2") {
 		t.Errorf("changes segment missing: %s", line)
 	}
 
 	config.Visibility.Changes = false
-	line = Render(payload, config, Extras{Home: "/home/user", Changes: "±3 +10/−2"})
+	line = Render(payload, config, Extras{Changes: "±3 +10/−2"})
 	if strings.Contains(line, "±3") {
 		t.Errorf("changes segment shown while disabled: %s", line)
 	}
@@ -350,21 +393,6 @@ func TestModelFamily(t *testing.T) {
 		if got := modelFamily(testCase.id, testCase.display); got != testCase.want {
 			t.Errorf("modelFamily(%q, %q) = %q, want %q", testCase.id, testCase.display, got, testCase.want)
 		}
-	}
-}
-
-// TestCompactLocation pins the degradation location compaction.
-func TestCompactLocation(t *testing.T) {
-	if got := compactLocation("/home/user", "/home/user", "", false); got != "~" {
-		t.Errorf("home location = %q, want ~", got)
-	}
-	if got := compactLocation("/home/user/dev/proj", "/home/user", "feat/login", true); got != "proj feat/login*" {
-		t.Errorf("compact location = %q", got)
-	}
-	long := "chore/agy-integration-ai-v4.1.1-shell-v4.2.0"
-	got := compactLocation("/home/user/dev/proj", "/home/user", long, false)
-	if !strings.Contains(got, "chore/agy-inte…") {
-		t.Errorf("long branch not clipped to 15: %q", got)
 	}
 }
 
@@ -434,20 +462,5 @@ func TestSubagentCount(t *testing.T) {
 		if got := payload.SubagentCount(); got != want {
 			t.Errorf("SubagentCount(%q) = %d, want %d", raw, got, want)
 		}
-	}
-}
-
-// TestScannerWave pins the exact per-character roles at a known render tick.
-func TestScannerWave(t *testing.T) {
-	got := scanWorkingLabel("abcde", 5) // phase 5, head at index 2
-	want := ansiBrightCyan + "a" + ansiReset + ansiYellow + "b" + ansiReset + ansiBrightWhite + "c" + ansiReset + ansiYellow + "d" + ansiReset + ansiBrightCyan + "e" + ansiReset
-	if got != want {
-		t.Fatalf("scanner = %q, want %q", got, want)
-	}
-	if scanWorkingLabel("abcde", 20) != got {
-		t.Fatal("scanner did not repeat at 15 steps")
-	}
-	if stripANSI(scanWorkingLabel("exploring…", 0)) != "exploring…" {
-		t.Fatal("scanner altered visible label")
 	}
 }

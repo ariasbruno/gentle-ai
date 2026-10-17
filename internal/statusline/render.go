@@ -22,134 +22,77 @@ const (
 	ansiMagenta       = "\x1b[35m"
 	ansiBrightMagenta = "\x1b[95m"
 	ansiCyan          = "\x1b[36m"
-	ansiYellow        = "\x1b[33m"
-	ansiBrightWhite   = "\x1b[97m"
-	ansiBrightCyan    = "\x1b[96m"
 )
 
 const (
-	brandText          = "✿ gentle ai"
 	gaugeCells         = 8
+	compactGaugeCells  = 6
 	warningThreshold   = 80
 	errorThreshold     = 95
 	contextWarnPercent = 90
-	compactBranchWidth = 15
 	defaultWidth       = 80
 )
 
 // The animated petal, ported from Gentle Shell's prompt (lib/shell-prompt.ts):
-// idle keeps a static flower; working spins four frames while the tone walks
-// the GS pulse deep → soft → rose → bright → rose → soft → deep.
+// idle keeps a static flower; active spins four frames while the tone walks
+// the GS pulse. L19: the petal carries no label and no brand — the flower
+// alone is the state.
 var petalFrames = [4]string{"✿", "❀", "❁", "✾"}
 var petalTones = [8]string{
-	ansiMagenta, ansiCyan, ansiYellow, ansiBrightMagenta,
-	ansiYellow, ansiCyan, ansiMagenta, ansiMagenta,
+	ansiMagenta, ansiCyan, ansiWarning, ansiBrightMagenta,
+	ansiWarning, ansiCyan, ansiMagenta, ansiMagenta,
 }
 
-// The reflected-light wave over the working label, ported from Gentle Shell's
-// scanWorkingText (lib/shell-prompt.ts): a bright head sweeps the text and
-// the neighboring characters settle through accent and soft into the muted
-// base, one step per render tick.
-const (
-	scannerSteps       = 15
-	scannerEntryOffset = 3
-)
-
-func scanWorkingLabel(text string, tick int64) string {
-	phase := ((tick % scannerSteps) + scannerSteps) % scannerSteps
-	head := int(phase) - scannerEntryOffset
-	var builder strings.Builder
-	for index, char := range []rune(text) {
-		distance := head - index
-		if distance < 0 {
-			distance = -distance
-		}
-		var tone string
-		switch distance {
-		case 0:
-			tone = ansiBrightWhite
-		case 1:
-			tone = ansiYellow
-		case 2:
-			tone = ansiBrightCyan
-		default:
-			tone = ansiDim
-		}
-		builder.WriteString(tone)
-		builder.WriteRune(char)
-		builder.WriteString(ansiReset)
-	}
-	return builder.String()
-}
-
-// petalState builds the merged brand/state segment: idle → the static
-// brand (no label, hidden entirely in minimal density); active → the
-// animated petal plus the phase label (S12 phase when provided, otherwise
-// the agent_state fallback), like the Gentle Shell prompt frame.
-func petalState(p *Payload, config Config, extras Extras) string {
+// petalGlyph renders the bare flower: idle → static bold; active → the
+// animated frame with its pulse tone (S2, L19).
+func petalGlyph(p *Payload) string {
 	if p.AgentState == "" || p.AgentState == "idle" {
-		if config.Density == DensityMinimal {
-			return ""
-		}
-		return ansiBold + brandText + ansiReset
+		return ansiBold + "✿" + ansiReset
 	}
 	tick := time.Now().Unix()
-	glyph := petalFrames[tick%int64(len(petalFrames))]
-	tone := petalTones[tick%int64(len(petalTones))]
-	label := extras.Phase
-	if label == "" {
-		label = stateBadge(p.AgentState)
-	}
-	return tone + ansiBold + glyph + ansiReset + " " + scanWorkingLabel(label+"…", tick)
+	return petalTones[tick%int64(len(petalTones))] + ansiBold + petalFrames[tick%int64(len(petalFrames))] + ansiReset
 }
 
-// FallbackLine is the brand-only line rendered for absent, empty, or
-// unparsable payloads — graceful, never an error (S6).
-const FallbackLine = brandText
+// FallbackLine is the petal-only line rendered for absent, empty, or
+// unparsable payloads — graceful, never an error (S6, L19).
+const FallbackLine = "✿"
 
-// Segment tags drive the degradation cascade: auxiliary segments die first;
-// brand and location survive longest.
+// Segment tags drive the degradation cascade (S3): the survival priority is
+// petal+mode·model > tasklist > rdd > engram > git > jobs > subagents > ctx >
+// cost > quota, and dropOrder walks the exact reverse.
 const (
-	tagBrand     = "brand"
-	tagState     = "state"
-	tagLocation  = "location"
-	tagModel     = "model"
+	tagPetal     = "petal"
 	tagCtx       = "ctx"
 	tagCost      = "cost"
 	tagQuota     = "quota"
 	tagJobs      = "jobs"
 	tagSubagents = "subagents"
-	tagSandbox   = "sandbox"
-	tagVim       = "vim"
-	tagRDD       = "rdd"
-	tagChanges   = "changes"
 	tagMem       = "mem"
+	tagRDD       = "rdd"
+	tagTasklist  = "tasklist"
+	tagChanges   = "changes"
 )
 
-// dropOrder is the degradation step-2 order (S3): changes and rdd first
-// (auxiliary, subprocess-derived), then chrome, then the counters, keeping
-// brand and location alive longest.
-var dropOrder = []string{tagChanges, tagRDD, tagVim, tagSandbox, tagSubagents, tagJobs, tagQuota, tagCost, tagCtx, tagModel, tagState}
+var dropOrder = []string{tagQuota, tagCost, tagCtx, tagSubagents, tagJobs, tagChanges, tagMem, tagRDD, tagTasklist}
 
 type segment struct {
-	tag  string
+	tag string
+	// text is the full rendering of the segment.
 	text string
+	// compact is the shortened form the cascade tries before dropping the
+	// segment; empty means the segment has no compact form.
+	compact string
 }
 
-// Extras carries the values the CLI layer resolves out of band: the home
-// directory for ~ shortening, the in-process RDD review switch mode, the
-// optional git changes summary, the ODD phase inferred by the PreToolUse
-// hook (S12; empty falls back to the agent_state label), and the Engram
-// observation count (S13; zero hides the segment).
+// Extras carries the values the CLI layer resolves out of band: the
+// in-process RDD review display (S15), the optional git changes summary
+// (S5/S18), and the Engram observation count (S13; zero hides the segment).
 type Extras struct {
-	Home string
-	// RDDMode is "on", "off", or "?" — empty hides the segment.
+	// RDDMode is the review display: "on", "off", or a state label — empty
+	// hides the segment.
 	RDDMode string
 	// Changes is a preformatted "±N +A/−D" string — empty hides the segment.
 	Changes string
-	// Phase is the hook-inferred ODD phase label ("exploring", …) — empty
-	// falls back to the agent_state label while the agent is active.
-	Phase string
 	// Observations is the Engram observation count of the payload cwd.
 	Observations int
 	// EngramProject is the Engram project name of the payload cwd (empty
@@ -181,16 +124,17 @@ func gaugeColor(pct int) string {
 	}
 }
 
-// renderGauge builds the 8-cell bar.
-func renderGauge(pct int) string {
-	filled := pct * gaugeCells / 100
-	if filled > gaugeCells {
-		filled = gaugeCells
+// renderGauge builds the bar with the given cell count (8 comfortable,
+// 6 in compact density).
+func renderGauge(pct, cells int) string {
+	filled := pct * cells / 100
+	if filled > cells {
+		filled = cells
 	}
 	if filled < 0 {
 		filled = 0
 	}
-	return strings.Repeat("▰", filled) + strings.Repeat("▱", gaugeCells-filled)
+	return strings.Repeat("▰", filled) + strings.Repeat("▱", cells-filled)
 }
 
 // roundPercent rounds half up, matching the Gentle Shell Math.round.
@@ -198,57 +142,8 @@ func roundPercent(v float64) int {
 	return int(v + 0.5)
 }
 
-// stateBadge maps the agy agent_state enum to the fallback label shown while
-// the agent is active (idle shows no label — the static petal brand is the
-// whole state, Gentle Shell prompt parity).
-func stateBadge(state string) string {
-	switch state {
-	case "thinking":
-		return "thinking"
-	case "working", "tool_use":
-		return "working"
-	case "initializing":
-		return "starting"
-	default:
-		return "working"
-	}
-}
-
-// shortenCwd replaces the home prefix with ~.
-func shortenCwd(cwd, home string) string {
-	if home != "" && strings.HasPrefix(cwd, home) {
-		return "~" + strings.TrimPrefix(cwd, home)
-	}
-	return cwd
-}
-
-// compactLocation shrinks the location for degradation step 2: cwd becomes
-// its last path segment (~ for the home itself) and a long branch is clipped
-// to 15 visible characters with an ellipsis (S3).
-func compactLocation(cwd, home, branch string, dirty bool) string {
-	compact := cwd
-	if home != "" && cwd == home {
-		compact = "~"
-	} else if trimmed := strings.TrimSuffix(cwd, "/"); trimmed != "" {
-		if index := strings.LastIndex(trimmed, "/"); index >= 0 {
-			compact = trimmed[index+1:]
-		}
-	}
-	if branch != "" {
-		if runes := []rune(branch); len(runes) > compactBranchWidth {
-			branch = string(runes[:compactBranchWidth-1]) + "…"
-		}
-		compact += " " + branch
-	}
-	if dirty {
-		compact += "*"
-	}
-	return compact
-}
-
 // formatCost mirrors the Gentle Shell formatCost: two decimals at or above
-// one dollar, three below — plain, with no suffix (L13: the `sub` marker
-// confused more than it informed).
+// one dollar, three below — plain, with no suffix (L13).
 func formatCost(cost float64) string {
 	if cost < 1 {
 		return fmt.Sprintf("$%.3f", cost)
@@ -256,10 +151,26 @@ func formatCost(cost float64) string {
 	return fmt.Sprintf("$%.2f", cost)
 }
 
-// quotaLabelFromKey derives the window label from the bucket key — never
-// from reset_in_seconds, which is the countdown to the reset, not the window
-// length (L13). The active model family prefix and separators are stripped:
-// "gemini-weekly" → "weekly".
+// quotaCountdown formats the bucket's reset countdown (S16): ≥1 day →
+// "NdMh", ≥1 hour → "NhMm", under an hour → "Nm". Non-positive values
+// return "" and the caller falls back to the key-derived label.
+func quotaCountdown(seconds float64) string {
+	if seconds <= 0 {
+		return ""
+	}
+	total := int(seconds)
+	if days := total / 86400; days > 0 {
+		return fmt.Sprintf("%dd%dh", days, (total%86400)/3600)
+	}
+	if hours := total / 3600; hours > 0 {
+		return fmt.Sprintf("%dh%dm", hours, (total%3600)/60)
+	}
+	return fmt.Sprintf("%dm", total/60)
+}
+
+// quotaLabelFromKey derives the window label from the bucket key — the S16
+// fallback when a bucket carries no usable reset countdown. The active model
+// family prefix and separators are stripped: "gemini-weekly" → "weekly".
 func quotaLabelFromKey(key, family string) string {
 	label := key
 	if family != "" && strings.HasPrefix(strings.ToLower(key), strings.ToLower(family)+"-") {
@@ -313,35 +224,65 @@ func activeQuota(p *Payload) map[string]Quota {
 	return filtered
 }
 
-// buildSegments assembles the ordered, visible segments (S2). Empty segments
-// are omitted; visibility flags and density gate their groups.
+// buildSegments assembles the ordered, visible segments (S2, L18/L19). Each
+// segment carries its compact form for the cascade (S3). Density picks the
+// starting forms: comfortable = full, compact = compact with 6-cell gauges,
+// minimal = only the petal block, tasklist, rdd, and engram (compact).
 func buildSegments(p *Payload, config Config, extras Extras) []segment {
+	density := config.Density
+	cells := gaugeCells
+	useCompact := false
+	minimal := false
+	switch density {
+	case DensityCompact:
+		cells = compactGaugeCells
+		useCompact = true
+	case DensityMinimal:
+		useCompact = true
+		minimal = true
+	}
+	_ = minimal
+
 	var segs []segment
-	add := func(tag, text string) {
-		if text != "" {
-			segs = append(segs, segment{tag: tag, text: text})
+	add := func(tag, text, compact string) {
+		if text == "" {
+			return
 		}
+		if useCompact && compact != "" {
+			text = compact
+		}
+		segs = append(segs, segment{tag: tag, text: text, compact: compact})
+	}
+	inMinimal := func(tag string) bool {
+		switch tag {
+		case tagPetal, tagTasklist, tagRDD, tagMem:
+			return true
+		}
+		return false
+	}
+	segmentOf := func(tag, text, compact string) {
+		if minimal && !inMinimal(tag) {
+			return
+		}
+		add(tag, text, compact)
 	}
 
-	// Brand/state petal (S2): idle → static brand, no label; active → the
-	// animated petal plus the phase label, Gentle Shell prompt parity.
-	add(tagBrand, petalState(p, config, extras))
-	location := shortenCwd(p.Cwd, extras.Home)
-	if p.VCS.Branch != "" {
-		location += " " + p.VCS.Branch
-	}
-	if p.VCS.Dirty {
-		location += "*"
-	}
-	add(tagLocation, location)
-
+	// Block 1 (never drops): bare petal + `mode · model` (L18/L19).
+	petalText := petalGlyph(p)
 	if config.Visibility.ModelDetails {
-		model := p.Model.DisplayName
+		modelText := p.Model.DisplayName
 		if p.ExecutionMode != "" {
-			model += " · " + p.ExecutionMode
+			if modelText == "" {
+				modelText = p.ExecutionMode
+			} else {
+				modelText = p.ExecutionMode + " · " + modelText
+			}
 		}
-		add(tagModel, model)
+		if modelText != "" {
+			petalText += " " + modelText
+		}
 	}
+	segmentOf(tagPetal, petalText, "")
 
 	if config.Visibility.UsageCost {
 		pct := roundPercent(p.ContextWindow.UsedPercentage)
@@ -349,13 +290,15 @@ func buildSegments(p *Payload, config Config, extras Extras) []segment {
 		if config.Visibility.ContextWarning && pct >= contextWarnPercent {
 			marker = " !"
 		}
-		add(tagCtx, fmt.Sprintf("ctx %s%s%s %d%%%s", gaugeColor(pct), renderGauge(pct), ansiReset, pct, marker))
+		segmentOf(tagCtx,
+			fmt.Sprintf("ctx %s%s%s %d%%%s", gaugeColor(pct), renderGauge(pct, cells), ansiReset, pct, marker),
+			fmt.Sprintf("ctx %s%d%%%s", gaugeColor(pct), pct, ansiReset))
 
 		cost := 0.0
 		if p.Cost != nil {
 			cost = *p.Cost
 		}
-		add(tagCost, formatCost(cost))
+		segmentOf(tagCost, formatCost(cost), "")
 
 		quota := activeQuota(p)
 		family := modelFamily(p.Model.ID, p.Model.DisplayName)
@@ -373,45 +316,47 @@ func buildSegments(p *Payload, config Config, extras Extras) []segment {
 			if used > 100 {
 				used = 100
 			}
-			add(tagQuota, fmt.Sprintf("%s %s%s%s %d%%", quotaLabelFromKey(key, family), gaugeColor(used), renderGauge(used), ansiReset, used))
+			label := quotaCountdown(float64(bucket.ResetInSeconds))
+			if label == "" {
+				label = quotaLabelFromKey(key, family)
+			}
+			segmentOf(tagQuota,
+				fmt.Sprintf("%s %s%s%s %d%%", label, gaugeColor(used), renderGauge(used, cells), ansiReset, used),
+				fmt.Sprintf("%s %d%%", label, used))
 		}
 	}
 
 	if config.Visibility.Agents {
 		if p.TaskCount > 0 {
-			add(tagJobs, fmt.Sprintf("⧗ %d jobs", p.TaskCount))
+			jobsWord := "jobs"
+			if p.TaskCount == 1 {
+				jobsWord = "job"
+			}
+			segmentOf(tagJobs, fmt.Sprintf("⧗ %d %s", p.TaskCount, jobsWord), fmt.Sprintf("⧗ %d", p.TaskCount))
 		}
 		if count := p.SubagentCount(); count > 0 {
-			add(tagSubagents, fmt.Sprintf("✦ %d subagents", count))
+			agentsWord := "subagents"
+			if count == 1 {
+				agentsWord = "subagent"
+			}
+			segmentOf(tagSubagents, fmt.Sprintf("✦ %d %s", count, agentsWord), fmt.Sprintf("✦ %d", count))
 		}
 	}
 
 	if config.Visibility.Engram && extras.Observations > 0 {
+		full := fmt.Sprintf("🧠 %d", extras.Observations)
 		if extras.EngramProject != "" {
-			add(tagMem, fmt.Sprintf("🧠 %s · %d", extras.EngramProject, extras.Observations))
-		} else {
-			add(tagMem, fmt.Sprintf("🧠 %d", extras.Observations))
+			full = fmt.Sprintf("🧠 %s · %d", extras.EngramProject, extras.Observations)
 		}
-	}
-
-	if p.Sandbox.Enabled {
-		badge := "⊘ sandbox"
-		if p.Sandbox.AllowNetwork {
-			badge += "·net"
-		}
-		add(tagSandbox, badge)
-	}
-
-	if p.Vim.Mode != "" {
-		add(tagVim, "vim."+p.Vim.Mode)
+		segmentOf(tagMem, full, fmt.Sprintf("🧠 %d", extras.Observations))
 	}
 
 	if config.Visibility.RDD && extras.RDDMode != "" {
-		add(tagRDD, "🌹 "+extras.RDDMode)
+		segmentOf(tagRDD, "🌹 "+extras.RDDMode, "")
 	}
 
 	if config.Visibility.Changes {
-		add(tagChanges, extras.Changes)
+		segmentOf(tagChanges, extras.Changes, "")
 	}
 
 	return segs
@@ -427,31 +372,10 @@ func joinSegments(segs []segment) string {
 	return strings.Join(parts, separator)
 }
 
-// fitWithTitle renders line plus right-aligned title when both fit the
-// width; the title keeps at least one leading space.
-func fitWithTitle(line, title string, width int) (string, bool) {
-	lineWidth := visibleWidth(line)
-	if title == "" {
-		if lineWidth <= width {
-			return line, true
-		}
-		return "", false
-	}
-	titleWidth := visibleWidth(title)
-	if lineWidth+1+titleWidth <= width {
-		padding := width - lineWidth - titleWidth
-		if padding < 1 {
-			padding = 1
-		}
-		return line + strings.Repeat(" ", padding) + title, true
-	}
-	return "", false
-}
-
-// Render builds the final status line for one payload: the full line first,
-// then the width-driven degradation cascade (compact location → dropped
-// segments → ellipsis truncation), with the conversation title right-aligned
-// whenever it fits (S3).
+// Render builds the final status line for one payload (S3): the density-
+// adapted segments first, then the width-driven cascade — each class in
+// dropOrder first switches to its compact form, then is dropped — and a
+// final ellipsis truncation. The petal block never drops.
 func Render(payload *Payload, config Config, extras Extras) string {
 	if payload == nil {
 		return FallbackLine
@@ -461,56 +385,45 @@ func Render(payload *Payload, config Config, extras Extras) string {
 		width = defaultWidth
 	}
 	segs := buildSegments(payload, config, extras)
-	title := payload.ConversationTitle
 
-	if line, ok := fitWithTitle(joinSegments(segs), title, width); ok {
-		return line
-	}
-
-	for i := range segs {
-		if segs[i].tag == tagLocation {
-			segs[i].text = compactLocation(payload.Cwd, extras.Home, payload.VCS.Branch, payload.VCS.Dirty)
-			break
-		}
-	}
-	if line, ok := fitWithTitle(joinSegments(segs), title, width); ok {
+	line := joinSegments(segs)
+	if visibleWidth(line) <= width {
 		return line
 	}
 
 	for _, drop := range dropOrder {
-		for i := len(segs) - 1; i >= 0; i-- {
-			if segs[i].tag == drop {
-				segs = append(segs[:i], segs[i+1:]...)
-				if drop != tagQuota {
-					break
-				}
+		// Compact step: switch every segment of the class to its compact
+		// form when one exists.
+		compacted := false
+		for i := range segs {
+			if segs[i].tag == drop && segs[i].compact != "" && segs[i].text != segs[i].compact {
+				segs[i].text = segs[i].compact
+				compacted = true
 			}
 		}
-		if line, ok := fitWithTitle(joinSegments(segs), title, width); ok {
+		if compacted {
+			line = joinSegments(segs)
+			if visibleWidth(line) <= width {
+				return line
+			}
+		}
+		// Drop step: remove every segment of the class.
+		kept := segs[:0]
+		for _, seg := range segs {
+			if seg.tag != drop {
+				kept = append(kept, seg)
+			}
+		}
+		segs = kept
+		line = joinSegments(segs)
+		if visibleWidth(line) <= width {
 			return line
 		}
 	}
 
-	line := joinSegments(segs)
-	if visibleWidth(line) > width {
-		plain := stripANSI(line)
-		if title != "" {
-			titleWidth := visibleWidth(title)
-			avail := width - titleWidth - 1
-			if avail > 1 && utf8.RuneCountInString(plain) > avail {
-				truncated := string([]rune(plain)[:avail-1]) + "…"
-				padding := width - avail - titleWidth
-				if padding < 0 {
-					padding = 0
-				}
-				return truncated + strings.Repeat(" ", padding) + title
-			}
-		} else if utf8.RuneCountInString(plain) > width {
-			return string([]rune(plain)[:width-1]) + "…"
-		}
-	}
-	if fitted, ok := fitWithTitle(line, title, width); ok {
-		return fitted
+	// Final truncation of whatever survives (the petal block at minimum).
+	if plain := stripANSI(line); utf8.RuneCountInString(plain) > width {
+		return string([]rune(plain)[:width-1]) + "…"
 	}
 	return line
 }

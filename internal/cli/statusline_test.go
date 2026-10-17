@@ -48,12 +48,15 @@ func TestRunStatusLineRendersPayload(t *testing.T) {
 	}`
 	line := runStatusLineTest(t, nil, payload, home)
 	for _, want := range []string{
-		"working…", "⟡", "feat/login*", "Gemini 3.5 Pro (High) · planning",
-		"ctx", "43%", "$0.312", "⧗ 2 jobs", "🌹 on", "fix login",
+		"⟡", "planning · Gemini 3.5 Pro (High)",
+		"ctx", "43%", "$0.312", "⧗ 2 jobs", "🌹 on",
 	} {
 		if !strings.Contains(stripStatusLineANSI(line), want) {
 			t.Errorf("missing segment %q in: %s", want, line)
 		}
+	}
+	if plain := stripStatusLineANSI(line); strings.Contains(plain, "feat/login") || strings.Contains(plain, "fix login") || strings.Contains(plain, "…") {
+		t.Errorf("removed segments rendered: %s", line)
 	}
 }
 
@@ -77,8 +80,8 @@ func TestRunStatusLineFallback(t *testing.T) {
 		"not-object": `"just a string"`,
 	} {
 		got := runStatusLineTest(t, nil, payload, home)
-		if got != "✿ gentle ai" {
-			t.Errorf("%s payload: output = %q, want the brand-only fallback", name, got)
+		if got != "✿" {
+			t.Errorf("%s payload: output = %q, want the petal-only fallback", name, got)
 		}
 	}
 }

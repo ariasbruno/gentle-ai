@@ -70,10 +70,9 @@ func runStatusLine(args []string, stdin io.Reader, stdout io.Writer, homeDir str
 		cwd, _ = os.Getwd()
 	}
 
-	extras := statusline.Extras{Home: homeDir}
-	if payload.AgentState != "" && payload.AgentState != "idle" {
-		extras.Phase = readStatusLinePhase(homeDir, payload.ConversationID)
-	}
+	// The PreToolUse hook still records phase files (S12 infra), but the
+	// statusline no longer displays a label (L19: bare petal).
+	extras := statusline.Extras{}
 	if config.Visibility.RDD {
 		extras.RDDMode = resolveStatusLineRDD(homeDir, cwd)
 	}

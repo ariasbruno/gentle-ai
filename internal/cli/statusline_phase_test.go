@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -112,61 +113,34 @@ func TestRecordStatusLinePhasePrunesStaleSiblings(t *testing.T) {
 	}
 }
 
-// TestRunStatusLineUsesPhaseRecord pins the end-to-end wiring: a fresh phase
-// record drives the petal label while the agent is active.
-func TestRunStatusLineUsesPhaseRecord(t *testing.T) {
+// TestRunStatusLinePhaseRecordedNotRendered pins the L19 decision: the
+// PreToolUse hook still records phase files and readStatusLinePhase reads
+// them back (S12 infra), but the rendered line carries no phase label.
+func TestRunStatusLinePhaseRecordedNotRendered(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	recordAntigravityStatusLinePhase(AntigravityCLIHookPayload{
-		ConversationID: "conv-demo",
-		ToolCall:       &AntigravityCLIToolCall{Name: "read_file"},
-	})
 	payload := `{
-		"conversation_id": "conv-demo",
+		"conversationId": "conv-789",
 		"agent_state": "working",
 		"cwd": "` + home + `/project",
 		"model": {"display_name": "Gemini 3.5 Pro"},
-		"context_window": {"used_percentage": 10},
-		"terminal_width": 200
+		"terminal_width": 200,
+		"toolCall": {"name": "read_file", "args": {"path": "x"}}
 	}`
+	var hookPayload AntigravityCLIHookPayload
+	if err := json.Unmarshal([]byte(payload), &hookPayload); err != nil {
+		t.Fatal(err)
+	}
+	var hookOut bytes.Buffer
+	if err := handleAntigravityPreToolUse(hookPayload, home, &hookOut); err != nil {
+		t.Fatal(err)
+	}
+	if phase := readStatusLinePhase(home, "conv-789"); phase != "exploring" {
+		t.Fatalf("phase record readback = %q, want exploring", phase)
+	}
 	line := runStatusLineTest(t, nil, payload, home)
-	if !strings.Contains(stripStatusLineANSI(line), "exploring…") {
-		t.Errorf("phase label missing: %s", line)
-	}
-
-	// Without a record the agent_state fallback applies.
-	payload = `{
-		"conversation_id": "conv-other",
-		"agent_state": "working",
-		"cwd": "` + home + `/project",
-		"model": {"display_name": "Gemini 3.5 Pro"},
-		"context_window": {"used_percentage": 10},
-		"terminal_width": 200
-	}`
-	line = runStatusLineTest(t, nil, payload, home)
-	if !strings.Contains(stripStatusLineANSI(line), "working…") {
-		t.Errorf("fallback label missing: %s", line)
-	}
-
-	// While idle the phase record does not surface any label.
-	recordAntigravityStatusLinePhase(AntigravityCLIHookPayload{
-		ConversationID: "conv-idle",
-		ToolCall:       &AntigravityCLIToolCall{Name: "read_file"},
-	})
-	payload = `{
-		"conversation_id": "conv-idle",
-		"agent_state": "idle",
-		"cwd": "` + home + `/project",
-		"model": {"display_name": "Gemini 3.5 Pro"},
-		"context_window": {"used_percentage": 10},
-		"terminal_width": 200
-	}`
-	line = runStatusLineTest(t, nil, payload, home)
-	if strings.Contains(stripStatusLineANSI(line), "…") {
-		t.Errorf("idle line shows an activity label: %s", line)
-	}
-	if !strings.Contains(line, "✿ gentle ai") {
-		t.Errorf("idle line lost the static brand: %s", line)
+	if plain := stripStatusLineANSI(line); strings.Contains(plain, "…") {
+		t.Errorf("statusline renders a phase label: %s", line)
 	}
 }
 
