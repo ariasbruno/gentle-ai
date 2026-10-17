@@ -2,11 +2,13 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -77,7 +79,7 @@ func runStatusLine(args []string, stdin io.Reader, stdout io.Writer, homeDir str
 		extras.RDDMode = resolveStatusLineRDD(homeDir, cwd)
 	}
 	if config.Visibility.Changes {
-		extras.Changes = statusLineGitChanges(cwd)
+		extras.Changes = statusLineGitChangesCached(homeDir, cwd)
 	}
 	if config.Visibility.Engram {
 		extras.EngramProject, extras.Observations = statusLineEngramStats(homeDir, cwd)
@@ -125,4 +127,48 @@ func statusLineGitChanges(cwd string) string {
 		return ""
 	}
 	return fmt.Sprintf("±%d +%d/−%d", count, added, deleted)
+}
+
+// The changes cache (S18): the git subprocess runs at most once per cwd per
+// five seconds; a lost cache only costs one extra git run.
+
+const changesCacheTTL = 5 * time.Second
+
+type changesCacheRecord struct {
+	Cwd     string `json:"cwd"`
+	TS      int64  `json:"ts"`
+	Changes string `json:"changes"`
+}
+
+func changesCachePath(home string) string {
+	return filepath.Join(home, ".gentle-ai", "statusline-changes-cache.json")
+}
+
+// statusLineGitChangesCached serves the git summary from the cache when
+// fresh; otherwise it recomputes and stores it (the clean-empty result
+// caches too).
+func statusLineGitChangesCached(home, cwd string) string {
+	if home == "" || cwd == "" {
+		return ""
+	}
+	raw, err := os.ReadFile(changesCachePath(home))
+	if err == nil {
+		var record changesCacheRecord
+		if json.Unmarshal(raw, &record) == nil &&
+			record.Cwd == cwd && time.Since(time.Unix(record.TS, 0)) <= changesCacheTTL {
+			return record.Changes
+		}
+	}
+	changes := statusLineGitChanges(cwd)
+	record := changesCacheRecord{Cwd: cwd, TS: time.Now().Unix(), Changes: changes}
+	if encoded, err := json.Marshal(record); err == nil {
+		path := changesCachePath(home)
+		if os.MkdirAll(filepath.Dir(path), 0o755) == nil {
+			temporary := path + ".tmp"
+			if os.WriteFile(temporary, encoded, 0o644) == nil {
+				_ = os.Rename(temporary, path)
+			}
+		}
+	}
+	return changes
 }

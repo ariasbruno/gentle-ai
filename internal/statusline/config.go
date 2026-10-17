@@ -41,7 +41,7 @@ func DefaultConfig() Config {
 	return Config{
 		Density: DensityComfortable,
 		Visibility: Visibility{
-			Changes:        false,
+			Changes:        true,
 			RDD:            true,
 			Agents:         true,
 			UsageCost:      true,

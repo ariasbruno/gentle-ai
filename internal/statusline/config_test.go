@@ -13,8 +13,11 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if config.Density != DensityComfortable {
 		t.Errorf("default density = %q", config.Density)
 	}
-	if config.Visibility.Changes {
-		t.Error("changes defaults to hidden")
+	if !config.Visibility.Changes {
+		t.Error("changes defaults to visible")
+	}
+	if !config.Visibility.Tasklist || !config.Visibility.Engram {
+		t.Error("tasklist/engram default to visible")
 	}
 	if !config.Visibility.RDD || !config.Visibility.Agents || !config.Visibility.UsageCost ||
 		!config.Visibility.ModelDetails || !config.Visibility.ContextWarning {
@@ -50,7 +53,7 @@ func TestLoadConfigValues(t *testing.T) {
 		"schema": "gentle-ai.statusline/v1",
 		"density": "minimal",
 		"visibility": {
-			"changes": true,
+			"changes": false,
 			"rdd": false,
 			"agents": false,
 			"usageCost": false,
@@ -65,8 +68,8 @@ func TestLoadConfigValues(t *testing.T) {
 	if config.Density != DensityMinimal {
 		t.Errorf("density = %q, want minimal", config.Density)
 	}
-	if !config.Visibility.Changes {
-		t.Error("changes not honored")
+	if config.Visibility.Changes {
+		t.Error("changes=false not honored")
 	}
 	if config.Visibility.RDD || config.Visibility.Agents || config.Visibility.UsageCost ||
 		config.Visibility.ModelDetails || config.Visibility.ContextWarning {
@@ -92,7 +95,7 @@ func TestLoadConfigPartialVisibility(t *testing.T) {
 	if config.Visibility.RDD {
 		t.Error("rdd=false not honored")
 	}
-	if !config.Visibility.ModelDetails || config.Visibility.Changes {
+	if !config.Visibility.ModelDetails || !config.Visibility.Changes {
 		t.Errorf("absent keys did not keep defaults: %+v", config.Visibility)
 	}
 }
