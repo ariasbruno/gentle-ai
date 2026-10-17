@@ -272,29 +272,26 @@ func buildSegments(p *Payload, config Config, extras Extras) []segment {
 		add(tag, text, compact)
 	}
 
-	// Block 1 (never drops): bare petal + `mode · model` (L18/L19). The
-	// mode is always visible (L23/L24): agy sends cycle_mode when a mode is
-	// set ("plan", "accept-edits", and presumably "auto" where available)
-	// and omits it in the default mode — auto is a distinct, account-gated
-	// mode ("--mode auto is not available for this account; continuing in
-	// the default mode"), so the absent key means default, not auto. The
-	// canonical execution_mode is kept as a fallback.
+	// Block 1 (never drops): bare petal + `mode · model` (L18/L19/L25).
+	// The mode renders verbatim when agy reports it — the live cycle_mode
+	// ("plan", "accept-edits", "auto" where the account has it), the
+	// canonical execution_mode as fallback — and the default mode renders
+	// nothing (L25): absent means unset, never an invented label.
 	mode := p.CycleMode
 	if mode == "" {
 		mode = p.ExecutionMode
-	}
-	if mode == "" {
-		mode = "default"
 	}
 	petalText := petalGlyph(p)
 	if config.Visibility.ModelDetails {
 		modelText := p.Model.DisplayName
 		if modelText == "" {
 			modelText = mode
-		} else {
+		} else if mode != "" {
 			modelText = mode + " · " + modelText
 		}
-		petalText += " " + modelText
+		if modelText != "" {
+			petalText += " " + modelText
+		}
 	}
 	segmentOf(tagPetal, petalText, "")
 

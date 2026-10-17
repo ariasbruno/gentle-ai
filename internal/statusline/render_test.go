@@ -513,10 +513,10 @@ func TestRenderTasklistSegment(t *testing.T) {
 	}
 }
 
-// TestRenderCycleMode pins the mode resolution: cycle_mode wins, the
-// canonical execution_mode is the fallback, and an absent mode renders
-// `default` — auto is a distinct account-gated mode (L24), so absence
-// never means auto.
+// TestRenderCycleMode pins the mode resolution (L25): the live cycle_mode
+// renders verbatim, the canonical execution_mode is the fallback, and an
+// absent mode renders nothing — the default mode never gets an invented
+// label.
 func TestRenderCycleMode(t *testing.T) {
 	base := `"model": {"display_name": "Gemini 3.5 Pro (High)"}, "terminal_width": 200`
 	cases := []struct {
@@ -524,7 +524,7 @@ func TestRenderCycleMode(t *testing.T) {
 	}{
 		{"cycle_mode plan", `{` + base + `, "cycle_mode": "plan"}`, "plan · Gemini 3.5 Pro (High)"},
 		{"cycle_mode accept-edits", `{` + base + `, "cycle_mode": "accept-edits"}`, "accept-edits · Gemini 3.5 Pro (High)"},
-		{"absent means default", `{` + base + `}`, "default · Gemini 3.5 Pro (High)"},
+		{"absent renders no mode", `{` + base + `}`, "Gemini 3.5 Pro (High)"},
 		{"execution_mode fallback", `{` + base + `, "execution_mode": "planning"}`, "planning · Gemini 3.5 Pro (High)"},
 		{"cycle wins over execution", `{` + base + `, "execution_mode": "planning", "cycle_mode": "plan"}`, "plan · Gemini 3.5 Pro (High)"},
 		{"cycle_mode auto passes through", `{` + base + `, "cycle_mode": "auto"}`, "auto · Gemini 3.5 Pro (High)"},
@@ -532,8 +532,17 @@ func TestRenderCycleMode(t *testing.T) {
 	for _, testCase := range cases {
 		payload := mustPayload(t, testCase.raw)
 		line := Render(payload, DefaultConfig(), defaultExtras())
-		if plain := stripANSI(line); !strings.Contains(plain, testCase.want) {
+		plain := stripANSI(line)
+		if !strings.Contains(plain, testCase.want) {
 			t.Errorf("%s: missing %q in: %s", testCase.name, testCase.want, line)
 		}
+	}
+
+	// The absent case must carry no invented mode label at all.
+	absent := mustPayload(t, `{`+base+`}`)
+	line := Render(absent, DefaultConfig(), defaultExtras())
+	plain := stripANSI(line)
+	if strings.Contains(plain, "default") || strings.Contains(plain, "auto") {
+		t.Errorf("absent mode invented a label: %s", line)
 	}
 }
