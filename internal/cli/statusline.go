@@ -46,6 +46,7 @@ func runStatusLine(args []string, stdin io.Reader, stdout io.Writer, homeDir str
 	}
 
 	raw, _ := io.ReadAll(io.LimitReader(stdin, maxStatuslinePayloadBytes))
+	dumpStatusLinePayload(homeDir, raw)
 	payload, parseErr := statusline.ParsePayload(raw)
 
 	if title {
@@ -171,4 +172,21 @@ func statusLineGitChangesCached(home, cwd string) string {
 		}
 	}
 	return changes
+}
+
+// dumpStatusLinePayload keeps the last live payload (best-effort): agy's
+// real schema is the ground truth for display decisions — e.g. whether the
+// current version populates execution_mode — and this lets the exact bytes
+// agy sends be inspected after the fact. Failures are ignored; the dump
+// never affects the rendered line. 0600: the payload can carry the user's
+// email.
+func dumpStatusLinePayload(home string, raw []byte) {
+	if home == "" || len(raw) == 0 {
+		return
+	}
+	path := filepath.Join(home, ".gentle-ai", "statusline-last-payload.json")
+	if os.MkdirAll(filepath.Dir(path), 0o755) != nil {
+		return
+	}
+	_ = os.WriteFile(path, raw, 0o600)
 }

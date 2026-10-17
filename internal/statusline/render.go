@@ -5,7 +5,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -33,24 +32,15 @@ const (
 	defaultWidth       = 80
 )
 
-// The animated petal, ported from Gentle Shell's prompt (lib/shell-prompt.ts):
-// idle keeps a static flower; active spins four frames while the tone walks
-// the GS pulse. L19: the petal carries no label and no brand — the flower
-// alone is the state.
-var petalFrames = [4]string{"✿", "❀", "❁", "✾"}
-var petalTones = [8]string{
-	ansiMagenta, ansiCyan, ansiWarning, ansiBrightMagenta,
-	ansiWarning, ansiCyan, ansiMagenta, ansiMagenta,
-}
-
-// petalGlyph renders the bare flower: idle → static bold; active → the
-// animated frame with its pulse tone (S2, L19).
+// The petal is static (L23): the wall-clock frame animation advanced only
+// when agy re-rendered, which looked broken in practice, so the flower is
+// now a fixed glyph — plain while idle, magenta while the agent works, so
+// the state stays visible without motion.
 func petalGlyph(p *Payload) string {
 	if p.AgentState == "" || p.AgentState == "idle" {
 		return ansiBold + "✿" + ansiReset
 	}
-	tick := time.Now().Unix()
-	return petalTones[tick%int64(len(petalTones))] + ansiBold + petalFrames[tick%int64(len(petalFrames))] + ansiReset
+	return ansiMagenta + ansiBold + "✿" + ansiReset
 }
 
 // FallbackLine is the petal-only line rendered for absent, empty, or

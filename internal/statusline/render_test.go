@@ -180,15 +180,8 @@ func TestRenderCascade(t *testing.T) {
 	if visibleWidth(line) > 20 {
 		t.Errorf("tiny line overflows: %d cols: %s", visibleWidth(line), line)
 	}
-	tinyPlain := stripANSI(line)
-	petalSeen := false
-	for _, frame := range petalFrames {
-		if strings.Contains(tinyPlain, frame) {
-			petalSeen = true
-		}
-	}
-	if !petalSeen {
-		t.Errorf("tiny line lost the petal: %s", line)
+	if plain := stripANSI(line); !strings.Contains(plain, "✿") {
+		t.Errorf("tiny line lost the static petal: %s", line)
 	}
 }
 
@@ -261,9 +254,9 @@ func TestRenderVisibilityHiding(t *testing.T) {
 	}
 }
 
-// TestRenderPetalState pins the bare petal (L19): idle is the static flower
-// alone, active is the animated frame with no label, no brand, and no
-// scanner; modelDetails only hides the mode·model text.
+// TestRenderPetalState pins the bare static petal (L19/L23): idle is the
+// plain flower, active is the same glyph in the magenta work tone, with no
+// label, brand, or animation; modelDetails only hides the mode·model text.
 func TestRenderPetalState(t *testing.T) {
 	idle := mustPayload(t, `{"cwd": "/home/user/project", "terminal_width": 200, "agent_state": "idle"}`)
 	line := Render(idle, DefaultConfig(), defaultExtras())
@@ -281,14 +274,11 @@ func TestRenderPetalState(t *testing.T) {
 	if strings.Contains(plain, "…") || strings.Contains(plain, "thinking") || strings.Contains(plain, "gentle ai") {
 		t.Errorf("active petal carries a label or brand: %s", line)
 	}
-	petalSeen := false
-	for _, frame := range petalFrames {
-		if strings.Contains(plain, frame) {
-			petalSeen = true
-		}
+	if !strings.Contains(plain, "✿") {
+		t.Errorf("active state missing the static petal: %s", line)
 	}
-	if !petalSeen {
-		t.Errorf("active state missing animated petal: %s", line)
+	if !strings.Contains(line, ansiMagenta) {
+		t.Errorf("active petal not in the static work tone: %s", line)
 	}
 
 	noModel := DefaultConfig()
@@ -300,13 +290,7 @@ func TestRenderPetalState(t *testing.T) {
 	if strings.Contains(plain, "M") {
 		t.Errorf("modelDetails:false still shows the model: %s", line)
 	}
-	petalSeen = false
-	for _, frame := range petalFrames {
-		if strings.Contains(plain, frame) {
-			petalSeen = true
-		}
-	}
-	if !petalSeen {
+	if !strings.Contains(plain, "✿") {
 		t.Errorf("modelDetails:false lost the petal: %s", line)
 	}
 }

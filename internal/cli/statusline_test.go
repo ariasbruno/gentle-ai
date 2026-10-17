@@ -171,3 +171,27 @@ func runGitCommand(dir string, args ...string) (string, error) {
 	out, err := command.CombinedOutput()
 	return string(out), err
 }
+
+// TestRunStatusLineDumpsPayload pins the L23 instrumentation: the raw live
+// payload lands at ~/.gentle-ai/statusline-last-payload.json (0600) without
+// affecting the rendered line.
+func TestRunStatusLineDumpsPayload(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	payload := `{"cwd": "/home/user/project", "terminal_width": 200}`
+	line := runStatusLineTest(t, nil, payload, home)
+	if !strings.Contains(line, "✿") {
+		t.Fatalf("dump broke the render: %s", line)
+	}
+	raw, err := os.ReadFile(filepath.Join(home, ".gentle-ai", "statusline-last-payload.json"))
+	if err != nil {
+		t.Fatalf("payload dump missing: %v", err)
+	}
+	if string(raw) != payload {
+		t.Errorf("dump = %q, want %q", raw, payload)
+	}
+	info, err := os.Stat(filepath.Join(home, ".gentle-ai", "statusline-last-payload.json"))
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Errorf("dump permissions wrong: %v %v", info.Mode().Perm(), err)
+	}
+}
