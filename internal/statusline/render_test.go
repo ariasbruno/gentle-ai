@@ -464,3 +464,67 @@ func TestSubagentCount(t *testing.T) {
 		}
 	}
 }
+
+// TestRenderTasklistSegment pins the S17 render states: in-progress with and
+// without blocked tasks, the idle fraction, the complete check, and the
+// visibility/zero gates.
+func TestRenderTasklistSegment(t *testing.T) {
+	payload := mustPayload(t, `{
+		"model": {"display_name": "M"},
+		"context_window": {"used_percentage": 10},
+		"terminal_width": 200
+	}`)
+	extras := defaultExtras()
+	extras.Tasklist = TasklistStats{Done: 12, Total: 17, CurrentID: "T15", CurrentStatus: "in_progress"}
+	line := Render(payload, DefaultConfig(), extras)
+	if plain := stripANSI(line); !strings.Contains(plain, "⋗ 12/17 · T15 in_progress") {
+		t.Errorf("in-progress tasklist missing: %s", line)
+	}
+	if !strings.Contains(line, ansiWarning) {
+		t.Errorf("in-progress tasklist not warning-toned: %s", line)
+	}
+
+	extras.Tasklist.Blocked = 2
+	line = Render(payload, DefaultConfig(), extras)
+	if plain := stripANSI(line); !strings.Contains(plain, "⋗ 12/17 · T15 in_progress ⚠2") {
+		t.Errorf("blocked count missing: %s", line)
+	}
+
+	extras.Tasklist = TasklistStats{Done: 12, Total: 17}
+	line = Render(payload, DefaultConfig(), extras)
+	if plain := stripANSI(line); !strings.Contains(plain, "⋗ 12/17") || strings.Contains(plain, "T15") {
+		t.Errorf("idle tasklist fraction wrong: %s", line)
+	}
+
+	extras.Tasklist = TasklistStats{Done: 17, Total: 17}
+	line = Render(payload, DefaultConfig(), extras)
+	if plain := stripANSI(line); !strings.Contains(plain, "⋗ 17/17 ✓") {
+		t.Errorf("complete tasklist missing: %s", line)
+	}
+	if !strings.Contains(line, ansiAccent) {
+		t.Errorf("complete tasklist not accent-toned: %s", line)
+	}
+
+	// Compact density drops the current-task detail.
+	compactConfig := DefaultConfig()
+	compactConfig.Density = DensityCompact
+	extras.Tasklist = TasklistStats{Done: 12, Total: 17, CurrentID: "T15", CurrentStatus: "in_progress"}
+	line = Render(payload, compactConfig, extras)
+	if plain := stripANSI(line); strings.Contains(plain, "T15") || !strings.Contains(plain, "⋗ 12/17") {
+		t.Errorf("compact tasklist keeps detail: %s", line)
+	}
+
+	hidden := DefaultConfig()
+	hidden.Visibility.Tasklist = false
+	extras.Tasklist = TasklistStats{Done: 12, Total: 17}
+	line = Render(payload, hidden, extras)
+	if strings.Contains(stripANSI(line), "⋗") {
+		t.Errorf("tasklist shown while disabled: %s", line)
+	}
+
+	extras.Tasklist = TasklistStats{}
+	line = Render(payload, DefaultConfig(), extras)
+	if strings.Contains(stripANSI(line), "⋗") {
+		t.Errorf("tasklist shown with zero total: %s", line)
+	}
+}

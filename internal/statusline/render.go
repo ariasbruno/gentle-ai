@@ -98,6 +98,21 @@ type Extras struct {
 	// EngramProject is the Engram project name of the payload cwd (empty
 	// drops the name part of the 🧠 segment).
 	EngramProject string
+	// Tasklist is the parsed ODD feature-doc task state (S17); Total == 0
+	// hides the segment.
+	Tasklist TasklistStats
+}
+
+// TasklistStats carries the parsed ## Tasks state of the most recent ODD
+// feature document (S17).
+type TasklistStats struct {
+	Done  int
+	Total int
+	// CurrentID/CurrentStatus name the first in_progress task (the first
+	// pending one when nothing runs); empty means no active task.
+	CurrentID     string
+	CurrentStatus string
+	Blocked       int
 }
 
 var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
@@ -353,6 +368,26 @@ func buildSegments(p *Payload, config Config, extras Extras) []segment {
 
 	if config.Visibility.RDD && extras.RDDMode != "" {
 		segmentOf(tagRDD, "🌹 "+extras.RDDMode, "")
+	}
+
+	if config.Visibility.Tasklist && extras.Tasklist.Total > 0 {
+		tasklist := extras.Tasklist
+		var full, compact string
+		switch {
+		case tasklist.Done == tasklist.Total:
+			full = ansiAccent + fmt.Sprintf("⋗ %d/%d ✓", tasklist.Done, tasklist.Total) + ansiReset
+			compact = full
+		case tasklist.CurrentID != "":
+			full = ansiWarning + fmt.Sprintf("⋗ %d/%d · %s %s", tasklist.Done, tasklist.Total, tasklist.CurrentID, tasklist.CurrentStatus) + ansiReset
+			if tasklist.Blocked > 0 {
+				full += ansiWarning + fmt.Sprintf(" ⚠%d", tasklist.Blocked) + ansiReset
+			}
+			compact = ansiWarning + fmt.Sprintf("⋗ %d/%d", tasklist.Done, tasklist.Total) + ansiReset
+		default:
+			full = fmt.Sprintf("⋗ %d/%d", tasklist.Done, tasklist.Total)
+			compact = full
+		}
+		segmentOf(tagTasklist, full, compact)
 	}
 
 	if config.Visibility.Changes {
