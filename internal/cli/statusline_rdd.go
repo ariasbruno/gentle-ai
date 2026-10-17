@@ -33,8 +33,7 @@ func rddStateCachePath(home string) string {
 }
 
 // rddStateLabel maps one review authority state to the Gentle Shell display
-// label; the empty string means no recognizable state and falls back to the
-// plain switch display.
+// label. Unknown states must not look like a successful switch-only read.
 func rddStateLabel(state reviewtransaction.State) string {
 	switch state {
 	case reviewtransaction.StateUnreviewed:
@@ -57,13 +56,13 @@ func rddStateLabel(state reviewtransaction.State) string {
 	case reviewtransaction.StateInvalidated:
 		return "Outdated · code changed"
 	default:
-		return ""
+		return "Review unavailable"
 	}
 }
 
 // resolveStatusLineRDD builds the RDD segment display: `off` when the switch
 // is off, the active authority's state label when one exists (cached per
-// root), and the plain `on` otherwise. Any failure degrades to `?` and never
+// root), and the plain `on` otherwise. Errors show `Review unavailable` and never
 // blocks the line.
 func resolveStatusLineRDD(home, cwd string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), rddStateDeadline)
@@ -72,23 +71,32 @@ func resolveStatusLineRDD(home, cwd string) string {
 	mode, err := ReviewModeStatus(ctx, cwd)
 	if err != nil || mode.Effective != reviewtransaction.RDDModeOn {
 		if err != nil {
-			return "?"
+			return "Review unavailable"
 		}
 		return "off"
 	}
 
-	if label, ok := readRDDStateCache(home, cwd); ok {
+	// Resolve just the root before reading the cache, not the expensive status.
+	root, rootErr := (reviewtransaction.SnapshotBuilder{Repo: cwd}).ResolveRepositoryRoot(ctx)
+	if ctx.Err() != nil {
+		return "Review unavailable"
+	}
+	if rootErr != nil {
+		return "on" // No repository: there cannot be a review authority.
+	}
+	if label, ok := readRDDStateCache(home, root); ok {
 		return label
 	}
 
 	label := "on"
-	_, _, status, ok, resolveErr := antigravityResolveTargetIdentity(ctx, cwd)
-	if resolveErr == nil && ok && status.Authority != nil {
-		if mapped := rddStateLabel(status.Authority.State); mapped != "" {
-			label = mapped
-		}
+	_, _, status, ok, resolveErr := antigravityResolveTargetIdentity(ctx, root)
+	if resolveErr != nil || ctx.Err() != nil {
+		return "Review unavailable"
 	}
-	writeRDDStateCache(home, cwd, label)
+	if ok && status.Authority != nil {
+		label = rddStateLabel(status.Authority.State)
+	}
+	writeRDDStateCache(home, root, label)
 	return label
 }
 

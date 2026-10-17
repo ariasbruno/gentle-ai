@@ -436,3 +436,18 @@ func TestSubagentCount(t *testing.T) {
 		}
 	}
 }
+
+// TestScannerWave pins the exact per-character roles at a known render tick.
+func TestScannerWave(t *testing.T) {
+	got := scanWorkingLabel("abcde", 5) // phase 5, head at index 2
+	want := ansiBrightCyan + "a" + ansiReset + ansiYellow + "b" + ansiReset + ansiBrightWhite + "c" + ansiReset + ansiYellow + "d" + ansiReset + ansiBrightCyan + "e" + ansiReset
+	if got != want {
+		t.Fatalf("scanner = %q, want %q", got, want)
+	}
+	if scanWorkingLabel("abcde", 20) != got {
+		t.Fatal("scanner did not repeat at 15 steps")
+	}
+	if stripANSI(scanWorkingLabel("exploring…", 0)) != "exploring…" {
+		t.Fatal("scanner altered visible label")
+	}
+}
