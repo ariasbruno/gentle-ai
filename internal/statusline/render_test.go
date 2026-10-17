@@ -512,3 +512,26 @@ func TestRenderTasklistSegment(t *testing.T) {
 		t.Errorf("tasklist shown with zero total: %s", line)
 	}
 }
+
+// TestRenderCycleMode pins the L23 mode resolution: cycle_mode wins, the
+// canonical execution_mode is the fallback, and an absent mode renders the
+// agy default (auto) — the mode is always visible.
+func TestRenderCycleMode(t *testing.T) {
+	base := `"model": {"display_name": "Gemini 3.5 Pro (High)"}, "terminal_width": 200`
+	cases := []struct {
+		name, raw, want string
+	}{
+		{"cycle_mode plan", `{` + base + `, "cycle_mode": "plan"}`, "plan · Gemini 3.5 Pro (High)"},
+		{"cycle_mode accept-edits", `{` + base + `, "cycle_mode": "accept-edits"}`, "accept-edits · Gemini 3.5 Pro (High)"},
+		{"default is auto", `{` + base + `}`, "auto · Gemini 3.5 Pro (High)"},
+		{"execution_mode fallback", `{` + base + `, "execution_mode": "planning"}`, "planning · Gemini 3.5 Pro (High)"},
+		{"cycle wins over execution", `{` + base + `, "execution_mode": "planning", "cycle_mode": "plan"}`, "plan · Gemini 3.5 Pro (High)"},
+	}
+	for _, testCase := range cases {
+		payload := mustPayload(t, testCase.raw)
+		line := Render(payload, DefaultConfig(), defaultExtras())
+		if plain := stripANSI(line); !strings.Contains(plain, testCase.want) {
+			t.Errorf("%s: missing %q in: %s", testCase.name, testCase.want, line)
+		}
+	}
+}

@@ -272,20 +272,26 @@ func buildSegments(p *Payload, config Config, extras Extras) []segment {
 		add(tag, text, compact)
 	}
 
-	// Block 1 (never drops): bare petal + `mode · model` (L18/L19).
+	// Block 1 (never drops): bare petal + `mode · model` (L18/L19). The
+	// mode is always visible (L23): agy 1.4.1 sends cycle_mode when a mode
+	// is set and omits it in the default (auto) mode; the canonical docs
+	// name execution_mode, kept as a fallback.
+	mode := p.CycleMode
+	if mode == "" {
+		mode = p.ExecutionMode
+	}
+	if mode == "" {
+		mode = "auto"
+	}
 	petalText := petalGlyph(p)
 	if config.Visibility.ModelDetails {
 		modelText := p.Model.DisplayName
-		if p.ExecutionMode != "" {
-			if modelText == "" {
-				modelText = p.ExecutionMode
-			} else {
-				modelText = p.ExecutionMode + " · " + modelText
-			}
+		if modelText == "" {
+			modelText = mode
+		} else {
+			modelText = mode + " · " + modelText
 		}
-		if modelText != "" {
-			petalText += " " + modelText
-		}
+		petalText += " " + modelText
 	}
 	segmentOf(tagPetal, petalText, "")
 

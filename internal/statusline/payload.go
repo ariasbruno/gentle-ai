@@ -77,7 +77,11 @@ type Payload struct {
 	Subagents         json.RawMessage  `json:"subagents"`
 	TerminalWidth     int              `json:"terminal_width"`
 	ExecutionMode     string           `json:"execution_mode"`
-	Vim               Vim              `json:"vim"`
+	// CycleMode is agy 1.4.1's live execution-mode field (undocumented
+	// upstream): "plan"/"accept-edits" when set, absent in the default
+	// (auto) mode — verified by payload captures in L23.
+	CycleMode string `json:"cycle_mode"`
+	Vim       Vim    `json:"vim"`
 }
 
 // SubagentCount reports the number of running subagents; a missing or
