@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -12,6 +13,11 @@ import (
 // runStatusLineTest invokes the command with a fresh HOME so the in-process
 // RDD read resolves against empty user state (defaults on) and returns the
 // rendered stdout.
+
+func stripStatusLineANSI(line string) string {
+	return regexp.MustCompile(`\x1b\[[0-9;]*m`).ReplaceAllString(line, "")
+}
+
 func runStatusLineTest(t *testing.T, args []string, stdinPayload, homeDir string) string {
 	t.Helper()
 	t.Setenv("HOME", homeDir)
@@ -45,7 +51,7 @@ func TestRunStatusLineRendersPayload(t *testing.T) {
 		"working…", "⟡", "feat/login*", "Gemini 3.5 Pro (High) · planning",
 		"ctx", "43%", "$0.312", "⧗ 2 jobs", "🌹 on", "fix login",
 	} {
-		if !strings.Contains(line, want) {
+		if !strings.Contains(stripStatusLineANSI(line), want) {
 			t.Errorf("missing segment %q in: %s", want, line)
 		}
 	}

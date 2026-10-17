@@ -23,6 +23,8 @@ const (
 	ansiBrightMagenta = "\x1b[95m"
 	ansiCyan          = "\x1b[36m"
 	ansiYellow        = "\x1b[33m"
+	ansiBrightWhite   = "\x1b[97m"
+	ansiBrightCyan    = "\x1b[96m"
 )
 
 const (
@@ -44,6 +46,42 @@ var petalTones = [8]string{
 	ansiYellow, ansiCyan, ansiMagenta, ansiMagenta,
 }
 
+// The reflected-light wave over the working label, ported from Gentle Shell's
+// scanWorkingText (lib/shell-prompt.ts): a bright head sweeps the text and
+// the neighboring characters settle through accent and soft into the muted
+// base, one step per render tick.
+const (
+	scannerSteps       = 15
+	scannerEntryOffset = 3
+)
+
+func scanWorkingLabel(text string, tick int64) string {
+	phase := ((tick % scannerSteps) + scannerSteps) % scannerSteps
+	head := int(phase) - scannerEntryOffset
+	var builder strings.Builder
+	for index, char := range []rune(text) {
+		distance := head - index
+		if distance < 0 {
+			distance = -distance
+		}
+		var tone string
+		switch distance {
+		case 0:
+			tone = ansiBrightWhite
+		case 1:
+			tone = ansiYellow
+		case 2:
+			tone = ansiBrightCyan
+		default:
+			tone = ansiDim
+		}
+		builder.WriteString(tone)
+		builder.WriteRune(char)
+		builder.WriteString(ansiReset)
+	}
+	return builder.String()
+}
+
 // petalState builds the merged brand/state segment: idle → the static
 // brand (no label, hidden entirely in minimal density); active → the
 // animated petal plus the phase label (S12 phase when provided, otherwise
@@ -62,7 +100,7 @@ func petalState(p *Payload, config Config, extras Extras) string {
 	if label == "" {
 		label = stateBadge(p.AgentState)
 	}
-	return tone + ansiBold + glyph + ansiReset + " " + label + "…"
+	return tone + ansiBold + glyph + ansiReset + " " + scanWorkingLabel(label+"…", tick)
 }
 
 // FallbackLine is the brand-only line rendered for absent, empty, or
@@ -114,6 +152,9 @@ type Extras struct {
 	Phase string
 	// Observations is the Engram observation count of the payload cwd.
 	Observations int
+	// EngramProject is the Engram project name of the payload cwd (empty
+	// drops the name part of the 🧠 segment).
+	EngramProject string
 }
 
 var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
@@ -346,7 +387,11 @@ func buildSegments(p *Payload, config Config, extras Extras) []segment {
 	}
 
 	if config.Visibility.Engram && extras.Observations > 0 {
-		add(tagMem, fmt.Sprintf("mem %d", extras.Observations))
+		if extras.EngramProject != "" {
+			add(tagMem, fmt.Sprintf("🧠 %s · %d", extras.EngramProject, extras.Observations))
+		} else {
+			add(tagMem, fmt.Sprintf("🧠 %d", extras.Observations))
+		}
 	}
 
 	if p.Sandbox.Enabled {
@@ -361,15 +406,8 @@ func buildSegments(p *Payload, config Config, extras Extras) []segment {
 		add(tagVim, "vim."+p.Vim.Mode)
 	}
 
-	if config.Visibility.RDD {
-		switch extras.RDDMode {
-		case "on":
-			add(tagRDD, "🌹 on")
-		case "off":
-			add(tagRDD, "🌹 off")
-		case "?":
-			add(tagRDD, "🌹 ?")
-		}
+	if config.Visibility.RDD && extras.RDDMode != "" {
+		add(tagRDD, "🌹 "+extras.RDDMode)
 	}
 
 	if config.Visibility.Changes {

@@ -130,7 +130,7 @@ func TestRunStatusLineUsesPhaseRecord(t *testing.T) {
 		"terminal_width": 200
 	}`
 	line := runStatusLineTest(t, nil, payload, home)
-	if !strings.Contains(line, "exploring…") {
+	if !strings.Contains(stripStatusLineANSI(line), "exploring…") {
 		t.Errorf("phase label missing: %s", line)
 	}
 
@@ -144,7 +144,7 @@ func TestRunStatusLineUsesPhaseRecord(t *testing.T) {
 		"terminal_width": 200
 	}`
 	line = runStatusLineTest(t, nil, payload, home)
-	if !strings.Contains(line, "working…") {
+	if !strings.Contains(stripStatusLineANSI(line), "working…") {
 		t.Errorf("fallback label missing: %s", line)
 	}
 
@@ -162,7 +162,7 @@ func TestRunStatusLineUsesPhaseRecord(t *testing.T) {
 		"terminal_width": 200
 	}`
 	line = runStatusLineTest(t, nil, payload, home)
-	if strings.Contains(line, "…") {
+	if strings.Contains(stripStatusLineANSI(line), "…") {
 		t.Errorf("idle line shows an activity label: %s", line)
 	}
 	if !strings.Contains(line, "✿ gentle ai") {

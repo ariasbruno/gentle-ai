@@ -46,7 +46,7 @@ func TestRenderFullLine(t *testing.T) {
 		"weekly", "30%", "⧗ 2 jobs", "✦ 2 subagents", "⊘ sandbox·net",
 		"vim.NORMAL", "🌹 on", "fix login",
 	} {
-		if !strings.Contains(line, want) {
+		if !strings.Contains(stripANSI(line), want) {
 			t.Errorf("missing segment %q in: %s", want, line)
 		}
 	}
@@ -165,7 +165,7 @@ func TestRenderMinimalHidesBrand(t *testing.T) {
 	if !strings.Contains(line, "Gemini 3.5 Pro") {
 		t.Errorf("minimal density lost the content segments: %s", line)
 	}
-	if strings.Contains(line, "…") {
+	if strings.Contains(stripANSI(line), "…") {
 		t.Errorf("minimal idle shows an activity label: %s", line)
 	}
 }
@@ -220,13 +220,13 @@ func TestRenderPetalState(t *testing.T) {
 	if !strings.Contains(line, brandText) {
 		t.Errorf("idle lost the static brand: %s", line)
 	}
-	if strings.Contains(line, "…") {
+	if strings.Contains(stripANSI(line), "…") {
 		t.Errorf("idle shows an activity label: %s", line)
 	}
 
 	active := mustPayload(t, `{"cwd": "/home/user/project", "terminal_width": 200, "agent_state": "thinking"}`)
 	line = Render(active, DefaultConfig(), defaultExtras())
-	if !strings.Contains(line, "thinking…") {
+	if !strings.Contains(stripANSI(line), "thinking…") {
 		t.Errorf("active state missing fallback label: %s", line)
 	}
 	petalSeen := false
@@ -241,10 +241,10 @@ func TestRenderPetalState(t *testing.T) {
 
 	phased := Extras{Home: "/home/user", Phase: "exploring"}
 	line = Render(active, DefaultConfig(), phased)
-	if !strings.Contains(line, "exploring…") {
+	if !strings.Contains(stripANSI(line), "exploring…") {
 		t.Errorf("hook phase label missing: %s", line)
 	}
-	if strings.Contains(line, "gentle ai") {
+	if strings.Contains(stripANSI(line), "gentle ai") {
 		t.Errorf("active state shows the idle brand: %s", line)
 	}
 }
@@ -378,7 +378,8 @@ func TestFormatCost(t *testing.T) {
 	}
 }
 
-// TestRenderMemSegment pins the Engram observation segment.
+// TestRenderMemSegment pins the Engram segment: 🧠 project · count, the
+// count-only fallback, and the visibility/zero gates.
 func TestRenderMemSegment(t *testing.T) {
 	payload := mustPayload(t, `{
 		"cwd": "/home/user/project",
@@ -388,22 +389,30 @@ func TestRenderMemSegment(t *testing.T) {
 	}`)
 	extras := defaultExtras()
 	extras.Observations = 918
+	extras.EngramProject = "gentle-ai"
 	line := Render(payload, DefaultConfig(), extras)
-	if !strings.Contains(line, "mem 918") {
-		t.Errorf("mem segment missing: %s", line)
+	if !strings.Contains(line, "🧠 gentle-ai · 918") {
+		t.Errorf("engram segment missing: %s", line)
+	}
+
+	extras.EngramProject = ""
+	line = Render(payload, DefaultConfig(), extras)
+	if !strings.Contains(line, "🧠 918") {
+		t.Errorf("count-only engram segment missing: %s", line)
 	}
 
 	noEngram := DefaultConfig()
 	noEngram.Visibility.Engram = false
+	extras.EngramProject = "gentle-ai"
 	line = Render(payload, noEngram, extras)
-	if strings.Contains(line, "mem") {
-		t.Errorf("mem segment shown while disabled: %s", line)
+	if strings.Contains(line, "🧠") {
+		t.Errorf("engram segment shown while disabled: %s", line)
 	}
 
 	extras.Observations = 0
 	line = Render(payload, DefaultConfig(), extras)
-	if strings.Contains(line, "mem") {
-		t.Errorf("mem segment shown with zero observations: %s", line)
+	if strings.Contains(line, "🧠") {
+		t.Errorf("engram segment shown with zero observations: %s", line)
 	}
 }
 

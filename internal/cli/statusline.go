@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gentleman-programming/gentle-ai/v4/internal/reviewtransaction"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/statusline"
 )
 
@@ -76,37 +75,17 @@ func runStatusLine(args []string, stdin io.Reader, stdout io.Writer, homeDir str
 		extras.Phase = readStatusLinePhase(homeDir, payload.ConversationID)
 	}
 	if config.Visibility.RDD {
-		extras.RDDMode = resolveStatusLineRDD(cwd)
+		extras.RDDMode = resolveStatusLineRDD(homeDir, cwd)
 	}
 	if config.Visibility.Changes {
 		extras.Changes = statusLineGitChanges(cwd)
 	}
 	if config.Visibility.Engram {
-		extras.Observations = statusLineEngramObservations(homeDir, cwd)
+		extras.EngramProject, extras.Observations = statusLineEngramStats(homeDir, cwd)
 	}
 
 	_, _ = fmt.Fprintln(stdout, statusline.Render(payload, config, extras))
 	return nil
-}
-
-// resolveStatusLineRDD reads the receipt-driven-development switch through
-// the same read-only resolver the review command uses; any failure degrades
-// to the unknown badge and never blocks the line (S5).
-func resolveStatusLineRDD(cwd string) string {
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
-	status, err := ReviewModeStatus(ctx, cwd)
-	if err != nil {
-		return "?"
-	}
-	switch status.Effective {
-	case reviewtransaction.RDDModeOn:
-		return "on"
-	case reviewtransaction.RDDModeOff:
-		return "off"
-	default:
-		return "?"
-	}
 }
 
 // statusLineGitChanges renders the opt-in changes segment "±N +A/−D" from

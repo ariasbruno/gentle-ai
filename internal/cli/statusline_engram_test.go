@@ -19,7 +19,7 @@ func fakeEngramOnPATH(t *testing.T, observations int) string {
 	counter := filepath.Join(binDir, "calls")
 	script := "#!/bin/sh\necho 1 >> " + counter +
 		"\nprintf 'Engram Memory Stats\\n  Sessions:     263\\n  Observations:  " +
-		strconv.Itoa(observations) + "\\n  Prompts:      1194\\n'\n"
+		strconv.Itoa(observations) + "\\n  Projects:     gentle-ai\\n  Prompts:      1194\\n'\n"
 	if err := os.WriteFile(filepath.Join(binDir, "engram"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -44,15 +44,15 @@ func TestStatusLineEngramObservations(t *testing.T) {
 	t.Setenv("HOME", home)
 	counter := fakeEngramOnPATH(t, 918)
 
-	if got := statusLineEngramObservations(home, cwd); got != 918 {
-		t.Errorf("observations = %d, want 918", got)
+	if project, got := statusLineEngramStats(home, cwd); got != 918 || project != "gentle-ai" {
+		t.Errorf("stats = (%q, %d), want (gentle-ai, 918)", project, got)
 	}
 	if calls := engramCallCount(t, counter); calls != 1 {
 		t.Errorf("expected one engram invocation, got %d", calls)
 	}
 
 	// The second call is served from the cache: no extra invocation.
-	if got := statusLineEngramObservations(home, cwd); got != 918 {
+	if _, got := statusLineEngramStats(home, cwd); got != 918 {
 		t.Errorf("cached observations = %d, want 918", got)
 	}
 	if calls := engramCallCount(t, counter); calls != 1 {
@@ -61,7 +61,7 @@ func TestStatusLineEngramObservations(t *testing.T) {
 
 	// Another cwd is a different cache entry: one more invocation.
 	other := t.TempDir()
-	if got := statusLineEngramObservations(home, other); got != 918 {
+	if _, got := statusLineEngramStats(home, other); got != 918 {
 		t.Errorf("other cwd observations = %d, want 918", got)
 	}
 	if calls := engramCallCount(t, counter); calls != 2 {
@@ -76,7 +76,7 @@ func TestStatusLineEngramStaleCacheReinvokes(t *testing.T) {
 	t.Setenv("HOME", home)
 	counter := fakeEngramOnPATH(t, 42)
 
-	if got := statusLineEngramObservations(home, cwd); got != 42 {
+	if _, got := statusLineEngramStats(home, cwd); got != 42 {
 		t.Fatalf("first read = %d", got)
 	}
 
@@ -92,7 +92,7 @@ func TestStatusLineEngramStaleCacheReinvokes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := statusLineEngramObservations(home, cwd); got != 42 {
+	if _, got := statusLineEngramStats(home, cwd); got != 42 {
 		t.Errorf("stale cache served %d, want a fresh 42", got)
 	}
 	if calls := engramCallCount(t, counter); calls != 2 {
@@ -110,7 +110,7 @@ func TestStatusLineEngramFailuresHideSegment(t *testing.T) {
 
 	// No engram on PATH at all.
 	t.Setenv("PATH", t.TempDir())
-	if got := statusLineEngramObservations(home, cwd); got != 0 {
+	if _, got := statusLineEngramStats(home, cwd); got != 0 {
 		t.Errorf("missing binary returned %d, want 0", got)
 	}
 
@@ -121,8 +121,8 @@ func TestStatusLineEngramFailuresHideSegment(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", binDir)
-	if got := statusLineEngramObservations(home, cwd); got != 0 {
-		t.Errorf("unparsable output returned %d, want 0", got)
+	if project, got := statusLineEngramStats(home, cwd); got != 0 || project != "" {
+		t.Errorf("unparsable output returned (%q, %d), want empty", project, got)
 	}
 }
 
@@ -141,7 +141,7 @@ func TestRunStatusLineRendersEngramSegment(t *testing.T) {
 		"terminal_width": 200
 	}`
 	line := runStatusLineTest(t, nil, payload, home)
-	if !strings.Contains(line, "mem 314") {
-		t.Errorf("mem segment missing: %s", line)
+	if !strings.Contains(line, "🧠 gentle-ai · 314") {
+		t.Errorf("engram segment missing: %s", line)
 	}
 }
