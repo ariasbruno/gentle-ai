@@ -276,6 +276,21 @@ func TestAntigravityCLIDelegationFallbackIsTruthful(t *testing.T) {
 	}
 }
 
+func TestAntigravityCLISkillLoadingWordingIsTruthful(t *testing.T) {
+	input := "For skill-shaped requests, do not treat injected `<available_skills>` as complete. " +
+		"Use the registry and filesystem only as a discovery aid; do not let a trigger table override the user's concrete request.\n"
+	got := applyAntigravityCLIParentMutations(applyCommonTextMutations(input))
+	if !strings.Contains(got, "Antigravity CLI injects no `<available_skills>` block") {
+		t.Fatalf("skill-loading wording still presumes an injected block:\n%s", got)
+	}
+	if strings.Contains(got, "do not treat injected `<available_skills>` as complete") {
+		t.Errorf("generated text retains the Pi-only caution:\n%s", got)
+	}
+	if !strings.Contains(got, "do not let a trigger table override the user's concrete request") {
+		t.Errorf("generated text dropped the trigger-table caution:\n%s", got)
+	}
+}
+
 func writeAgentFixture(t *testing.T, sourceRoot, name, body string) {
 	t.Helper()
 	agentsDir := filepath.Join(sourceRoot, "assets", "agents")

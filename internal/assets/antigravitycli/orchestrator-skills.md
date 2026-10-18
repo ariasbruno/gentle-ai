@@ -27,7 +27,7 @@ If any subagent reports a fallback instead of `paths-injected`, treat it as an o
 
 ## Intent-Driven Skill Discovery
 
-For skill-shaped requests, do not treat injected `<available_skills>` as complete. Use the registry and filesystem only as a discovery aid; do not let a trigger table override the user's concrete request or turn a small request into a larger workflow.
+For skill-shaped requests, do not assume an injected skill list is complete: Antigravity CLI injects no `<available_skills>` block. Use the registry and filesystem only as a discovery aid; do not let a trigger table override the user's concrete request or turn a small request into a larger workflow.
 
 Discovery order:
 

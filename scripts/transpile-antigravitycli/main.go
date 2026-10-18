@@ -1195,6 +1195,14 @@ func applyAntigravityCLIParentMutations(content string) string {
 		"If neither worker definition exists, fall back to the native `Agent` even when `subagent_*` tools are available.",
 		"If neither worker definition exists, delegate the bounded write with Antigravity's native `invoke_subagent`.")
 
+	// Antigravity CLI injects no `<available_skills>` system-prompt block (the
+	// same runtime fact Hermes states in its persona assets). The inherited Pi
+	// caution against over-trusting that block therefore reads as if one were
+	// injected here. Keep the caution, name the runtime fact.
+	content = strings.ReplaceAll(content,
+		"For skill-shaped requests, do not treat injected `<available_skills>` as complete.",
+		"For skill-shaped requests, do not assume an injected skill list is complete: Antigravity CLI injects no `<available_skills>` block.")
+
 	// AGY has native subagent messaging, not the Pi cross-session directory.
 	content = stripAntigravityCLISectionUntil(content, "## Session subject and display identity", "## Pi Runtime Overlays")
 	content = replaceAntigravityCLILineContaining(content, "Before work beyond small direct tasks, publish own", "")
