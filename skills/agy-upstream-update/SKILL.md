@@ -15,7 +15,7 @@ Load for planning or executing an AGY integration update against Gentle AI, Gent
 
 - Keep planning read-only. Execute only explicitly authorized migration work; this skill grants no commit, publication, destructive Git, installation, authentication, model-run, or native review consent.
 - Pin AI/Shell commits and the AGY validation version; never migrate against moving `main` or a dirty generator source.
-- Start one update branch from the last accepted AGY integration: `chore/agy-integration-ai-v{AI}-shell-v{Shell}`. Preserve previous branches and user changes; inspect existing attempts instead of overwriting them.
+- Start one update branch from the last accepted AGY integration: `agy/ai-v{AI}_shell-v{Shell}`. Preserve previous branches and user changes; inspect existing attempts instead of overwriting them.
 - Merge pinned AI into that baseline. Never rebuild the fork from upstream or replay its full history for each release.
 - Resolve ownership and behavior, not merely conflict markers. Regenerate generated assets; preserve AGY behavior and user-owned data.
 - Never equate a clean merge, compilation, capability claim, or generated-file equality with functional compatibility or feature parity.

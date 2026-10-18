@@ -12,7 +12,7 @@ Status: implemented, verified and recorded locally within the scope below. The g
 | Prior Shell provenance | `0da07ce949952268b290bf751f22ad1202a40fc3` |
 | Shell v4.2.0 | `c41ebd591358d393cf19c5ead981f67640a600ba` |
 | Validation runtime | `agy --version`: exit 0, stdout `1.3.4\n` |
-| Update branch | `chore/agy-integration-ai-v4.1.1-shell-v4.2.0` |
+| Update branch | `agy/ai-v4.1.1_shell-v4.2.0` |
 
 Previous validation runtime version: not independently established. AGY's observed changelog supplies release-specific evidence, not authenticated model proof. Target Shell is a clean detached source worktree; do not substitute the earlier Shell 4.1.0 attempt.
 

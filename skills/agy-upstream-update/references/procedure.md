@@ -10,7 +10,7 @@ The merge base explains textual changes; the prior incorporated release defines 
 
 Use the last accepted AGY integration, not merely the newest branch or an incomplete review-slices branch. Confirm acceptance with the human when unknown. Preserve dirty files without silently carrying them into another branch. Do not reset, clean, rewrite history, apply a stash, or overwrite an existing branch automatically.
 
-Name the update branch `chore/agy-integration-ai-v{AI}-shell-v{Shell}`, for example `chore/agy-integration-ai-v4.1.1-shell-v4.1.0`. Versions label the attempt; full IDs identify inputs. Inspect an existing same-name branch and ask whether to resume it if its purpose or inputs differ. An AGY-only update with unchanged AI/Shell still needs an explicit attempt decision; do not invent a naming suffix.
+Name the update branch `agy/ai-v{AI}_shell-v{Shell}`, for example `agy/ai-v4.1.1_shell-v4.1.0`. Versions label the attempt; full IDs identify inputs. Inspect an existing same-name branch and ask whether to resume it if its purpose or inputs differ. An AGY-only update with unchanged AI/Shell still needs an explicit attempt decision; do not invent a naming suffix.
 
 Planning stays read-only: return proposed inputs, maps and checks in the response. Create the migration report or implementation tracking only when authorized. An isolated same-clone worktree can protect the original checkout during execution; do not move work outside permitted roots.
 

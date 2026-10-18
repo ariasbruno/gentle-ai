@@ -15,7 +15,7 @@ Status: proposed / in progress / blocked / verified, awaiting acceptance / accep
 | Previous AGY validation version | | |
 | Target AGY validation version | | |
 | Merge base | | |
-| Update branch | `chore/agy-integration-ai-v{AI}-shell-v{Shell}` | |
+| Update branch | `agy/ai-v{AI}_shell-v{Shell}` | |
 | Runner/toolchain and isolation | | |
 
 Authorized operations:
