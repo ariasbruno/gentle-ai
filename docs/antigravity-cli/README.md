@@ -15,15 +15,14 @@ Necesitás tener `agy` (con login interactivo completado) y el binario `gentle-a
 
 Si todavía no tenés `gentle-ai`, podés instalarlo con Go (1.25+):
 
-#### Opción A: Vía `go install` apuntando al release / tag de este fork (Recomendado)
-```bash
-go install github.com/ariasbruno/gentle-ai/cmd/gentle-ai@latest
-```
-*(o indicando el tag específico del release, por ejemplo `@v4.0.0`)*
+#### Opción A: Descargando el binario del release de este fork (Recomendado)
+Tomá el artefacto de la [página de releases de este fork](https://github.com/ariasbruno/gentle-ai/releases) y ponelo en tu `$PATH`.
+
+*(`go install github.com/ariasbruno/gentle-ai/...@<tag>` no funciona: el `go.mod` declara el módulo de upstream, así que apuntaría al repositorio original.)*
 
 #### Opción B: Clonando y compilando desde la rama de desarrollo
 ```bash
-git clone -b antigravity-cli-v4 https://github.com/ariasbruno/gentle-ai.git
+git clone -b agy/ai-v4.1.1_shell-v4.2.0 https://github.com/ariasbruno/gentle-ai.git
 cd gentle-ai
 go install ./cmd/gentle-ai
 ```

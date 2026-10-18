@@ -11,25 +11,19 @@
 
 <p>
 <a href="https://github.com/Gentleman-Programming/gentle-ai/releases"><img src="https://img.shields.io/github/v/release/Gentleman-Programming/gentle-ai?style=for-the-badge&labelColor=1A1218&color=F095C8" alt="Release"></a>
-<a href="https://github.com/ariasbruno/gentle-ai/stargazers"><img src="https://img.shields.io/github/stars/ariasbruno/gentle-ai?style=for-the-badge&labelColor=1A1218&color=F095C8" alt="Stars"></a>
+<a href="https://github.com/Gentleman-Programming/gentle-ai/stargazers"><img src="https://img.shields.io/github/stars/Gentleman-Programming/gentle-ai?style=for-the-badge&labelColor=1A1218&color=F095C8" alt="Stars"></a>
 <img src="https://img.shields.io/badge/agents-18-F095C8?style=for-the-badge&labelColor=1A1218" alt="18 agents">
 <img src="https://img.shields.io/badge/macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-D7A0B8?style=for-the-badge&labelColor=1A1218" alt="Platform">
 <a href="LICENSE"><img src="https://img.shields.io/badge/MIT-D7A0B8?style=for-the-badge&labelColor=1A1218" alt="License: MIT"></a>
 </p>
 
 <p>
-<a href="docs/antigravity-cli/README.md"><strong>Guía Antigravity CLI (`agy`)</strong></a> &bull;
+<a href="docs/antigravity-cli/README.md"><strong>Antigravity CLI Guide</strong></a> &bull;
+<a href="https://gentlemanprogramming.com/"><strong>Website</strong></a> &bull;
 <a href="docs/quickstart.md"><strong>Quickstart</strong></a> &bull;
-<a href="https://github.com/Gentleman-Programming/gentle-ai"><strong>Repo Original (Upstream)</strong></a> &bull;
-<a href="https://gentlemanprogramming.com/"><strong>Website</strong></a>
+<a href="docs/intended-usage.md"><strong>Docs</strong></a> &bull;
+<a href="https://gentle-ai-wiki.gentlemanprogramming.com/"><strong>Wiki</strong></a>
 </p>
-
-> [!IMPORTANT]
-> **Fork de desarrollo: Integración para Google Antigravity CLI (`agy`)**
-> - **Propósito:** Este repositorio extiende Gentle AI v4 para dar soporte nativo a `agy` mediante un plugin gestionado, transpilación de assets desde Gentle Shell, soporte de instalación tanto a nivel global como workspace (`.agents/`), y transporte de revisión RDD en Go.
-> - **Rama activa:** Todo el desarrollo y las integraciones vigentes se encuentran en la rama [`antigravity-cli-v4`](https://github.com/ariasbruno/gentle-ai/tree/antigravity-cli-v4).
-> - **Documentación en profundidad:** Consulta la [**Guía completa de Antigravity CLI**](docs/antigravity-cli/README.md) para ver arquitectura, decisiones de diseño, verificación y auditoría de código.
-> - **Versión original:** Si buscas la versión upstream general de Gentle AI, visita [Gentleman-Programming/gentle-ai](https://github.com/Gentleman-Programming/gentle-ai).
 
 <br/>
 
@@ -187,7 +181,7 @@ Gentle Shell is a separate Pi integration package. Gentle AI configures supporte
 
 Gentle-AI brings its shared workflow to Pi, OpenCode, Claude Code, Codex, **Google Antigravity CLI**, and twelve more agents. Each integration uses that agent's native capabilities, so available features such as delegation and RDD review can differ.
 
-**[Docs →](docs/agents.md)** &bull; **[Guía de Antigravity CLI en español →](docs/antigravity-cli/README.md)**
+**[Docs →](docs/agents.md)** &bull; **[Antigravity CLI Guide →](docs/antigravity-cli/README.md)**
 
 ---
 
@@ -213,27 +207,20 @@ Gentle-AI brings its shared workflow to Pi, OpenCode, Claude Code, Codex, **Goog
 
 ## Get started
 
-### Installation
-
-#### Option A: Direct install via `go install` (Recommended)
-Install the binary directly using Go (1.25.10+):
-
 ```bash
-# Latest release tag from this repository:
-go install github.com/ariasbruno/gentle-ai/cmd/gentle-ai@latest
+# macOS (Homebrew)
+brew install gentleman-programming/tap/gentle-ai
 
-# Or specify a release tag:
-go install github.com/ariasbruno/gentle-ai/cmd/gentle-ai@v4.0.0
+# macOS / Linux (curl)
+curl -fsSL https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/main/scripts/install.sh | bash
+
+# Windows (PowerShell) — source install of the latest release, needs Go 1.25.10+
+go install github.com/gentleman-programming/gentle-ai/v4/cmd/gentle-ai@v4.1.1
 ```
 
-#### Option B: Clone and build from branch
 ```bash
-# 1. Clone this repository (antigravity-cli-v4 branch)
-git clone -b antigravity-cli-v4 https://github.com/ariasbruno/gentle-ai.git
-cd gentle-ai
-
-# 2. Compile and install to your PATH ($GOPATH/bin)
-go install ./cmd/gentle-ai
+gentle-ai          # pick your agents, components and persona
+gentle-ai doctor   # verify — read-only, changes nothing
 ```
 
 ### Setup Google Antigravity CLI
