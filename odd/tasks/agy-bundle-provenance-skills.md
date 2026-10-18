@@ -17,7 +17,7 @@ Two ratified deliverables of the agy-vs-gentle-shell 1:1 adaptation:
 - DeployPluginTree copies the embedded bundle subtree wholesale (os.CopyFS after a refuse-non-regular
   walk) — a new bundle skills/ dir deploys automatically; adapter has a legacy per-name skills prune.
 - internal/assets/assets_test.go pins the CATALOG skills (skills/*), not the antigravitycli bundle.
-- Local gentle-shell checkout: /home/bruno/dev/gentle-shell (main @ 7a27c1c0).
+- Local gentle-shell checkout: $HOME/dev/gentle-shell (main @ 7a27c1c0).
 
 ## Binding design
 1. **Provenance is DETERMINISTIC**: PROVENANCE.json = source repo URL + resolved commit sha (+ source
@@ -37,7 +37,7 @@ Two ratified deliverables of the agy-vs-gentle-shell 1:1 adaptation:
    plugin skills/ entries that are not in the current bundle (stale selected skills from the old
    flow); the capability manifest Skills claim for agy stays true (the agent has skills — delivered
    by the bundle).
-6. Regen runs use --source-dir /home/bruno/dev/gentle-shell (HEAD 7a27c1c0) and the diff is reviewed
+6. Regen runs use --source-dir $HOME/dev/gentle-shell (HEAD 7a27c1c0) and the diff is reviewed
    by the parent before committing.
 
 ## Tasks

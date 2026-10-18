@@ -12,7 +12,7 @@
 | HEAD de producto | `628bc61ec2851040f2c95de150d8c9e62883b17d` |
 | Módulo | `github.com/gentleman-programming/gentle-ai/v4` |
 | Go observado | `go1.27.1 linux/amd64` |
-| agy observado | `1.3.0`, binario `/home/bruno/.local/bin/agy` |
+| agy observado | `1.3.0`, binario `$HOME/.local/bin/agy` |
 | Fuente de resultado | Handoff del verificador independiente transmitido por el padre |
 | Verbosidad | Salida no verbose: no acredita conteo por-test de ejecuciones/skips |
 | Cambio de esta tarea | Documentación pasiva; sin RED/GREEN significativo |
@@ -21,7 +21,7 @@ El SHA de Gentle Shell del bundle es otro campo, no el HEAD del producto: [proce
 
 ## Resultado por grupo recibido
 
-El verificador ejecutó **cuatro grupos de producto y uno de bench**, además de dos comandos de identificación/control del worktree. Todos los siete comandos terminaron con exit 0. Esta es la transcripción literal recibida, en orden, desde `/home/bruno/dev/gentle-ai`:
+El verificador ejecutó **cuatro grupos de producto y uno de bench**, además de dos comandos de identificación/control del worktree. Todos los siete comandos terminaron con exit 0. Esta es la transcripción literal recibida, en orden, desde `$HOME/dev/gentle-ai`:
 
 ```sh
 # 1. Identidad y estado inicial.

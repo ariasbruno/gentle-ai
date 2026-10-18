@@ -104,7 +104,7 @@ Todos los PASS corresponden al HEAD `628bc61ec2851040f2c95de150d8c9e62883b17d`. 
 
 ### Ayuda local frente a docs vivas
 
-El padre informó estos comandos de inspección: `command -v agy`, `agy --version`, `agy --help`, `go version`. Resultado: `/home/bruno/.local/bin/agy`, v1.3.0 y Go1.27.1 linux/amd64. Help enumera `--agent`, `--print`, `--model`, `--sandbox`, `--output-format`, `--input-format`, `--json-schema`, `--dangerously-skip-permissions`.
+El padre informó estos comandos de inspección: `command -v agy`, `agy --version`, `agy --help`, `go version`. Resultado: `$HOME/.local/bin/agy`, v1.3.0 y Go1.27.1 linux/amd64. Help enumera `--agent`, `--print`, `--model`, `--sandbox`, `--output-format`, `--input-format`, `--json-schema`, `--dangerously-skip-permissions`.
 
 Esta observación **O** prueba superficie anunciada de flags, no cumplimiento de sandbox/permisos ni contrato del frontmatter. La mención recibida de staging CLI-managed `~/.gemini/antigravity-cli/plugins` es observación externa separada, no cambio a `PluginDir` del código.
 
