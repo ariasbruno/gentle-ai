@@ -2707,11 +2707,11 @@ func TestPersonaContentNonHermesNeutralUnchanged(t *testing.T) {
 }
 
 // TestPersonaContentResidualDispatchAllAgents is a table-driven regression test
-// covering every model.AgentID constant (16 total): Claude Code and Kimi
-// receive the residual (tone-free) persona asset when residual=true; all other
-// 14 agents receive the full persona section unaffected by the residual flag.
-// Neutral's generic/persona-neutral.md remains the byte-identical fallback for
-// every non-{Claude,Kimi} agent (Hermes keeps its own dedicated neutral asset).
+// over the agent IDs that have persona coverage: Claude Code and Kimi receive
+// the residual (tone-free) persona asset when residual=true; all others receive
+// the full persona section, unaffected by the residual flag. Neutral's
+// generic/persona-neutral.md remains the byte-identical fallback for every agent
+// that has no dedicated neutral asset (Hermes and Antigravity CLI do).
 func TestPersonaContentResidualDispatchAllAgents(t *testing.T) {
 	allAgents := []model.AgentID{
 		model.AgentClaudeCode,
@@ -2730,6 +2730,7 @@ func TestPersonaContentResidualDispatchAllAgents(t *testing.T) {
 		model.AgentPi,
 		model.AgentTrae,
 		model.AgentHermes,
+		model.AgentAntigravityCLI,
 	}
 
 	isResidualCapable := func(agent model.AgentID) bool {
@@ -2768,6 +2769,13 @@ func TestPersonaContentResidualDispatchAllAgents(t *testing.T) {
 				// Hermes keeps its own dedicated neutral asset regardless of residual.
 				if content == genericNeutral {
 					t.Fatalf("personaContent(hermes, neutral) should not be byte-identical to generic/persona-neutral.md")
+				}
+			case agent == model.AgentAntigravityCLI:
+				// Antigravity CLI keeps its own dedicated neutral asset: the generic
+				// wording names an <available_skills> block the agy harness never
+				// injects, so agy cannot use the shared fallback.
+				if content == genericNeutral {
+					t.Fatalf("personaContent(antigravity-cli, neutral) should not be byte-identical to generic/persona-neutral.md")
 				}
 			case residual:
 				if strings.Contains(content, "Senior Architect") {
@@ -2809,6 +2817,7 @@ func TestResidualChannelAllAgents(t *testing.T) {
 		model.AgentPi,
 		model.AgentTrae,
 		model.AgentHermes,
+		model.AgentAntigravityCLI,
 	}
 
 	for _, agentID := range allAgentIDs {

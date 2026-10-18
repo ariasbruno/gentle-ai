@@ -690,9 +690,23 @@ func personaContent(agent model.AgentID, persona model.PersonaID, residualConten
 	}
 }
 
+// Antigravity CLI persona assets live outside internal/assets/antigravitycli/
+// on purpose. That directory is the transpiled Gentle Shell bundle, and its
+// drift gate requires the committed tree to match a fresh transpilation in both
+// directions, so a hand-authored file committed there fails CI with "missing in
+// regenerated". Persona content is gentle-ai's own asset, exactly like every
+// other agent's persona, so it gets its own ungated directory.
+const (
+	antigravityCLIPersonaGentlemanAsset = "antigravitycli-persona/persona-gentleman.md"
+	antigravityCLIPersonaNeutralAsset   = "antigravitycli-persona/persona-neutral.md"
+)
+
 func neutralPersonaContent(agent model.AgentID, residualContentAvailable bool) string {
 	if agent == model.AgentHermes {
 		return assets.MustRead("hermes/persona-neutral.md")
+	}
+	if agent == model.AgentAntigravityCLI {
+		return assets.MustRead(antigravityCLIPersonaNeutralAsset)
 	}
 	if residualContentAvailable {
 		switch agent {
@@ -719,6 +733,8 @@ func gentlemanPersonaContent(agent model.AgentID) string {
 		return assets.MustRead("kiro/persona-gentleman.md")
 	case model.AgentHermes:
 		return assets.MustRead("hermes/persona-gentleman.md")
+	case model.AgentAntigravityCLI:
+		return assets.MustRead(antigravityCLIPersonaGentlemanAsset)
 	default:
 		return assets.MustRead("generic/persona-gentleman.md")
 	}

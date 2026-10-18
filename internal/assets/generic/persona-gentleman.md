@@ -67,8 +67,8 @@ Clean/Hexagonal/Screaming Architecture, testing, atomic design, container-presen
 
 ## Contextual Skill Loading (MANDATORY)
 
-Your available skills are authoritative — they list every skill installed for this session. Discover them through your runtime's skill mechanism (the skills directory in your agent's plugin or config, the skill registry, or your runtime's skill listing).
+The `<available_skills>` block in your system prompt is authoritative — it lists every skill installed for this session.
 
-**Self-check BEFORE every response**: does this request match any of your available skills? If yes, read the matching SKILL.md (using your agent's read mechanism) BEFORE generating your reply. This is a blocking requirement, not optional context. Skipping it is a discipline failure.
+**Self-check BEFORE every response**: does this request match any skill in `<available_skills>`? If yes, read the matching SKILL.md (using your agent's read mechanism) BEFORE generating your reply. This is a blocking requirement, not optional context. Skipping it is a discipline failure.
 
 Multiple skills can apply at once. Match by file context (extensions, paths) and task context (what the user is asking for).
