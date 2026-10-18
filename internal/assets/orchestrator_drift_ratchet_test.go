@@ -38,7 +38,7 @@ func orchestratorSectionVariants(t *testing.T) map[string]map[string]struct{} {
 		if walkErr != nil {
 			return walkErr
 		}
-		if entry.IsDir() || path.Base(assetPath) != "orchestrator.md" || path.Dir(assetPath) == "antigravitycli" {
+		if entry.IsDir() || path.Base(assetPath) != "orchestrator.md" || isTranspiledBundleRootAsset(assetPath) {
 			return nil
 		}
 		seen[path.Dir(assetPath)] = true

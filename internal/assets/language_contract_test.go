@@ -319,7 +319,7 @@ func allSDDOrchestratorAssetPaths(t *testing.T) []string {
 		if d.IsDir() {
 			return nil
 		}
-		if strings.HasPrefix(path, "antigravitycli/") {
+		if isTranspiledBundleAsset(path) {
 			return nil
 		}
 		if strings.HasSuffix(path, "/orchestrator.md") {

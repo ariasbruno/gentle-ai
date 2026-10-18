@@ -31,6 +31,7 @@ No se fabrican una cronología de «18 commits» ni resultados históricos a par
 | Modelos/effort HOME-owned; `inherit` por defecto (decisión explícita del usuario), explícitos opcionales, malformed cerrado | **Decisión explícita del usuario** (Log L1 en [odd/tasks/agy-reviewer-inherit-effort.md](../../odd/tasks/agy-reviewer-inherit-effort.md)); repo no prescribe modelos canónicos | Repo fallback, defaults silenciosos ante corruption, modelos fijos por prompt o exigir modelo explícito | Preserva control del usuario; el default aislado es el del propio AGY, no el del perfil habitual; corruption bloquea | [`ResolveAntigravityCLIReviewRouting`](../../internal/reviewerprovider/antigravitycli_routing.go#L359-L425) |
 | Hooks neutros selectivamente, deny en pre-tool | **Inferida** de branches actuales; comentario genérico fail-open no manda | Fallar siempre abierto o abortar toda sesión ante cualquier error | Evita bloqueo en post/resolución stop; protege formato/loops conocidos en pre | [`RunAntigravityCLIHook`](../../internal/cli/antigravity_hook.go#L88-L148), [pre-tool](../../internal/cli/antigravity_hook.go#L405-L476) |
 | Evidencia separada en fuente/unit/mock/driven/orgánica | **Decisión documental de esta tarea**, basada en fixtures | Tratar cualquier PASS o help como proof de paridad | Evita falsa confianza; mantiene explícitos límites no medidos | [Mock](../../bench/journeys_antigravity_cli.go#L27-L67), [organic](../../internal/reviewerprovider/antigravitycli_organic_test.go#L1-L102), [registro](09-verification.md) |
+| Los guards de assets por runtime excluyen el bundle transpilado y delegan su cobertura en el gate de drift y en el transpilador | **Decisión documental de esta tarea**, derivada del mecanismo actual | Incluir `antigravitycli/` en esos guards, o sembrar a mano el placeholder de secciones ODD en el core | El bundle no se puede editar sin romper el drift gate, así que un guard ahí fija una revisión ajena; a cambio, el core queda fuera de esas aserciones y su cobertura debe leerse en el mapa de la sección 8 | [`isTranspiledBundleAsset`](../../internal/assets/planned_path_gate_test.go#L15-L46), [`inject.go`](../../internal/components/agentguidance/inject.go#L138-L151) |
 
 Las alternativas de la tercera columna son comparación técnica **de esta guía**. Salvo que el registro lo diga, no se afirma que históricamente se probaron y descartaron.
 
@@ -110,6 +111,22 @@ No hay una única política de fallo para toda la integración:
 - MCP malformed → documento nuevo, caller debe respaldar.
 
 Esta asimetría está en el código. Presentarla explícitamente es más útil que «resiliente y fail-open»: dice al operador cuál señal buscar y qué no esperar. [Hooks](03-orchestration-and-hooks.md#por-qué-todos-fail-open-es-incorrecto), [MCP](04-codegraph-and-benchmarks.md#reconciliación-y-controles-negativos), [import](06-asset-ownership-and-drift.md#primer-import-y-registro).
+
+## 8. Los guards de assets por runtime excluyen el bundle transpilado, y por qué
+
+`internal/assets/antigravitycli/` es el único directorio de runtime que este repositorio no escribe: `scripts/transpile-antigravitycli` lo genera desde la fuente de Gentle Shell, y el gate de drift compara el árbol commiteado contra una transpilación nueva **byte a byte en las dos direcciones** ([`compareTrees`](../../scripts/transpile-antigravitycli/main.go#L1505)). Un archivo escrito a mano ahí no se corrige: falla CI, así que un guard que lo inspeccione no puede arreglar nada que encuentre.
+
+Tres guards de assets por runtime lo excluyen de forma nombrada y explicada, no por descuido:
+
+| Guard | Qué verifica en los runtimes que este repositorio escribe | Por qué no aplica al bundle |
+|---|---|---|
+| [`TestEveryODDOrchestratorDoesNotRejectPlannedPaths`](../../internal/assets/planned_path_gate_test.go#L52) | Que cada `orchestrator.md` lleve `GENTLE_AI_ODD_SECTION:` y no rechace rutas planificadas sin el carve-out; además cierra el inventario en doce runtimes | El core de agy es compacto y rutea a módulos por regla en vez de llevar las secciones ODD compartidas: no hay placeholder que afirmar, y la expansión de placeholders solo corre para los runtimes a los que `agentguidance` les renderiza orchestrator, exclusión que hoy incluye a Antigravity CLI ([`inject.go`](../../internal/components/agentguidance/inject.go#L146), [`expandSharedOrchestratorSections`](../../internal/components/agentguidance/orchestrator.go#L285)) |
+| [`orchestratorSectionVariants`](../../internal/assets/orchestrator_drift_ratchet_test.go#L33) | Anclas de seguridad de prompts («Lossless Blocking Prompts», handoff de defectos) y ratchet de variantes por sección | Fijaría en este repositorio la redacción de un asset que pertenece a Gentle Shell |
+| [`allSDDOrchestratorAssetPaths`](../../internal/assets/language_contract_test.go#L312) | Contrato de idioma, alcance del reporte de defectos y orden de formateo sobre los doce orquestadores escritos acá | El texto es transpilado; su idioma se decide en la fuente |
+
+**Qué cubre al bundle, entonces:** el gate de drift (bytes y conjunto de archivos contra una transpilación nueva), los 15 tests del propio transpilador ([`main_test.go`](../../scripts/transpile-antigravitycli/main_test.go)) y los del adaptador, que verifican el despliegue de `rules/` y satélites sin depender de su redacción ([`renderNativeRule`](../../internal/agents/antigravitycli/native_rules.go#L31), que solo reescribe rutas y no expande secciones).
+
+**Límite explícito:** el contenido del core por secciones no lo cubre nadie hoy. Una aserción module-aware que recorra los módulos por regla del bundle es una propuesta para upstream, no un cambio de este fork; mientras tanto, este mapa es la declaración de dónde mirar cuando la doctrina de agy cambie.
 
 ## Decisiones no resueltas por esta documentación
 
