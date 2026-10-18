@@ -32,6 +32,7 @@ No se fabrican una cronología de «18 commits» ni resultados históricos a par
 | Hooks neutros selectivamente, deny en pre-tool | **Inferida** de branches actuales; comentario genérico fail-open no manda | Fallar siempre abierto o abortar toda sesión ante cualquier error | Evita bloqueo en post/resolución stop; protege formato/loops conocidos en pre | [`RunAntigravityCLIHook`](../../internal/cli/antigravity_hook.go#L88-L148), [pre-tool](../../internal/cli/antigravity_hook.go#L405-L476) |
 | Evidencia separada en fuente/unit/mock/driven/orgánica | **Decisión documental de esta tarea**, basada en fixtures | Tratar cualquier PASS o help como proof de paridad | Evita falsa confianza; mantiene explícitos límites no medidos | [Mock](../../bench/journeys_antigravity_cli.go#L27-L67), [organic](../../internal/reviewerprovider/antigravitycli_organic_test.go#L1-L102), [registro](09-verification.md) |
 | Los guards de assets por runtime excluyen el bundle transpilado y delegan su cobertura en el gate de drift y en el transpilador | **Decisión documental de esta tarea**, derivada del mecanismo actual | Incluir `antigravitycli/` en esos guards, o sembrar a mano el placeholder de secciones ODD en el core | El bundle no se puede editar sin romper el drift gate, así que un guard ahí fija una revisión ajena; a cambio, el core queda fuera de esas aserciones y su cobertura debe leerse en el mapa de la sección 8 | [`isTranspiledBundleAsset`](../../internal/assets/planned_path_gate_test.go#L15-L46), [`inject.go`](../../internal/components/agentguidance/inject.go#L138-L151) |
+| `antigravity-cli` convive con `antigravity` en vez de reemplazarlo | **Decisión explícita del usuario** durante esta remediación | Renombrar la entrada heredada, fusionar ambos agentes en uno, o mover el agente nuevo a otro id | Ninguna instalación existente cambia de destino y el PR puede añadir sin romper; a cambio quedan dos entradas seleccionables que resuelven su configuración bajo el mismo árbol `~/.gemini`, y esa convivencia hay que documentarla | [Catálogo](../../internal/catalog/agents.go#L26-L27), [sección 9](#9-antigravity-cli-convive-con-antigravity-en-vez-de-reemplazarlo) |
 
 Las alternativas de la tercera columna son comparación técnica **de esta guía**. Salvo que el registro lo diga, no se afirma que históricamente se probaron y descartaron.
 
@@ -127,6 +128,21 @@ Tres guards de assets por runtime lo excluyen de forma nombrada y explicada, no 
 **Qué cubre al bundle, entonces:** el gate de drift (bytes y conjunto de archivos contra una transpilación nueva), los 15 tests del propio transpilador ([`main_test.go`](../../scripts/transpile-antigravitycli/main_test.go)) y los del adaptador, que verifican el despliegue de `rules/` y satélites sin depender de su redacción ([`renderNativeRule`](../../internal/agents/antigravitycli/native_rules.go#L31), que solo reescribe rutas y no expande secciones).
 
 **Límite explícito:** el contenido del core por secciones no lo cubre nadie hoy. Una aserción module-aware que recorra los módulos por regla del bundle es una propuesta para upstream, no un cambio de este fork; mientras tanto, este mapa es la declaración de dónde mirar cuando la doctrina de agy cambie.
+
+## 9. `antigravity-cli` convive con `antigravity` en vez de reemplazarlo
+
+**Decisión explícita del usuario durante esta remediación:** la integración de Antigravity CLI **no reemplaza** a la entrada heredada; ambas conviven a propósito. El catálogo quedó con dos agentes que comparten ruta de configuración ([`agents.go`](../../internal/catalog/agents.go#L26-L27)):
+
+| Agente | Nombre en el catálogo | Qué escribe | Dónde |
+|---|---|---|---|
+| `antigravity` (heredada, de upstream) | Google Antigravity | Prompt de sistema y settings de la app/CLI de Antigravity | `~/.gemini/GEMINI.md`; settings en el variant dir, que es `~/.gemini/antigravity-desktop` si existe y si no `~/.gemini/antigravity-cli`; pasa a `~/.gemini/config` cuando existe su marcador de migración ([`adapter.go`](../../internal/agents/antigravity/adapter.go#L29-L35), [`SystemPromptFile` y `SettingsPath`](../../internal/agents/antigravity/adapter.go#L100-L110)) |
+| `antigravity-cli` (la que agrega el fork) | Antigravity CLI | El bundle transpilado de Gentle Shell como plugin y sus reglas nativas | `~/.gemini/config/plugins/gentle-ai` en global y `<workspace>/.agents/plugins/gentle-ai` en workspace ([`PluginDir`](../../internal/agents/antigravitycli/adapter.go#L116-L196)) |
+
+**Por qué se documenta en vez de unificarse:** las dos entradas resuelven su configuración bajo el mismo árbol `~/.gemini`, así que la duplicación salta a la vista y es el tipo de cosa que alguien «arregla» renombrando o fusionando entradas. Renombrar la heredada cambiaría el destino de instalaciones existentes, y fusionar los dos ids obligaría a adivinar cuál de los dos harness quiso seleccionar el usuario. La regla de esta remediación también lo pide: un cambio que afecta a agy y a otro agente se trata como que afecta a los dos, y acá el «otro» es la entrada heredada de upstream, que este fork **no toca**.
+
+**Consecuencia operativa:** cada id tiene su propio camino de limpieza. El desinstalador trabaja por agente y reporta por agente qué completó y qué no ([`Result`](../../internal/components/uninstall/service.go#L48-L62)), y el arreglo de permisos de esta remediación trata a `antigravity-cli` como un caso aparte del de la entrada heredada.
+
+**Límite no medido:** no se probó una instalación cruzada (instalar una entrada, desinstalar la otra y medir el árbol resultante). Queda anotado en la misma línea que el resto de esta página: no se afirma paridad ni aislamiento entre ambas.
 
 ## Decisiones no resueltas por esta documentación
 
