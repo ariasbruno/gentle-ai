@@ -28,6 +28,15 @@ func TargetPath(homeDir string, adapter agents.Adapter) string {
 	return adapter.SettingsPath(homeDir)
 }
 
+// ManagedOverlay returns the permission overlay gentle-ai injects for the agent
+// at this home directory, or nil when the agent has no permission target.
+// Uninstall uses it as the authoritative list of the entries gentle-ai owns, so
+// it can subtract exactly those entries instead of deleting a whole key the
+// user also writes to.
+func ManagedOverlay(id model.AgentID, homeDir string) []byte {
+	return agentOverlay(id, homeDir)
+}
+
 // claudeCodeOverlayJSON sets Claude Code to bypassPermissions mode (auto-accept all).
 // Valid modes: "acceptEdits", "bypassPermissions", "default", "dontAsk", "plan".
 var claudeCodeOverlayJSON = []byte(`{

@@ -1122,7 +1122,11 @@ func mergeObjectScope(base map[string]any, overlay map[string]any, permission, p
 
 		baseSlice, baseIsSlice := baseValue.([]any)
 		overlaySlice, overlayIsSlice := overlayValue.([]any)
-		if baseIsSlice && overlayIsSlice && (key == "deny" || (isPerm && (key == "ask" || key == "allow"))) {
+		// Permission lists union: a generated overlay adds restrictions on top
+		// of the user's own instead of erasing them. Anywhere else a key named
+		// "deny", "ask" or "allow" is ordinary data, so the overlay replaces it
+		// like every other list rather than silently keeping dropped values.
+		if baseIsSlice && overlayIsSlice && isPerm && (key == "deny" || key == "ask" || key == "allow") {
 			result[key] = unionSlices(baseSlice, overlaySlice)
 			continue
 		}

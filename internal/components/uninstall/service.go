@@ -25,6 +25,7 @@ import (
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/gga"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/opencodedefault"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/opencoderuntimeplugins"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/components/permissions"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/reviewassets"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/skills"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/telemetryruntime"
@@ -1019,8 +1020,14 @@ func (s *Service) componentOperations(adapter agents.Adapter, componentID model.
 		for _, path := range settingsTargets(homeDir, adapter) {
 			targets = append(targets, path)
 			switch adapter.Agent() {
-			case model.AgentClaudeCode:
-				ops = append(ops, rewriteJSONFile(path, jsonPath{"permissions"}))
+			case model.AgentClaudeCode, model.AgentAntigravityCLI:
+				// Subtract only the entries gentle-ai wrote. Deleting the whole
+				// permissions object would take the user's own rules and default
+				// mode with it, and Antigravity CLI had no case at all, so its
+				// injected overlay survived an uninstall.
+				if overlay := permissions.ManagedOverlay(adapter.Agent(), homeDir); len(overlay) > 0 {
+					ops = append(ops, subtractPermissionOverlay(path, overlay))
+				}
 			case model.AgentOpenCode:
 				ops = append(ops, rewriteJSONFile(path, jsonPath{"permission"}))
 			case model.AgentGeminiCLI:
@@ -1352,6 +1359,49 @@ func rewriteJSONFile(path string, jsonPaths ...jsonPath) operation {
 			}
 			_, err = filemerge.WriteFileAtomic(path, updated, perm)
 			if err != nil {
+				return false, false, err
+			}
+			return true, false, nil
+		},
+	}
+}
+
+// subtractPermissionOverlay rewrites a settings file by removing only the
+// permission entries gentle-ai injected, so the user's own rules and default
+// mode survive an uninstall. It mirrors rewriteJSONFile: the file disappears
+// only when nothing is left in it, and its mode is preserved.
+func subtractPermissionOverlay(path string, overlay []byte) operation {
+	return operation{
+		typeID: opRewriteFile,
+		path:   path,
+		apply: func(path string) (bool, bool, error) {
+			raw, err := readManagedFile(path)
+			if err != nil {
+				if os.IsNotExist(err) {
+					return false, false, nil
+				}
+				return false, false, fmt.Errorf("read json file %q: %w", path, err)
+			}
+			updated, changed, err := subtractJSONOverlay(raw, overlay)
+			if err != nil {
+				return false, false, fmt.Errorf("clean json file %q: %w", path, err)
+			}
+			if !changed {
+				return false, false, nil
+			}
+			if jsonIsEmptyObject(updated) {
+				if err := removeFileIfExists(path); err != nil {
+					return false, false, err
+				}
+				return true, true, nil
+			}
+			// Preserve the file's existing mode: an uninstall rewrite must
+			// not widen permissions on a file the user or agent restricted.
+			perm := os.FileMode(0o644)
+			if info, statErr := os.Lstat(path); statErr == nil {
+				perm = info.Mode().Perm()
+			}
+			if _, err = filemerge.WriteFileAtomic(path, updated, perm); err != nil {
 				return false, false, err
 			}
 			return true, false, nil

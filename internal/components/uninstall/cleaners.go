@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"strings"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/filemerge"
@@ -87,14 +88,115 @@ func removeJSONPaths(raw []byte, paths ...jsonPath) ([]byte, bool, error) {
 		return raw, false, nil
 	}
 
+	encoded, err := encodeCleanedJSON(root, raw)
+	if err != nil {
+		return nil, false, err
+	}
+
+	return encoded, true, nil
+}
+
+// encodeCleanedJSON renders a cleaned settings object back to bytes, keeping the
+// file's existing line ending and its trailing newline.
+func encodeCleanedJSON(root map[string]any, raw []byte) ([]byte, error) {
 	encoded, err := json.MarshalIndent(root, "", "  ")
 	if err != nil {
-		return nil, false, fmt.Errorf("marshal json after cleanup: %w", err)
+		return nil, fmt.Errorf("marshal json after cleanup: %w", err)
 	}
 
 	eol := detectEOL(string(raw))
 	encoded = bytes.ReplaceAll(encoded, []byte("\n"), []byte(eol))
-	return append(encoded, []byte(eol)...), true, nil
+	return append(encoded, []byte(eol)...), nil
+}
+
+// subtractJSONOverlay removes exactly the entries the overlay declares from the
+// base document and leaves everything else untouched. It is the inverse of the
+// permission overlay merge: lists lose only the values the overlay names,
+// scalars are deleted only while they still hold the overlay's value, and a key
+// disappears only once nothing is left inside it. Nothing the overlay does not
+// mention is ever removed, which is what keeps a user's own permission rules and
+// default mode intact after an uninstall.
+func subtractJSONOverlay(raw []byte, overlay []byte) ([]byte, bool, error) {
+	root, err := unmarshalJSONObject(raw)
+	if err != nil {
+		return nil, false, err
+	}
+	owned, err := unmarshalJSONObject(overlay)
+	if err != nil {
+		return nil, false, fmt.Errorf("decode permission overlay: %w", err)
+	}
+
+	if !subtractOverlayObject(root, owned) {
+		return raw, false, nil
+	}
+
+	encoded, err := encodeCleanedJSON(root, raw)
+	if err != nil {
+		return nil, false, err
+	}
+	return encoded, true, nil
+}
+
+func subtractOverlayObject(base map[string]any, overlay map[string]any) bool {
+	changed := false
+	for key, overlayValue := range overlay {
+		baseValue, ok := base[key]
+		if !ok {
+			continue
+		}
+
+		switch declared := overlayValue.(type) {
+		case []any:
+			baseList, isList := baseValue.([]any)
+			if !isList {
+				continue
+			}
+			kept := make([]any, 0, len(baseList))
+			removed := false
+			for _, item := range baseList {
+				if sliceContainsDeep(declared, item) {
+					removed = true
+					continue
+				}
+				kept = append(kept, item)
+			}
+			if !removed {
+				continue
+			}
+			changed = true
+			if len(kept) == 0 {
+				delete(base, key)
+				continue
+			}
+			base[key] = kept
+		case map[string]any:
+			baseMap, isMap := baseValue.(map[string]any)
+			if !isMap {
+				continue
+			}
+			if subtractOverlayObject(baseMap, declared) {
+				changed = true
+			}
+			if len(baseMap) == 0 {
+				delete(base, key)
+			}
+		default:
+			if reflect.DeepEqual(baseValue, overlayValue) {
+				delete(base, key)
+				changed = true
+			}
+		}
+	}
+	return changed
+}
+
+func sliceContainsDeep(list []any, item any) bool {
+	for _, candidate := range list {
+		if reflect.DeepEqual(candidate, item) {
+			return true
+		}
+	}
+	return false
 }
 
 func deleteJSONPath(root map[string]any, path jsonPath) bool {
