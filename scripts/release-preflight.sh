@@ -44,12 +44,16 @@ event_sha=$(git rev-parse "$GITHUB_SHA^{commit}")
 tag_sha=$(git rev-parse "refs/tags/$tag^{commit}")
 [[ "$head_sha" == "$event_sha" && "$head_sha" == "$tag_sha" ]] || die "checkout, event, and tag do not resolve to one commit"
 
+# Fork plumbing: this fork tags its releases from the development branch instead
+# of main, so the branch a fork release may be tagged from is named once here.
+fork_release_branch=${FORK_RELEASE_BRANCH:-agy/ai-v4.1.1_shell-v4.2.0}
+
 release_branch=${RELEASE_BRANCH:-main}
 if [[ "$GITHUB_REPOSITORY" == "ariasbruno/gentle-ai" && -z "${RELEASE_BRANCH:-}" ]]; then
-  if git fetch --no-tags origin '+refs/heads/antigravity-cli-integration:refs/remotes/origin/antigravity-cli-integration' 2>/dev/null; then
-    candidate_sha=$(git rev-parse 'refs/remotes/origin/antigravity-cli-integration^{commit}' 2>/dev/null || true)
+  if git fetch --no-tags origin "+refs/heads/${fork_release_branch}:refs/remotes/origin/${fork_release_branch}" 2>/dev/null; then
+    candidate_sha=$(git rev-parse "refs/remotes/origin/${fork_release_branch}^{commit}" 2>/dev/null || true)
     if [[ "$head_sha" == "$candidate_sha" ]]; then
-      release_branch=antigravity-cli-integration
+      release_branch=$fork_release_branch
     fi
   fi
 fi
@@ -70,4 +74,4 @@ remote_tag_sha=$(git ls-remote origin "refs/tags/$tag^{}" | awk 'NR == 1 { print
 go mod tidy -diff
 [[ -z "$(git status --porcelain=v1 --untracked-files=all)" ]] || die "preflight mutated the checkout"
 
-printf 'release preflight: exact tag %s on main %s verified\n' "$tag" "$head_sha"
+printf 'release preflight: exact tag %s on %s %s verified\n' "$tag" "$release_branch" "$head_sha"
