@@ -118,10 +118,10 @@ Registrar para cada ejecución: fecha, HEAD, command literal, cwd, Go/OS, exit, 
 |---|---|---|---|
 | Import gate | [`TestEnsurePluginImportedManifestGate`](../../internal/agents/antigravitycli/adapter_test.go#L345-L380) | JSON inválido, imports no array, nombre ausente; cero comandos/mutaciones | Runner/mock |
 | Import failure | [`TestEnsurePluginImportedFailures`](../../internal/agents/antigravitycli/adapter_test.go#L382-L427) | Falta binario/árbol, command failure, falta registro, timeout | Runner falso |
-| Generación staged | [`TestTranspileSubagentsFailureLeavesDestinationUnchanged`](../../scripts/transpile-antigravitycli/main_test.go#L48-L86) | Último agente fuente inválido no refresca parcialmente ni poda destino | Fuente fixture, filesystem temporal |
-| Drift bytes | [`TestCheckGateContentDriftFails`](../../scripts/transpile-antigravitycli/main_test.go#L594-L630) | Contenido plugin.json corrupto provoca diff | Árbol fuente mínimo fixture |
-| Drift set | [`TestCheckGateMissingFileFails`, `ExtraFileFails`](../../scripts/transpile-antigravitycli/main_test.go#L632-L707) | Falta/extra de archivo detectados | No canon upstream completo |
-| HEAD frente a dirty | [`TestCheckGateComparesAgainstCommittedTree`](../../scripts/transpile-antigravitycli/main_test.go#L531-L592) | Dirty no altera comparación; hand edit committed falla | Git fixture; no gate actual del checkout |
+| Generación staged | [`TestTranspileSubagentsFailureLeavesDestinationUnchanged`](../../scripts/transpile-antigravitycli/main_test.go#L48-L87) | Último agente fuente inválido no refresca parcialmente ni poda destino | Fuente fixture, filesystem temporal |
+| Drift bytes | [`TestCheckGateContentDriftFails`](../../scripts/transpile-antigravitycli/main_test.go#L685-L722) | Contenido plugin.json corrupto provoca diff | Árbol fuente mínimo fixture |
+| Drift set | [`TestCheckGateMissingFileFails`, `ExtraFileFails`](../../scripts/transpile-antigravitycli/main_test.go#L622-L798) | Falta/extra de archivo detectados | No canon upstream completo |
+| HEAD frente a dirty | [`TestCheckGateComparesAgainstCommittedTree`](../../scripts/transpile-antigravitycli/main_test.go#L622-L684) | Dirty no altera comparación; hand edit committed falla | Git fixture; no gate actual del checkout |
 | Hook wiring de pipeline | [`TestStagePlansKeepAntigravityCLIPluginImportStep`](../../internal/cli/antigravity_cli_plugin_import_guard_test.go#L19-L72) | Selección no-agy no tiene paso, agy sí en install/sync | Plan, no ejecución real |
 | Pre-tool transport | [`TestAntigravityHookPreToolUseEdgeCases`](../../internal/cli/antigravity_hook_test.go#L337-L369) | Empty/null/array/malformed deny | Handler fixture |
 | Loop | [`TestAntigravityHookPreToolUseCircuitBreaker`](../../internal/cli/antigravity_hook_test.go#L183-L299) | Tercera llamada idéntica deny; args/tool distintos reinician | Persistencia fixture |

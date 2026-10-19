@@ -34,13 +34,13 @@ Fuentes canónicas de referencia en dicho commit:
 | `_shared` | Fragmentos comunes | `skills/_shared/` | Excluye `review-ledger-contract.md` específico Pi |
 | Manifiesto/procedencia | Generados por herramienta | `plugin.json`, `PROVENANCE.json` | Datos deterministas |
 
-Implementación: [`transpileSubagents`](../../scripts/transpile-antigravitycli/main.go#L443-L512), [`transpileTopLevelOrchestrator`](../../scripts/transpile-antigravitycli/main.go#L568-L612), [`transpileSkills`](../../scripts/transpile-antigravitycli/main.go#L634-L704), [`transpileSatellites`, soporte/cadenas](../../scripts/transpile-antigravitycli/main.go#L768-L866).
+Implementación: [`transpileSubagents`](../../scripts/transpile-antigravitycli/main.go#L469-L508), [`transpileTopLevelOrchestrator`](../../scripts/transpile-antigravitycli/main.go#L613-L643), [`transpileSkills`](../../scripts/transpile-antigravitycli/main.go#L667-L713), [`transpileSatellites`, soporte/cadenas](../../scripts/transpile-antigravitycli/main.go#L941-L1046).
 
 No se aplica a agy la antigua regla «SKILL.md fork-owned del catálogo interno» como mecanismo de entrega. El componente de skills omite agy: [`DeliversFor`, `InjectWithCapability`](../../internal/components/skills/inject.go#L28-L46). Esto conserva el catálogo para otros adaptadores y establece un único owner del `skills/` del plugin.
 
 ## Resolución de fuente para generación
 
-`resolveSourceRootWithProvenance` aplica este orden: [main.go, líneas 140–210](../../scripts/transpile-antigravitycli/main.go#L140-L210).
+`resolveSourceRootWithProvenance` aplica este orden: [main.go, líneas 140–210](../../scripts/transpile-antigravitycli/main.go#L147-L219).
 
 1. `--source-dir` válido; lee su `HEAD`.
 2. `GENTLE_SHELL_DIR`, después `GENTLE_PI_DIR`.
@@ -68,11 +68,11 @@ El mapa real es una tabla de Go, no un compilador semántico del sistema de agen
 | `ask_user_question`, `ask_user_choice` y variante de paquete | `ask_question` |
 | `subagent_run` | `invoke_subagent`, `send_message` |
 
-`glob` no es la clave de discovery en este mapa. Las herramientas `mem_*` y CodeGraph son tratadas como conocidas/ignoradas a nivel de lista built-in porque tienen ruta MCP; `gentle_*` se clasifica como directiva interna: [`isKnownIgnoredPiTool`](../../scripts/transpile-antigravitycli/main.go#L868-L887). **Ignorar un nombre no implementa una herramienta equivalente**.
+`glob` no es la clave de discovery en este mapa. Las herramientas `mem_*` y CodeGraph son tratadas como conocidas/ignoradas a nivel de lista built-in porque tienen ruta MCP; `gentle_*` se clasifica como directiva interna: [`isKnownIgnoredPiTool`](../../scripts/transpile-antigravitycli/main.go#L1047-L1070). **Ignorar un nombre no implementa una herramienta equivalente**.
 
 ## Frontmatter y capacidades solicitadas
 
-`transpileSubagentMarkdown` exige fences y descripción, traduce tools, añade `mainAgent: false`, añade `excludeDefaultComponents: true` para los agentes clasificados como aislados y `enable_mcp_tools: true` cuando la fuente contiene CodeGraph o `mem_save`: [líneas 515–566](../../scripts/transpile-antigravitycli/main.go#L515-L566), [lista de aislados](../../scripts/transpile-antigravitycli/main.go#L78-L85).
+`transpileSubagentMarkdown` exige fences y descripción, traduce tools, añade `mainAgent: false`, añade `excludeDefaultComponents: true` para los agentes clasificados como aislados y `enable_mcp_tools: true` cuando la fuente contiene CodeGraph o `mem_save`: [líneas 515–566](../../scripts/transpile-antigravitycli/main.go#L540-L597), [lista de aislados](../../scripts/transpile-antigravitycli/main.go#L78-L85).
 
 Ejemplo actual, no esquema exhaustivo del cliente:
 
@@ -90,7 +90,7 @@ Fuente: [explorer emitido](../../internal/assets/antigravitycli/agents/gentle-ai
 
 La página oficial [Agents](https://antigravity.google/docs/cli/commands/agents/) documenta `agent.md` con `name` y `description` en rutas global/proyecto. **No prueba por sí sola el enforcement completo de `tools`, `mainAgent`, `excludeDefaultComponents` o `enable_mcp_tools` en v1.3.0.** Los comentarios del transpilador sobre versiones antiguas son intención/experiencia registrada, no un ensayo nuevo del cliente.
 
-`--strict` falla si se acumulan tools sin mapping; los errores estructurales de la transformación también abortan. No llamarlo «validación completa del AST de agy»: la implementación usa strings/regex para gran parte de los contratos: [`main`](../../scripts/transpile-antigravitycli/main.go#L90-L137), [`transpileSubagentMarkdown`](../../scripts/transpile-antigravitycli/main.go#L515-L566).
+`--strict` falla si se acumulan tools sin mapping; los errores estructurales de la transformación también abortan. No llamarlo «validación completa del AST de agy»: la implementación usa strings/regex para gran parte de los contratos: [`main`](../../scripts/transpile-antigravitycli/main.go#L98-L146), [`transpileSubagentMarkdown`](../../scripts/transpile-antigravitycli/main.go#L540-L597).
 
 ## Adaptaciones de runtime frente a Pi
 
@@ -104,8 +104,13 @@ Dado que `agy` no ejecuta el runtime TypeScript de Pi ni sus extensiones propiet
 | Perfiles en `subagents.json` | Secciones específicas removidas | `agy` resuelve modelos vía flags de CLI o configuración estándar |
 | Operaciones CodeGraph built-in | Servidor MCP `gentle-ai_codegraph` | CodeGraph se expone como servidor MCP estándar vía stdio |
 | Rutas canónicas de Pi (`.pi/`) | Rutas de plugin (`.agents/` o `.gemini/`) | Ajuste automático al destino seleccionado (global o workspace) |
+| `name` de skill con namespace (`gentle-ai-<carpeta>`) | `name` igual a la carpeta que emite la fuente | El loader de plugins de `agy` exige que el `name` de una skill coincida con su carpeta, y `agy plugin validate --strict` rechaza el plugin cuando no coincide |
 
-Referencias: [`mutateAgentRuntimeInstructions`](../../scripts/transpile-antigravitycli/main.go#L1092-L1167) y [`applyAntigravityCLIParentMutations`](../../scripts/transpile-antigravitycli/main.go#L1170-L1261).
+El renombrado ocurre al final de la transpilación, en [`normalizeEmittedSkillNames`](../../scripts/transpile-antigravitycli/main.go#L810-L874), y arrastra **toda** referencia al nombre viejo dentro del árbol generado (frontmatter, tabla de skills y referencias en el cuerpo), de modo que el plugin nunca nombre una skill que no embarque con ese nombre. La identidad resultante es la que el resto del ecosistema ya usa para las mismas skills: `internal/assets/skills/chained-pr/SKILL.md` declara `name: chained-pr`.
+
+Verificado contra AGY 1.4.2 sobre un plugin recién desplegado: `agy plugin validate --strict` no reporta findings. Antes del cambio reportaba 11 warnings —uno por skill— y fallaba en modo estricto; el origen era el canon de Gentle Shell, que nombra sus skills con namespace porque el registro de Pi comparte espacio de nombres con las skills del usuario, y el loader de `agy` no acepta esa convención.
+
+Referencias: [`mutateAgentRuntimeInstructions`](../../scripts/transpile-antigravitycli/main.go#L1275-L1340) y [`applyAntigravityCLIParentMutations`](../../scripts/transpile-antigravitycli/main.go#L1341-L1452).
 
 ## Subagentes incluidos y validación por invariantes
 

@@ -179,7 +179,7 @@ Los cuatro presets son Default, Recommended, Performance y Economy; Custom es un
 
 No inferir benchmarks de precio/calidad de sus nombres. `DiscoverAntigravityModels` usa `agy models` y un fallback local si falla; descubrir puede contactar servicios del cliente. No se ejecutó. La navegación del picker ofrece presets, roles, búsqueda de modelo y selección de effort por rol; [estado/navigation](../../internal/tui/screens/antigravity_review_model_picker.go#L45-L208). La disponibilidad del runtime requiere comprobación separada.
 
-**Diferencia importante:** routing RDD por rol no es configuración general de todos los subagentes agy. El transpilador elimina las secciones de profiles Pi y prescribe defaults del runtime para genéricos: [mutación](../../scripts/transpile-antigravitycli/main.go#L1170-L1228). No proponer `.pi/subagents.json` como mecanismo agy.
+**Diferencia importante:** routing RDD por rol no es configuración general de todos los subagentes agy. El transpilador elimina las secciones de profiles Pi y prescribe defaults del runtime para genéricos: [mutación](../../scripts/transpile-antigravitycli/main.go#L1213-L1256). No proponer `.pi/subagents.json` como mecanismo agy.
 
 ## Evidencia del adaptador
 

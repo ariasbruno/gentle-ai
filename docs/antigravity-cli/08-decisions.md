@@ -19,7 +19,7 @@ No se fabrican una cronología de «18 commits» ni resultados históricos a par
 
 | Decisión actual | Procedencia del motivo | Alternativa considerada en este análisis | Ventaja/coste verificable | Fuentes |
 |---|---|---|---|---|
-| Canon Gentle Shell + transpilador, no diez prompts mantenidos manualmente | **Registrada**: bundle-provenance-skills fija un único owner y pin | Copias manuales o importar literalmente Pi | Reduce fuentes de doctrina; añade riesgo de mutaciones textuales y pin obsoleto | [Registro](../../odd/tasks/agy-bundle-provenance-skills.md), [`transpileSkills`](../../scripts/transpile-antigravitycli/main.go#L634-L679) |
+| Canon Gentle Shell + transpilador, no diez prompts mantenidos manualmente | **Registrada**: bundle-provenance-skills fija un único owner y pin | Copias manuales o importar literalmente Pi | Reduce fuentes de doctrina; añade riesgo de mutaciones textuales y pin obsoleto | [Registro](../../odd/tasks/agy-bundle-provenance-skills.md), [`transpileSkills`](../../scripts/transpile-antigravitycli/main.go#L667-L713) |
 | Routing canon-first con protocolo ODD único | **Registrada**: canon no incluye esa inyección runtime Pi, resto de doctrina ya existe | Duplicar RenderRouting completo o mantener split rules | Reduce duplicación; exige preservar routing y canon como dos piezas complementarias | [Registro](../../odd/tasks/agy-canon-first-routing.md), [`injectAntigravityCLIRule`](../../internal/components/agentguidance/inject.go#L320-L382) |
 | Orchestrator en rules con always_on y fill | **Registrada**: el registro rules-always-on describe caída de reglas sin trigger y asset root no cargado | Root-only, inlining íntegro en AGENTS.md, o loading manual | Hace explícita superficie cargable; presión de bytes/tokens y dependencia de client behavior | [Registro](../../odd/tasks/agy-rules-always-on.md), [`ensureAntigravityOrchestratorRule`](../../internal/cli/antigravity_orchestrator_rule.go#L28-L52) |
 | Satélites lazy fuera de rules | **Registrada**: rules-always-on señala tamaño de delegation y lectura on-demand | Todo siempre en contexto o splitting exhaustivo | Reduce coste inicial; modelo debe leer el satélite correcto, no garantía automática | [Registro](../../odd/tasks/agy-rules-always-on.md), [`BundleAssets`](../../internal/agents/antigravitycli/adapter.go#L192-L207) |
@@ -38,7 +38,7 @@ Las alternativas de la tercera columna son comparación técnica **de esta guía
 
 ## 1. Un canon compartido no implica un runtime compartido
 
-La fuente canónica separa disciplina del harness de contratos dinámicos RDD y memory. La adaptación agy mantiene doctrina pero elimina secciones Pi y cambia rutas/primitivas: [`applyAntigravityCLIParentMutations`](../../scripts/transpile-antigravitycli/main.go#L1170-L1261).
+La fuente canónica separa disciplina del harness de contratos dinámicos RDD y memory. La adaptación agy mantiene doctrina pero elimina secciones Pi y cambia rutas/primitivas: [`applyAntigravityCLIParentMutations`](../../scripts/transpile-antigravitycli/main.go#L1341-L1452).
 
 ### Frente a edición manual
 
@@ -48,7 +48,7 @@ La fuente canónica separa disciplina del harness de contratos dinámicos RDD y 
 
 ### Frente a copiar Pi literalmente
 
-El ledger compartido Pi describe SessionManager/relay/runtime específicos y se excluye: [`transpileSharedDirExcludingReviewLedger`](../../scripts/transpile-antigravitycli/main.go#L681-L704). Copiarlo completo introduciría un segundo lifecycle textual contradictorio. El contrato agy correcto se materializa desde Go, no desde ese fragmento.
+El ledger compartido Pi describe SessionManager/relay/runtime específicos y se excluye: [`transpileSharedDirExcludingReviewLedger`](../../scripts/transpile-antigravitycli/main.go#L714-L737). Copiarlo completo introduciría un segundo lifecycle textual contradictorio. El contrato agy correcto se materializa desde Go, no desde ese fragmento.
 
 ## 2. Límite de archivo frente a splitting
 

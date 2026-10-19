@@ -28,7 +28,7 @@ internal/assets/antigravitycli ────── embed ───────►
                                                cliente agy
 ```
 
-Fuentes: [`transpileAll`](../../scripts/transpile-antigravitycli/main.go#L224-L280), [`transpileSkills`](../../scripts/transpile-antigravitycli/main.go#L634-L679), [`BundleAssets`/despliegue](../../internal/agents/antigravitycli/adapter.go#L192-L207), [`antigravityCLIPluginImportStep.Run`](../../internal/cli/run.go#L921-L940). Es un diagrama de implementación, no prueba de carga del cliente.
+Fuentes: [`transpileAll`](../../scripts/transpile-antigravitycli/main.go#L243-L291), [`transpileSkills`](../../scripts/transpile-antigravitycli/main.go#L667-L713), [`BundleAssets`/despliegue](../../internal/agents/antigravitycli/adapter.go#L192-L207), [`antigravityCLIPluginImportStep.Run`](../../internal/cli/run.go#L921-L940). Es un diagrama de implementación, no prueba de carga del cliente.
 
 ## Secuencia de configuración global
 
@@ -76,7 +76,7 @@ Fuentes: [`reviewProviderAdapterWithRouting`](../../internal/cli/review_provider
 | Vocabulario ODD/RDD y disciplina del padre | Routing protocol-only más canon transpilado |
 | Intención de exploración/worker/verificador de Gentle Shell | Acceso CodeGraph MCP con prefijo agy |
 
-[`ContractFor`](../../internal/reviewerprovider/contract.go#L154-L161), [`RuntimeContextBudget`](../../internal/reviewerprovider/capture_runtimes.go#L5-L30), [`applyAntigravityCLIParentMutations`](../../scripts/transpile-antigravitycli/main.go#L1170-L1261), [`injectAntigravityCLIRule`](../../internal/components/agentguidance/inject.go#L320-L382).
+[`ContractFor`](../../internal/reviewerprovider/contract.go#L154-L161), [`RuntimeContextBudget`](../../internal/reviewerprovider/capture_runtimes.go#L5-L30), [`applyAntigravityCLIParentMutations`](../../scripts/transpile-antigravitycli/main.go#L1341-L1452), [`injectAntigravityCLIRule`](../../internal/components/agentguidance/inject.go#L320-L382).
 
 No se ha probado que Pi background, watchdog, UI de elección, enforcing de superficies o ledger TS estén portados a agy. La adaptación elimina o cambia texto de esas superficies; no transfiere el código que las ejecuta.
 
