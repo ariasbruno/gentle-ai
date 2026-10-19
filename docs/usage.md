@@ -372,7 +372,7 @@ gentle-ai -v
 | `restore [--list \| latest \| <id>] [--yes]` | Restore managed config from a backup snapshot | [Rollback](rollback.md) |
 | `telemetry` | Manage telemetry consent (`status`, `enable`, `disable`) and runtime events | [Telemetry](telemetry.md) |
 | `review` | Receipt-Driven Development review lifecycle, including `review assess` and `review mode` | [Review Integration](review-integration.md) |
-| `codegraph init --cwd <project-root>` | Validate a project root, then initialize its CodeGraph index (used by generated agent guidance) | [Components](components.md) |
+| `codegraph init --cwd <project-root>` | Validate a project root, initialize its CodeGraph index (used by generated agent guidance), and add `.codegraph/` to the worktree's local Git exclude file | [Components](components.md) |
 | `codegraph [--help\|-h]`, `codegraph init [--help\|-h]` | Show local CodeGraph initialization help and exit successfully without initializing an index; other CodeGraph commands are not forwarded | |
 | `skill-registry list [--json]` | List the resolved, deduplicated skill set | [Skill Registry](skill-registry.md) |
 | `uninstall opencode-plugin <id> [--yes]` | Remove `gentle-logo` or a legacy external plugin registration (`sub-agent-statusline`, `sdd-engram-plugin`) left by older installations | — |

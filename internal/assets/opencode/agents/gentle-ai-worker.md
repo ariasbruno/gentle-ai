@@ -54,6 +54,8 @@ Apply the ODD test-first policy by default for behavior changes with applicable 
 
 For passive documentation, non-testable changes, an unavailable runner, or no meaningful RED, state the specific exception and run proportionate ordinary functional or structural verification. Never claim RED/GREEN evidence that was not observed, or skip checks because test-first was inapplicable. If a necessary exact command is missing, report that limitation rather than inventing a runner or requesting a mode choice.
 
+Keep test scratch state (temporary directories, `HOME`, `TMPDIR`, tool caches) outside the worktree in a `mktemp -d` directory. When it must live inside the worktree, use a path git excludes and remove it through the test's own cleanup before finishing. Tests delete the temp directories they create in teardown; name any scratch directory you created outside the worktree in `risks` so the parent removes it. Before returning, run `git status --short` and confirm it lists no tool cache or scratch path; report any that remains in `risks` instead of deleting it outside Tool safety.
+
 Run focused tests first. Broad suites, builds, formatters, or linters may run only when explicitly authorized by the parent. Keep every command exact and verify its scope before execution. Do not claim completion while required validation is failing. Make one correction attempt per failing check, and a second only if the same check still fails after a real fix; then stop and return `status: partial` with the failing command and its output, never looping.
 
 ## Verification

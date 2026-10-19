@@ -32,6 +32,29 @@ func TestRoutingIncludesApplicableTestFirstPolicy(t *testing.T) {
 	}
 }
 
+// C7: blind reviewers flagged test scratch and tool caches in delivered diffs,
+// so the shared test-first policy keeps scratch outside the worktree and
+// forwards that rule to workers with the rest of the test discipline.
+func TestRenderRoutingKeepsTestScratchOutOfTheWorktree(t *testing.T) {
+	t.Parallel()
+
+	const rule = "Keep test scratch state (temporary directories, `HOME`, `TMPDIR`, tool caches) outside the worktree in a `mktemp -d` directory; when it must live inside the worktree, use a path git excludes and remove it before finishing, so no tool cache or scratch path remains in the change. Subagents never delete scratch: they report its exact paths, and the parent removes outside scratch after use, including the paths a worker or verifier reports. Forward the applicable runner, this test discipline"
+	for _, agent := range catalog.AllAgents() {
+		rendered, err := RenderRouting(agent.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(rendered, rule) {
+			t.Errorf("%s routing is missing the test scratch rule", agent.ID)
+		}
+		for _, retired := range []string{".test-tmp", "TMPDIR=$PWD"} {
+			if strings.Contains(rendered, retired) {
+				t.Errorf("%s routing still points scratch into the worktree: %q", agent.ID, retired)
+			}
+		}
+	}
+}
+
 // supportedAgentCount guards the catalog itself: routing renders for every
 // supported adapter (including the catalog-only Conductor, which simply never
 // gets written), so a silently shrinking catalog must fail here instead of
