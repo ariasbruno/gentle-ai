@@ -181,6 +181,8 @@ Los hooks de Gentle AI operan con un enfoque de seguridad estricto (*fail-closed
 | Cierre con cambios pendientes de revisión | `continue` | Bloquea el cierre: el loop continúa con el reason inyectado como mensaje de sistema; un record previo del mismo target de-silencia la repetición (dedup), sin certificar revisión completada |
 | Cierre estándar sin pendientes | `{}` | Permite el cierre normal de la interacción |
 
+**Campos opcionales del envelope de respuesta:** el tipo `AntigravityCLIHookOutput` declara además `injectSteps` (array) y `terminationBehavior` (string), con sus nombres JSON fijados por un test de serialización: [`antigravity_hook_test.go`](../../internal/cli/antigravity_hook_test.go#L546-L563). **Ningún handler los emite hoy**: la integración responde únicamente `{}`, `decision` o `reason`. Que el tipo los declare y que el test fije su serialización no prueba que `agy` los interprete ni que exista un comportamiento de terminación asociado.
+
 ---
 
 **Siguiente paso:** [MCP y la prueba del benchmark](04-codegraph-and-benchmarks.md).
