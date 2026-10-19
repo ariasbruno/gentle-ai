@@ -96,12 +96,34 @@ func RunReviewMode(args []string, stdout io.Writer) error {
 	}
 	// #4670: a status that could not be resolved carries the fail-closed
 	// projection, not a decision, so the human surface must not render it as
-	// one.
-	unavailable := operation == "status" && err != nil
+	// one. #5533: a failed enable or disable carries the same projection.
+	unavailable := err != nil && !reviewModeStatusResolved(result.Status)
 	if emitErr := emitReviewMode(stdout, result, *emitJSON, unavailable); emitErr != nil && err == nil {
 		return emitErr
 	}
 	return err
+}
+
+// reviewModeStatusResolved reports whether status is a resolution rather than
+// the fail-closed projection. It is read from the state, never the error: a
+// refusal such as clearing a clone override under a global off, or a write
+// that applied only for this build, still returns what was resolved. A
+// resolved status names a source that holds the value it reports; the
+// fail-closed projection names a source while both sources stay unset, or no
+// source at all.
+func reviewModeStatusResolved(status reviewtransaction.RDDModeStatus) bool {
+	switch status.Source {
+	case reviewtransaction.RDDModeSourceDefault:
+		return status.Global == reviewtransaction.RDDModeUnset &&
+			status.CloneLocal == reviewtransaction.RDDModeUnset &&
+			status.Effective == reviewtransaction.RDDModeOn
+	case reviewtransaction.RDDModeSourceGlobal:
+		return status.Global != reviewtransaction.RDDModeUnset
+	case reviewtransaction.RDDModeSourceCloneLocal:
+		return status.CloneLocal != reviewtransaction.RDDModeUnset
+	default:
+		return false
+	}
 }
 
 // reviewModeStatus is strictly read-only: it never creates user state and never
