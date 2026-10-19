@@ -3,7 +3,7 @@
 ## Objective and authority
 Publish Gentle AI v4.0.0, then pin that published runtime in Gentle Shell and publish Gentle Shell v4.0.0 (npm package gentle-pi). The user approved both versions, Windows corrections, Go /v4 migration, isolated worktrees, and two sequential preparation PRs: Windows first, then an atomic migration with size:exception only for the migration. Create approved preparation issues through repository policy; protected-label actions still require exact target-bound authorization. Use the authorized gh session over HTTPS for GitHub, release environments, notes/advisory, and release verification; publish npm only through Actions. No ambient SSH, local npm publish, live-runtime installation, history rewriting, or moved tags.
 
-Worktree: /Users/alanbuscaglia/work/gentle-ai-v4-release
+Worktree: gentle-ai-v4-release (local path redacted)
 Current branch: chore/v4-module-migration
 W2 base: 61692e5ff953b0aa6dd0124fdad52214adc16e85
 Initial W1 base: d623137c32bfa928cd062b226fd06ae24b7ba4ca
