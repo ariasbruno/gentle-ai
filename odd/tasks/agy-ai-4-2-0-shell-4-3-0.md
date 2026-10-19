@@ -1,0 +1,24 @@
+# AGY incremental update: AI 4.2.0 / Shell 4.3.0 / CLI 1.4.2
+Objective: bring the accepted AGY integration to Gentle AI v4.2.0 and regenerate the AGY bundle from Gentle Shell v4.3.0. Branch: `agy/ai-v4.2.0_shell-v4.3.0`. Runner: Go toolchain plus pinned generator checks. Delivery: ask-on-risk; no publication authorized.
+
+## Specs
+- S1: "Quiero que gentle ai este actualizado a la ultima release oficial." Target verified with `gh release list`: Gentle AI `v4.2.0`, commit `4acaf4241beae1e0c977c92dfe406a270f8d40de`, released 2026-10-15.
+- S2: Preserve the accepted AGY integration behavior from baseline `d4c31ec8d` (tip of `agy/ai-v4.1.1_shell-v4.2.0`); never rebuild the fork from upstream or replay its history (skill hard rule).
+- S3: Regenerate the AGY bundle from Gentle Shell `v4.3.0`, commit `d5d692a6888da9e9844e7e443ee30991fa4b9d14`, replacing provenance `c41ebd591358d393cf19c5ead981f67640a600ba`.
+- S4: Local commits only. No push, PR, publication, authentication, model run, or history rewrite. The local fork rebuild into the existing `~/go/bin` is the authorized update mechanism, not a release installation.
+- S5: Preserve AGY-owned behavior and user-owned configuration; generated outputs are never hand-edited.
+
+## Tasks
+- T1 [S1,S2] done: inputs/baseline recorded; branch created; AI 4.2.0 merged; agentguidance seam conflicts resolved. Commit `9d912b70d`.
+- T2 [S1,S3,S5] done: bundle regenerated twice from Shell 4.3.0; 39 files, byte-identical runs; provenance updated; new delegation-reference satellite wired through generator, adapter, native rules, and tests. Commit `7c47d6ee4`.
+- T3 [S1,S2,S3] in progress: focused checks green, build done, drift check passed; first full suite found one merge-induced docs-hygiene leak, fixed in `4e6f0c943`; final full suite and clean rebuild pending.
+
+## Log
+- L1 User request verbatim: "1. bien, borralo\n2. ¿como funciona eso de que gentle shell pinee una version distinta de gentle ai? Quiero que gentle ai este actualizado a la ultima release oficial.\n3. ok\n4. ok"
+- L2 Inputs: accepted baseline `d4c31ec8d`; prior AI merge-base `898d3976e8049a7238eaa7de60bff325c30d2b3d`; target AI `4acaf4241beae1e0c977c92dfe406a270f8d40de` (`v4.2.0`); old Shell provenance `c41ebd591358d393cf19c5ead981f67640a600ba`; target Shell `d5d692a6888da9e9844e7e443ee30991fa4b9d14` (`v4.3.0`); validation AGY `1.4.2`. Remote read `git fetch upstream --tags` performed (public, read-only); no push.
+- L3 Merge preview (`git merge-tree --write-tree`): 34 upstream commits, 85 files, +2933/-252, 3 conflicts all under `internal/components/agentguidance/` (`routing.go`, `routing_test.go`, `testdata/orchestrator-module-baseline.json`).
+- L4 Merge executed: 34 upstream commits, 85 files. Kept HEAD's `writeODDWorkflowProtocol` extraction plus the AGY canon-first branch, added the `agent` parameter, and retained upstream's `piODDSteps`. Baseline resolved with `--theirs` then regenerated with `-update`; goldens regenerated. Package green in 4.293s. Commit `9d912b70d` (`--no-verify`; rerere recorded the three resolutions).
+- L5 Bundle regeneration from `d5d692a`: Shell 4.3.0 split the delegation canon into a 50-line card plus `orchestrator-delegation-reference.md`, which the generator's fixed satellite list did not emit. Added the satellite to the generator and its path mutations, the adapter bundle map, and the native-rule metadata; kept the generic delegation rules and routing ladder, dropped only the Pi-only overlay bindings and the Pi session-subject paragraph the card now mentions. Two isolated runs were byte-identical (39 files). Provenance `c41ebd59` -> `d5d692a6`.
+- L6 T2 commit `7c47d6ee4`; post-commit drift check (`go run ./scripts/transpile-antigravitycli -check`) cloned `d5d692a68` and passed. Focused generator, agentguidance, antigravitycli adapter, and assets tests green.
+- L7 Build: `env -u GOROOT -u GOTOOLCHAIN GOBIN=$HOME/go/bin /usr/bin/go install ./cmd/gentle-ai` produced `4.2.1-0.20261019005603-7c47d6ee47f1+dirty` (the `+dirty` was the untracked feature doc; clean rebuild pending). Pin verified in the installed Shell 4.3.0 package: `scripts/gentle-ai-installer.mjs:40` sets `INSTALLER_VERSION = "4.2.0"`, `lib/gentle-ai-binary.ts:26` derives `GENTLE_AI_VERSION` from it, and `.gentle-ai/v4.2.0/gentle-ai` reports `4.2.0`. The real setup override is `GENTLE_SHELL_GENTLE_AI_BIN` (`bin/gentle-shell.mjs:698`), not `GENTLE_AI_BIN`.
+- L8 First full suite: all packages green except `internal/app` docs hygiene, which found two absolute home paths added by the AI 4.2.0 merge (`odd/tasks/v4-release-preparation.md`, `odd/tasks/verify-always-rdd-high.md`). Redacted both to neutral worktree names in `4e6f0c943`; the focused guard passes and the manual count is back to the 32 baseline. Final full suite pending.
