@@ -40,7 +40,7 @@ No se aplica a agy la antigua regla «SKILL.md fork-owned del catálogo interno�
 
 ## Resolución de fuente para generación
 
-`resolveSourceRootWithProvenance` aplica este orden: [main.go, líneas 140–210](../../scripts/transpile-antigravitycli/main.go#L147-L219).
+`resolveSourceRootWithProvenance` aplica este orden: [main.go, líneas 147–219](../../scripts/transpile-antigravitycli/main.go#L147-L219).
 
 1. `--source-dir` válido; lee su `HEAD`.
 2. `GENTLE_SHELL_DIR`, después `GENTLE_PI_DIR`.
@@ -72,7 +72,7 @@ El mapa real es una tabla de Go, no un compilador semántico del sistema de agen
 
 ## Frontmatter y capacidades solicitadas
 
-`transpileSubagentMarkdown` exige fences y descripción, traduce tools, añade `mainAgent: false`, añade `excludeDefaultComponents: true` para los agentes clasificados como aislados y `enable_mcp_tools: true` cuando la fuente contiene CodeGraph o `mem_save`: [líneas 515–566](../../scripts/transpile-antigravitycli/main.go#L540-L597), [lista de aislados](../../scripts/transpile-antigravitycli/main.go#L78-L85).
+`transpileSubagentMarkdown` exige fences y descripción, traduce tools, añade `mainAgent: false`, añade `excludeDefaultComponents: true` para los agentes clasificados como aislados y `enable_mcp_tools: true` cuando la fuente contiene CodeGraph o `mem_save`: [líneas 540–597](../../scripts/transpile-antigravitycli/main.go#L540-L597), [lista de aislados](../../scripts/transpile-antigravitycli/main.go#L78-L85).
 
 Ejemplo actual, no esquema exhaustivo del cliente:
 
@@ -109,6 +109,8 @@ Dado que `agy` no ejecuta el runtime TypeScript de Pi ni sus extensiones propiet
 El renombrado ocurre al final de la transpilación, en [`normalizeEmittedSkillNames`](../../scripts/transpile-antigravitycli/main.go#L810-L874), y arrastra **toda** referencia al nombre viejo dentro del árbol generado (frontmatter, tabla de skills y referencias en el cuerpo), de modo que el plugin nunca nombre una skill que no embarque con ese nombre. La identidad resultante es la que el resto del ecosistema ya usa para las mismas skills: `internal/assets/skills/chained-pr/SKILL.md` declara `name: chained-pr`.
 
 Verificado contra AGY 1.4.2 sobre un plugin recién desplegado: `agy plugin validate --strict` no reporta findings. Antes del cambio reportaba 11 warnings —uno por skill— y fallaba en modo estricto; el origen era el canon de Gentle Shell, que nombra sus skills con namespace porque el registro de Pi comparte espacio de nombres con las skills del usuario, y el loader de `agy` no acepta esa convención.
+
+**Límite conocido:** el renombrado reescribe los nombres que la propia fuente declara. Si una fuente declarara una skill con un nombre que ya coincide con su carpeta y su texto la nombrara con la forma con namespace, esa referencia sobrevivería al renombrado. Es unreachable con el pin actual —las 12 skills de Shell se nombran de forma consistente salvo `gentle-ai`— y en ese caso sería una inconsistencia de la fuente, no del transpilador. El guard de prefijo evita además que un nombre que es prefijo de otro corrompa al más largo; [`TestEmittedSkillNamesSurvivePrefixCollisions`](../../scripts/transpile-antigravitycli/main_test.go) lo fija.
 
 Referencias: [`mutateAgentRuntimeInstructions`](../../scripts/transpile-antigravitycli/main.go#L1275-L1340) y [`applyAntigravityCLIParentMutations`](../../scripts/transpile-antigravitycli/main.go#L1341-L1452).
 

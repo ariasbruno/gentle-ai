@@ -366,6 +366,140 @@ func TestEmittedSkillNamesMatchTheirFolders(t *testing.T) {
 	}
 }
 
+// TestEmittedSkillNamesSurvivePrefixCollisions pins the guard that keeps a
+// skill whose old name is a prefix of another skill's old name from being
+// corrupted by the rename: the shorter name must not be replaced inside the
+// longer one, and both must end up carrying their own folder.
+func TestEmittedSkillNamesSurvivePrefixCollisions(t *testing.T) {
+	sourceRoot := t.TempDir()
+	writeMinimalSourceTree(t, sourceRoot)
+
+	// "gentle-ai-skill" is a strict prefix of "gentle-ai-skill-creator".
+	writeNamespacedSkill(t, sourceRoot, "skill", "gentle-ai-skill",
+		"Use `gentle-ai-skill-creator` for patterns, and `gentle-ai-skill` for itself.\n")
+	writeNamespacedSkill(t, sourceRoot, "skill-creator", "gentle-ai-skill-creator",
+		"Related: `gentle-ai-skill` and `gentle-ai-skill-creator`.\n")
+
+	satellite := filepath.Join(sourceRoot, "assets", "orchestrator-skills.md")
+	if err := os.WriteFile(satellite, []byte("# Skills\n\n| A | `gentle-ai-skill` |\n| B | `gentle-ai-skill-creator` |\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	outputDir := t.TempDir()
+	if err := transpileAll(sourceRoot, outputDir); err != nil {
+		t.Fatal(err)
+	}
+
+	read := func(rel string) string {
+		raw, err := os.ReadFile(filepath.Join(outputDir, rel))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		return string(raw)
+	}
+
+	for folder, want := range map[string]string{
+		"skills/skill/SKILL.md":         "name: skill\n",
+		"skills/skill-creator/SKILL.md": "name: skill-creator\n",
+	} {
+		if !strings.Contains(read(folder), want) {
+			t.Errorf("%s must carry %q, got:\n%s", folder, want, read(folder))
+		}
+	}
+
+	// The prefix case must not corrupt the longer name nor leave a hybrid behind.
+	if body := read("skills/skill/SKILL.md"); !strings.Contains(body, "Use `skill-creator` for patterns, and `skill` for itself.") {
+		t.Errorf("prefix body corrupted:\n%s", body)
+	}
+	if body := read("skills/skill-creator/SKILL.md"); !strings.Contains(body, "Related: `skill` and `skill-creator`.") {
+		t.Errorf("prefix body corrupted:\n%s", body)
+	}
+
+	// No old name may survive anywhere in the emitted tree.
+	for _, old := range []string{"gentle-ai-skill", "gentle-ai-skill-creator"} {
+		err := filepath.Walk(outputDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() {
+				return nil
+			}
+			raw, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return readErr
+			}
+			if strings.Contains(string(raw), old) {
+				t.Errorf("emitted %s still names %q", path, old)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// TestCommittedBundleSkillNamesMatchTheirFolders pins the property the AGY
+// plugin loader enforces on the COMMITTED bundle, not only on a fixture: every
+// emitted skill's frontmatter name equals its folder, and no file in the
+// committed tree names a skill the plugin does not ship under that name.
+func TestCommittedBundleSkillNamesMatchTheirFolders(t *testing.T) {
+	bundleDir := filepath.Join("..", "..", "internal", "assets", "antigravitycli")
+	skillsDir := filepath.Join(bundleDir, "skills")
+
+	entries, err := os.ReadDir(skillsDir)
+	if err != nil {
+		t.Fatalf("read committed skills dir: %v", err)
+	}
+
+	shipped := map[string]bool{}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(skillsDir, entry.Name(), "SKILL.md"))
+		if err != nil {
+			t.Fatalf("read committed skill %s: %v", entry.Name(), err)
+		}
+		name := frontmatterName(string(raw))
+		if name != entry.Name() {
+			t.Errorf("committed skill %s declares name %q; the AGY plugin loader requires the name to equal the folder", entry.Name(), name)
+		}
+		shipped[name] = true
+	}
+	if len(shipped) == 0 {
+		t.Fatal("committed bundle ships no skills")
+	}
+
+	// Every namespaced name the tree might still carry must be gone.
+	err = filepath.Walk(bundleDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		raw, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		for _, stale := range []string{
+			"gentle-ai-branch-pr", "gentle-ai-chained-pr", "gentle-ai-cognitive-doc-design",
+			"gentle-ai-comment-writer", "gentle-ai-issue-creation", "gentle-ai-judgment-day",
+			"gentle-ai-rdd-defect-workflow", "gentle-ai-skill-creator", "gentle-ai-skill-improver",
+			"gentle-ai-skill-registry", "gentle-ai-work-unit-commits",
+		} {
+			if strings.Contains(string(raw), stale) {
+				t.Errorf("committed %s still names the skill %q; the plugin ships it under its folder", path, stale)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func writeAgentFixture(t *testing.T, sourceRoot, name, body string) {
 	t.Helper()
 	agentsDir := filepath.Join(sourceRoot, "assets", "agents")

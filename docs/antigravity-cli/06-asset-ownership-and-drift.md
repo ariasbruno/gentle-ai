@@ -98,7 +98,7 @@ El mock de [j4500](../../bench/journeys_antigravity_cli.go#L27-L67) reproduce el
 4. Compara set de archivos y bytes contra el árbol committed.
 5. Falla con diferencias si no coinciden.
 
-[main.go, líneas 1367–1458](../../scripts/transpile-antigravitycli/main.go#L1571-L1667).
+[main.go, líneas 1571–1667](../../scripts/transpile-antigravitycli/main.go#L1571-L1667).
 
 | Pregunta | ¿La responde `--check`? |
 |---|---|

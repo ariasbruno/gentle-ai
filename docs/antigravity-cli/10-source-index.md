@@ -15,7 +15,7 @@
 | **H** | Registro histórico; informa intención, no funcionalidad actual por sí solo |
 | **L** | Límite/no demostrado, sin resultado runtime actual |
 
-Todos los PASS corresponden al HEAD `628bc61ec2851040f2c95de150d8c9e62883b17d`. El [registro](09-verification.md) separa scopes y resultados. «T+V» significa test source leído y paquete PASS recibido, no que se haya observado ese nombre particular sin skip.
+Todos los PASS corresponden al HEAD `628bc61ec2851040f2c95de150d8c9e62883b17d`; la fila A9 se verificó aparte, contra el árbol commiteado de la rama de actualización, con [`TestCommittedBundleSkillNamesMatchTheirFolders`](../../scripts/transpile-antigravitycli/main_test.go). El [registro](09-verification.md) separa scopes y resultados. «T+V» significa test source leído y paquete PASS recibido, no que se haya observado ese nombre particular sin skip.
 
 ## Identidad, rutas y entrega
 
