@@ -280,6 +280,12 @@ func transpileAll(piRoot, outputDir string) error {
 		return fmt.Errorf("transpile skills: %w", err)
 	}
 
+	// 8. Make every emitted skill's identity its folder, and carry the same
+	// rename through every reference to it in the generated tree.
+	if err := normalizeEmittedSkillNames(outputDir); err != nil {
+		return fmt.Errorf("normalize emitted skill names: %w", err)
+	}
+
 	return nil
 }
 
@@ -789,6 +795,147 @@ func transformSkillContent(content, skillName string) string {
 	content = strings.ReplaceAll(content, "regardless of SDD persistence mode", "when indexing installed skills")
 	content = strings.ReplaceAll(content, "SDD", "ODD")
 	return content
+}
+
+// normalizeEmittedSkillNames makes every emitted skill's identity its folder
+// and rewrites the references to it.
+//
+// Gentle Shell ships its skills with a namespaced frontmatter name
+// (`gentle-ai-<folder>`) inside a `<folder>` directory, because Pi's registry
+// shares one namespace with the user's own skills. Antigravity CLI's plugin
+// loader requires a skill's name to match its folder, and rejects the plugin
+// under `--strict` when it does not, so the emitted plugin carries the folder
+// as the skill name. Every reference to a renamed skill is rewritten with it,
+// so the plugin never names a skill it does not ship under that name.
+func normalizeEmittedSkillNames(outputDir string) error {
+	skillsDir := filepath.Join(outputDir, "skills")
+	entries, err := os.ReadDir(skillsDir)
+	if err != nil {
+		return fmt.Errorf("read emitted skills dir: %w", err)
+	}
+
+	renames := map[string]string{}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(skillsDir, entry.Name(), "SKILL.md"))
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return fmt.Errorf("read emitted skill %s: %w", entry.Name(), err)
+		}
+		name := frontmatterName(string(raw))
+		if name == "" || name == entry.Name() {
+			continue
+		}
+		renames[name] = entry.Name()
+	}
+	if len(renames) == 0 {
+		return nil
+	}
+
+	oldNames := make([]string, 0, len(renames))
+	for old := range renames {
+		oldNames = append(oldNames, old)
+	}
+	sort.Slice(oldNames, func(i, j int) bool {
+		if len(oldNames[i]) != len(oldNames[j]) {
+			return len(oldNames[i]) > len(oldNames[j])
+		}
+		return oldNames[i] < oldNames[j]
+	})
+
+	return filepath.Walk(outputDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || !isEmittedTextAsset(path) {
+			return nil
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read %s: %w", path, err)
+		}
+		content := string(raw)
+		updated := content
+		for _, old := range oldNames {
+			updated = replaceSkillName(updated, old, renames[old])
+		}
+		if updated == content {
+			return nil
+		}
+		return writeDeterministicFile(path, updated)
+	})
+}
+
+// frontmatterName returns the `name` declared in a document's leading
+// frontmatter block, or an empty string when it declares none.
+func frontmatterName(content string) string {
+	rest, ok := strings.CutPrefix(content, "---\n")
+	if !ok {
+		return ""
+	}
+	block, _, found := strings.Cut(rest, "\n---")
+	if !found {
+		return ""
+	}
+	for _, line := range strings.Split(block, "\n") {
+		value, ok := strings.CutPrefix(line, "name:")
+		if !ok {
+			continue
+		}
+		return strings.Trim(strings.TrimSpace(value), "\"'")
+	}
+	return ""
+}
+
+// replaceSkillName replaces every standalone occurrence of old with new. A
+// match that continues with a name character is left alone, so a skill whose
+// name is a prefix of another's cannot corrupt it.
+func replaceSkillName(content, old, new string) string {
+	if old == "" {
+		return content
+	}
+	var out strings.Builder
+	for {
+		index := strings.Index(content, old)
+		if index < 0 {
+			break
+		}
+		end := index + len(old)
+		if end < len(content) && isSkillNameChar(content[end]) {
+			out.WriteString(content[:end])
+			content = content[end:]
+			continue
+		}
+		out.WriteString(content[:index])
+		out.WriteString(new)
+		content = content[end:]
+	}
+	out.WriteString(content)
+	return out.String()
+}
+
+func isSkillNameChar(c byte) bool {
+	switch {
+	case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		return true
+	case c == '-', c == '_':
+		return true
+	}
+	return false
+}
+
+// isEmittedTextAsset reports whether an emitted file carries text the skill
+// renames can reach.
+func isEmittedTextAsset(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".md", ".json":
+		return true
+	}
+	return false
 }
 
 func transpileSatellites(piRoot, outputDir string) error {

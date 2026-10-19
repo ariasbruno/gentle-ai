@@ -1,5 +1,5 @@
 ---
-name: gentle-ai-rdd-defect-workflow
+name: rdd-defect-workflow
 description: "Trigger: RDD, receipt-driven development, review authority, receipt/lineage, correction/recovery, delivery gate/kill switch, bounded review defects. Guide work."
 license: Apache-2.0
 metadata:

@@ -291,6 +291,81 @@ func TestAntigravityCLISkillLoadingWordingIsTruthful(t *testing.T) {
 	}
 }
 
+// writeNamespacedSkill writes a skill whose frontmatter name does not match
+// its folder, the way Gentle Shell ships them.
+func writeNamespacedSkill(t *testing.T, sourceRoot, folder, name, body string) {
+	t.Helper()
+	skillDir := filepath.Join(sourceRoot, "skills", folder)
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	raw := fmt.Sprintf("---\nname: %s\ndescription: Namespaced skill fixture.\n---\n\n%s", name, body)
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(raw), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Gentle Shell ships its skills with a namespaced frontmatter name
+// (`gentle-ai-<folder>`) inside a `<folder>` directory. Antigravity CLI's
+// plugin loader requires the two to match, so the emitted plugin must carry the
+// folder as the skill name, and every reference to that skill must follow it.
+func TestEmittedSkillNamesMatchTheirFolders(t *testing.T) {
+	sourceRoot := t.TempDir()
+	writeMinimalSourceTree(t, sourceRoot)
+
+	writeNamespacedSkill(t, sourceRoot, "chained-pr", "gentle-ai-chained-pr",
+		"Use `gentle-ai-skill-creator` when authoring a reusable pattern.\n")
+	writeNamespacedSkill(t, sourceRoot, "skill-creator", "gentle-ai-skill-creator",
+		"Create reusable patterns.\n")
+
+	// The skills satellite routes intents to skills by name.
+	satellite := filepath.Join(sourceRoot, "assets", "orchestrator-skills.md")
+	if err := os.WriteFile(satellite, []byte("# Skills\n\n| Split/stack/large PR | `gentle-ai-chained-pr` |\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	outputDir := t.TempDir()
+	if err := transpileAll(sourceRoot, outputDir); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, folder := range []string{"chained-pr", "skill-creator"} {
+		raw, err := os.ReadFile(filepath.Join(outputDir, "skills", folder, "SKILL.md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(raw), "name: "+folder+"\n") {
+			t.Errorf("emitted skill %s does not carry its folder as its name:\n%s", folder, raw)
+		}
+	}
+
+	// No emitted file may name a skill the plugin does not ship under that name.
+	for old, folder := range map[string]string{
+		"gentle-ai-chained-pr":    "chained-pr",
+		"gentle-ai-skill-creator": "skill-creator",
+	} {
+		err := filepath.Walk(outputDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() {
+				return nil
+			}
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			if strings.Contains(string(raw), old) {
+				t.Errorf("emitted %s still names %q; the plugin ships it as %q", path, old, folder)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func writeAgentFixture(t *testing.T, sourceRoot, name, body string) {
 	t.Helper()
 	agentsDir := filepath.Join(sourceRoot, "assets", "agents")
