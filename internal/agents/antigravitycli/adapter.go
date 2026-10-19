@@ -277,6 +277,7 @@ func (a *Adapter) BundleAssets() [][2]string {
 		{"antigravitycli/plugin.json", "plugin.json"},
 		{"antigravitycli/orchestrator.md", filepath.Join("rules", "gentle-ai-orchestrator.md")},
 		{"antigravitycli/orchestrator-delegation.md", "orchestrator-delegation.md"},
+		{"antigravitycli/orchestrator-delegation-reference.md", "orchestrator-delegation-reference.md"},
 		{"antigravitycli/orchestrator-memory.md", "orchestrator-memory.md"},
 		{"antigravitycli/orchestrator-skills.md", "orchestrator-skills.md"},
 		{"antigravitycli/orchestrator-prompts.md", "orchestrator-prompts.md"},

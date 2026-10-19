@@ -314,13 +314,14 @@ func writeMinimalSourceTree(t *testing.T, sourceRoot string) {
 	writeAgentFixture(t, sourceRoot, "test-agent", "Test body.\n")
 	// satellites
 	satellites := map[string]string{
-		"orchestrator-delegation.md":   "# Delegation\n\nContent.\n",
-		"orchestrator-memory.md":       "# Memory\n\nContent.\n",
-		"orchestrator-skills.md":       "# Skills\n\nContent.\n",
-		"orchestrator-prompts.md":      "# Prompts\n\nContent.\n",
-		"orchestrator-tracking.md":     "# Tracking\n\nContent.\n",
-		"orchestrator-verification.md": "# Verification\n\nContent.\n",
-		"orchestrator-writer.md":       "# Writer\n\nContent.\n",
+		"orchestrator-delegation.md":           "# Delegation\n\nContent.\n",
+		"orchestrator-delegation-reference.md": "# Delegation Reference\n\nContent.\n",
+		"orchestrator-memory.md":               "# Memory\n\nContent.\n",
+		"orchestrator-skills.md":               "# Skills\n\nContent.\n",
+		"orchestrator-prompts.md":              "# Prompts\n\nContent.\n",
+		"orchestrator-tracking.md":             "# Tracking\n\nContent.\n",
+		"orchestrator-verification.md":         "# Verification\n\nContent.\n",
+		"orchestrator-writer.md":               "# Writer\n\nContent.\n",
 	}
 	for name, content := range satellites {
 		if err := os.WriteFile(filepath.Join(assetsDir, name), []byte(content), 0o644); err != nil {

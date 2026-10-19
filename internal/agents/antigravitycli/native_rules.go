@@ -17,15 +17,16 @@ import (
 // Keep sources byte-stable: their exact embedded bytes prove ownership of the
 // previous root/support copies. Native metadata belongs to deployment only.
 var nativeRuleDescriptions = map[string]string{
-	"orchestrator-delegation.md":   "Use when the parent routes work or delegates scoped exploration, implementation, or verification to subagents.",
-	"orchestrator-memory.md":       "Use when the parent records organic progress, maintains large-task continuity, or recovers an interrupted task with Engram.",
-	"orchestrator-skills.md":       "Use when the parent resolves skill paths or discovers applicable skills before acting or delegating.",
-	"orchestrator-prompts.md":      "Use when relaying a blocking prompt or menu, or handing off a Gentle AI provider defect to the user.",
-	"orchestrator-tracking.md":     "Use when a task fails the core resume test or the user requests tracking, to maintain authorized ODD progress and evidence.",
-	"orchestrator-verification.md": "Use when selecting risk-based independent verification or preparing exact authorized writer verification commands.",
-	"orchestrator-writer.md":       "Use when the Writer rule fires or an explicitly activated Judgment Day fix batch needs bounded edit surfaces and dispatch.",
-	"strict-tdd.md":                "Use for implementation with applicable runnable deterministic behavior tests, to capture observed RED, GREEN, triangulation, and refactor evidence.",
-	"strict-tdd-verify.md":         "Use when verifying applicable test-first evidence or a justified exception, with proportionate checks and truthful reporting.",
+	"orchestrator-delegation.md":           "Use when the parent routes work or delegates scoped exploration, implementation, or verification to subagents.",
+	"orchestrator-delegation-reference.md": "Use when the delegation card names the reference for the routing ladder, workflows, background, fallback, or language detail.",
+	"orchestrator-memory.md":               "Use when the parent records organic progress, maintains large-task continuity, or recovers an interrupted task with Engram.",
+	"orchestrator-skills.md":               "Use when the parent resolves skill paths or discovers applicable skills before acting or delegating.",
+	"orchestrator-prompts.md":              "Use when relaying a blocking prompt or menu, or handing off a Gentle AI provider defect to the user.",
+	"orchestrator-tracking.md":             "Use when a task fails the core resume test or the user requests tracking, to maintain authorized ODD progress and evidence.",
+	"orchestrator-verification.md":         "Use when selecting risk-based independent verification or preparing exact authorized writer verification commands.",
+	"orchestrator-writer.md":               "Use when the Writer rule fires or an explicitly activated Judgment Day fix batch needs bounded edit surfaces and dispatch.",
+	"strict-tdd.md":                        "Use for implementation with applicable runnable deterministic behavior tests, to capture observed RED, GREEN, triangulation, and refactor evidence.",
+	"strict-tdd-verify.md":                 "Use when verifying applicable test-first evidence or a justified exception, with proportionate checks and truthful reporting.",
 }
 
 func renderNativeRule(source, content string) string {

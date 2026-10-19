@@ -170,6 +170,7 @@ func TestAntigravityCLI_ParentSatelliteSurfaceHasNoExecutablePiResidue(t *testin
 	paths := []string{
 		"antigravitycli/orchestrator.md",
 		"antigravitycli/orchestrator-delegation.md",
+		"antigravitycli/orchestrator-delegation-reference.md",
 		"antigravitycli/orchestrator-memory.md",
 		"antigravitycli/orchestrator-skills.md",
 	}
@@ -206,8 +207,8 @@ func TestAntigravityCLI_ParentSatelliteSurfaceHasNoExecutablePiResidue(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(delegation, "send_message") {
-		t.Error("AGY delegation satellite does not use native send_message")
+	if !strings.Contains(delegation, "invoke_subagent") {
+		t.Error("AGY delegation satellite does not use native invoke_subagent")
 	}
 }
 

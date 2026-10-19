@@ -1129,10 +1129,11 @@ func assertAntigravityCanonicalRouting(t *testing.T) {
 	}
 	rules := filepath.Join(adapter.PluginDir(home), "rules")
 	clauses := map[string][]string{
-		"gentle-ai-orchestrator.md":    {"**Understood**", "**Contained risk**", "**Resumable from the diff**", "File/command/test/fix counts", "the resume test fails", "no commits unless requested", "**High risk**", "(1) data/irreversible", "(2) security", "(3) consumed-contract", "(4) concurrency", "(5) delivery/environment", "(6) untestable", "Risk: item N", "unrequested existing behavior", "Required Phase Loading", "orchestrator-delegation.md", "strict-tdd.md"},
-		"orchestrator-delegation.md":   {"open product or design decision", "re-evaluate task size", "high-risk change", "independent", "Writer trigger", "parallelism", "context", "Without a reason, the parent works inline", "disjoint", "Inline writes read inline", "the user explicitly", "stop"},
-		"orchestrator-verification.md": {"any RDD state", "high", "independent", "small-model", "never replaces", "failed assessment"},
-		"strict-tdd.md":                {"RED", "GREEN"},
+		"gentle-ai-orchestrator.md":            {"**Understood**", "**Contained risk**", "**Resumable from the diff**", "File/command/test/fix counts", "the resume test fails", "no commits unless requested", "**High risk**", "(1) data/irreversible", "(2) security", "(3) consumed-contract", "(4) concurrency", "(5) delivery/environment", "(6) untestable", "Risk: item N", "unrequested existing behavior", "Required Phase Loading", "orchestrator-delegation.md", "strict-tdd.md"},
+		"orchestrator-delegation.md":           {"open product or design decision", "re-evaluate task size", "high-risk item", "independent", "Writer trigger", "parallelism", "context", "Without a reason, the parent works inline", "disjoint", "inline writes read inline", "stop"},
+		"orchestrator-delegation-reference.md": {"Language Domain Contract", "the user explicitly", "Work Routing Ladder", "Inline Direct", "Simple Delegation", "Canonical Lightweight Workflows"},
+		"orchestrator-verification.md":         {"any RDD state", "high", "independent", "small-model", "never replaces", "failed assessment"},
+		"strict-tdd.md":                        {"RED", "GREEN"},
 	}
 	for file, wants := range clauses {
 		raw, err := os.ReadFile(filepath.Join(rules, file))

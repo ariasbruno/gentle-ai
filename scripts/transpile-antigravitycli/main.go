@@ -794,6 +794,7 @@ func transformSkillContent(content, skillName string) string {
 func transpileSatellites(piRoot, outputDir string) error {
 	satellites := []string{
 		"orchestrator-delegation.md",
+		"orchestrator-delegation-reference.md",
 		"orchestrator-memory.md",
 		"orchestrator-skills.md",
 		"orchestrator-prompts.md",
@@ -1206,7 +1207,13 @@ func applyAntigravityCLIParentMutations(content string) string {
 	// AGY has native subagent messaging, not the Pi cross-session directory.
 	content = stripAntigravityCLISectionUntil(content, "## Session subject and display identity", "## Pi Runtime Overlays")
 	content = replaceAntigravityCLILineContaining(content, "Before work beyond small direct tasks, publish own", "")
-	content = stripSection(content, "## Pi Runtime Overlays")
+	content = replaceAntigravityCLILineContaining(content, "Before delegating, declare a subject via", "")
+	content = replaceAntigravityCLILineContaining(content, "Progress is published automatically from the todo list", "")
+	content = replaceAntigravityCLILineContaining(content, "For delegation other than a large task's bounded writes", "For delegation other than a large task's bounded writes, use the generic fallback: if the native subagent mechanism is unavailable, stop the complex work and explain the blocker instead of silently continuing inline. The delegation trigger remains mandatory; the fallback changes the runtime, not the requirement to delegate.")
+	// Shell 4.3.0 groups the generic delegation rules and routing ladder under
+	// this Pi-only heading; drop the heading and its intro, never the generic
+	// subsections beneath it. Only the delegation reference carries it.
+	content = strings.ReplaceAll(content, "## Pi Runtime Overlays\n\nThese sections bind generic delegation to Pi's runtime, adding routing without changing ODD ownership.\n\n", "")
 	content = stripAntigravityCLIMarkedSection(content, "<!-- gentle-pi:background-subagents -->", "<!-- /gentle-pi:background-subagents -->")
 	content = stripAntigravityCLISectionUntil(content, "#### Pi Trigger Runtime Bindings", "### Work Routing Ladder")
 	content = stripAntigravityCLISectionUntil(content, "#### Pi Subagent Model Routing", "## Pi Delegation Bindings")
@@ -1380,6 +1387,7 @@ func applyCommonTextMutations(s string) string {
 		{"{{GENTLE_PI_ASSETS_ROOT}}", "~/.gemini/config/plugins/gentle-ai"},
 		{"assets/support/", "~/.gemini/config/plugins/gentle-ai/support/"},
 		{"assets/agents/*.md", "~/.gemini/config/plugins/gentle-ai/agents/*/agent.md"},
+		{"assets/orchestrator-delegation-reference.md", "~/.gemini/config/plugins/gentle-ai/orchestrator-delegation-reference.md"},
 		{"assets/orchestrator-delegation.md", "~/.gemini/config/plugins/gentle-ai/orchestrator-delegation.md"},
 		{"assets/orchestrator-memory.md", "~/.gemini/config/plugins/gentle-ai/orchestrator-memory.md"},
 		{"assets/orchestrator-skills.md", "~/.gemini/config/plugins/gentle-ai/orchestrator-skills.md"},

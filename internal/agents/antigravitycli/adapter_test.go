@@ -64,6 +64,22 @@ func TestDeployPluginPhaseReferences(t *testing.T) {
 	// Bare filenames in the parent resolve beside the deployed core, not at
 	// the plugin root. Exercise every phase module, not just source text.
 	for module := range nativeRuleDescriptions {
+		if module == "orchestrator-delegation-reference.md" {
+			// The delegation reference is a lazy sub-reference, not a core
+			// phase: the core routes to the delegation card, and the card
+			// names the reference. Assert that reachable chain.
+			card, err := os.ReadFile(filepath.Join(a.PluginDir(home), "rules", "orchestrator-delegation.md"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(card), "`"+module+"`") {
+				t.Errorf("delegation card lacks explicit reference route to %s", module)
+			}
+			if _, err := os.Stat(filepath.Join(a.PluginDir(home), "rules", module)); err != nil {
+				t.Errorf("broken deployed reference route %s: %v", module, err)
+			}
+			continue
+		}
 		if !strings.Contains(string(data), "`"+module+"`") {
 			t.Errorf("deployed core lacks explicit phase route to %s", module)
 		}
@@ -770,7 +786,7 @@ func TestDeployNativeRules(t *testing.T) {
 	a := NewAdapter()
 	home := t.TempDir()
 	plugin := a.PluginDir(home)
-	names := []string{"orchestrator-delegation", "orchestrator-memory", "orchestrator-skills", "orchestrator-prompts", "orchestrator-tracking", "orchestrator-verification", "orchestrator-writer", "strict-tdd", "strict-tdd-verify"}
+	names := []string{"orchestrator-delegation", "orchestrator-delegation-reference", "orchestrator-memory", "orchestrator-skills", "orchestrator-prompts", "orchestrator-tracking", "orchestrator-verification", "orchestrator-writer", "strict-tdd", "strict-tdd-verify"}
 	for _, name := range names {
 		source := "antigravitycli/" + name + ".md"
 		legacy := name + ".md"

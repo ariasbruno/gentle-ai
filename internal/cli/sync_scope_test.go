@@ -758,7 +758,7 @@ func TestRunSyncWorkspaceScopeAntigravityCLIUpdatesWorkspaceWithoutGlobalMutatio
 				t.Fatalf("%s injection: %v", component, err)
 			}
 		}
-		for _, rel := range []string{"plugin.json", "mcp_config.json", "rules/AGENTS.md", "rules/gentle-ai-orchestrator.md", "rules/gentle-ai-routing.md", "rules/strict-tdd.md", "rules/strict-tdd-verify.md", "rules/orchestrator-delegation.md"} {
+		for _, rel := range []string{"plugin.json", "mcp_config.json", "rules/AGENTS.md", "rules/gentle-ai-orchestrator.md", "rules/gentle-ai-routing.md", "rules/strict-tdd.md", "rules/strict-tdd-verify.md", "rules/orchestrator-delegation.md", "rules/orchestrator-delegation-reference.md"} {
 			if _, err := os.Stat(filepath.Join(pluginDir, rel)); err != nil {
 				t.Errorf("missing scoped destination %s: %v", rel, err)
 			}
