@@ -72,6 +72,9 @@ type InstallResult struct {
 	BackgroundPolicyEnabled bool
 
 	PiBackground PiBackgroundResolution
+
+	// PiExcludedPackages are managed Pi sources skipped by `pi install`.
+	PiExcludedPackages []string
 }
 
 var (
@@ -163,9 +166,10 @@ var installStagePlan = func(runtime *installRuntime) pipeline.StagePlan { return
 // PreparedInstall is a validated install plan, ready for execution after app preflight.
 // Its fields stay private so dispatch reuses the exact parsed and resolved input.
 type PreparedInstall struct {
-	flags    InstallFlags
-	input    InstallInput
-	resolved planner.ResolvedPlan
+	flags              InstallFlags
+	input              InstallInput
+	resolved           planner.ResolvedPlan
+	piExcludedPackages []string
 }
 
 // PrepareInstall resolves and validates without reading or writing install state.
@@ -187,7 +191,11 @@ func PrepareInstall(args []string, detection system.DetectionResult) (PreparedIn
 	if err := validateInstallModifierConsumers(flags, input.Selection, resolved.OrderedComponents); err != nil {
 		return PreparedInstall{}, err
 	}
-	return PreparedInstall{flags: flags, input: input, resolved: resolved}, nil
+	piExcluded, err := validatePiExcludePackages(flags.PiExcludePackages, resolved.Agents)
+	if err != nil {
+		return PreparedInstall{}, err
+	}
+	return PreparedInstall{flags: flags, input: input, resolved: resolved, piExcludedPackages: piExcluded}, nil
 }
 
 // RunPreparedInstall executes a plan returned by PrepareInstall.
@@ -241,6 +249,8 @@ func RunPreparedInstall(prepared PreparedInstall, detection system.DetectionResu
 		DryRun:       input.DryRun,
 		Background:   background,
 		PiBackground: piBackground,
+
+		PiExcludedPackages: prepared.piExcludedPackages,
 	}
 	result.Background.activationPlan = backgroundActivation
 	if backgroundActivation != nil {
@@ -279,6 +289,7 @@ func RunPreparedInstall(prepared PreparedInstall, detection system.DetectionResu
 	runtime.backgroundActivation = backgroundActivation
 	runtime.runtimeReady = backgroundActivation != nil && backgroundActivation.Capability().Ready()
 	runtime.piBackgroundProjection = piBackgroundProjection
+	runtime.piExcludedPackages = prepared.piExcludedPackages
 	runtime.claudeOrchestratorModules = input.ClaudeOrchestratorModules
 
 	stagePlan = installStagePlan(runtime)
@@ -760,6 +771,7 @@ type installRuntime struct {
 	backgroundActivation *opencodeactivation.ActivationPlan
 
 	piBackgroundProjection *piBackgroundProjectionPlan
+	piExcludedPackages     []string
 	progress               pipeline.ProgressFunc
 
 	// claudeOrchestratorModules is the explicit install opt-in for the
@@ -919,6 +931,7 @@ func (r *installRuntime) stagePlan() pipeline.StagePlan {
 			homeDir:  r.homeDir,
 			profile:  r.profile,
 			progress: r.progress,
+			excluded: r.piExcludedPackages,
 		})
 	}
 
@@ -2848,6 +2861,8 @@ type agentInstallStep struct {
 	homeDir  string
 	profile  system.PlatformProfile
 	progress pipeline.ProgressFunc
+	// excluded lists validated managed Pi sources to skip.
+	excluded []string
 }
 
 func openCodeTelemetryConfigDir(home, workspace string, scope InstallScope, agentIDs []model.AgentID) string {
@@ -2963,7 +2978,7 @@ func (s agentInstallStep) Run() error {
 		return fmt.Errorf("preflight for agent %q: %w", s.agent, err)
 	}
 
-	commands, err := adapter.PrepareInstall(s.profile, s.homeDir)
+	commands, err := adapter.PrepareInstall(s.profile, s.homeDir, s.excluded...)
 	if err != nil {
 		return fmt.Errorf("resolve install command for %q: %w", s.agent, err)
 	}
