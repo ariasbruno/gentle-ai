@@ -2727,6 +2727,22 @@ func TestSyncRuntimeAddsCodeGraphStepsOnlyWhenSelected(t *testing.T) {
 	if !hasStepID(plan.Apply, "sync:community-tool:codegraph-guidance") {
 		t.Fatal("sync plan missing selected CodeGraph guidance step")
 	}
+	if hasStepID(plan.Apply, "sync:community-tool:pi-codegraph") {
+		t.Fatal("sync plan included Pi CodeGraph without Pi selection")
+	}
+
+	piSelected := model.Selection{
+		Agents:         []model.AgentID{model.AgentPi},
+		CommunityTools: []model.CommunityToolID{model.CommunityToolCodeGraph},
+	}
+	rt, err = newSyncRuntimeWithScope(home, piSelected, ScopeGlobal)
+	if err != nil {
+		t.Fatalf("newSyncRuntimeWithScope() error = %v", err)
+	}
+	plan = rt.stagePlan()
+	if !hasStepID(plan.Apply, "sync:community-tool:codegraph-guidance") {
+		t.Fatal("sync plan missing CodeGraph guidance with Pi selected")
+	}
 	if !hasStepID(plan.Apply, "sync:community-tool:pi-codegraph") {
 		t.Fatal("sync plan missing selected Pi CodeGraph step")
 	}
@@ -2877,8 +2893,8 @@ func TestRunSyncMigratesLegacyManagedPiCodeGraphSelection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunSyncWithSelection() error = %v", err)
 	}
-	if !result.Selection.HasCommunityTool(model.CommunityToolCodeGraph) || !refreshed {
-		t.Fatalf("legacy Pi selection = %v, refreshed = %t; want selected and reconciled", result.Selection.CommunityTools, refreshed)
+	if !result.Selection.HasCommunityTool(model.CommunityToolCodeGraph) || refreshed {
+		t.Fatalf("legacy Pi selection = %v, refreshed = %t; want selected and not reconciled for a non-Pi sync", result.Selection.CommunityTools, refreshed)
 	}
 	persisted, err := state.Read(home)
 	if err != nil {
@@ -2889,12 +2905,46 @@ func TestRunSyncMigratesLegacyManagedPiCodeGraphSelection(t *testing.T) {
 	}
 }
 
+func TestRunSyncNonPiSelectionDoesNotRefreshPiCodeGraph(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("PI_CODING_AGENT_DIR", "")
+	if err := state.Write(home, state.InstallState{InstalledAgents: []string{"antigravity-cli"}, Persona: "neutral"}); err != nil {
+		t.Fatal(err)
+	}
+	writeManagedPiCodeGraphManifest(t, home)
+	piMCP := filepath.Join(home, ".pi", "agent", "mcp.json")
+	before := "{\"mcpServers\":{\"codegraph\":{\"command\":\"codegraph\",\"args\":[\"serve\",\"--mcp\"]}}}\n"
+	mustWriteFile(t, piMCP, []byte(before))
+
+	previousRefresh := refreshPiCodeGraphIfConfigured
+	refreshPiCodeGraphIfConfigured = func(string, string) (communitytool.PiCodeGraphResult, bool, error) {
+		t.Fatal("Pi CodeGraph refresh ran for a non-Pi sync")
+		return communitytool.PiCodeGraphResult{}, false, nil
+	}
+	t.Cleanup(func() { refreshPiCodeGraphIfConfigured = previousRefresh })
+
+	result, err := RunSyncWithSelection(home, model.Selection{Agents: []model.AgentID{model.AgentAntigravityCLI}, Persona: model.PersonaNeutral})
+	if err != nil {
+		t.Fatalf("RunSyncWithSelection() error = %v", err)
+	}
+	after, err := os.ReadFile(piMCP)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", piMCP, err)
+	}
+	if string(after) != before {
+		t.Fatalf("Pi CodeGraph MCP changed during non-Pi sync:\n got %s\nwant %s", after, before)
+	}
+	if containsPath(result.ChangedFiles, piMCP) {
+		t.Fatalf("non-Pi sync reported Pi CodeGraph MCP as changed: %v", result.ChangedFiles)
+	}
+}
+
 // Issue #5219: sync must not recreate retired Pi SDD agents recorded in the
 // CodeGraph manifest, and undoing an overlay stays inside the sync backup.
 func TestRunSyncReleasesRetiredPiSDDAgentsFromCodeGraphManifest(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("PI_CODING_AGENT_DIR", "")
-	if err := state.Write(home, state.InstallState{InstalledAgents: []string{"opencode"}, Persona: "neutral"}); err != nil {
+	if err := state.Write(home, state.InstallState{InstalledAgents: []string{"pi"}, Persona: "neutral"}); err != nil {
 		t.Fatal(err)
 	}
 	probe := func(string) (communitytool.PiCodeGraphMCPProbeResult, error) {
@@ -2938,7 +2988,12 @@ func TestRunSyncReleasesRetiredPiSDDAgentsFromCodeGraphManifest(t *testing.T) {
 	}
 	mustWriteFile(t, overlaid, []byte(after))
 
-	codeGraph := model.Selection{Agents: []model.AgentID{model.AgentOpenCode}, CommunityTools: []model.CommunityToolID{model.CommunityToolCodeGraph}}
+	nonPi := model.Selection{Agents: []model.AgentID{model.AgentOpenCode}, CommunityTools: []model.CommunityToolID{model.CommunityToolCodeGraph}}
+	nonPiTargets, err := syncBackupTargetsScoped(home, "", ScopeGlobal, nonPi, resolveAdapters(nonPi.Agents))
+	if err != nil || containsPath(nonPiTargets, overlaid) {
+		t.Fatalf("non-Pi sync backup included Pi overlay: %v, %v", nonPiTargets, err)
+	}
+	codeGraph := model.Selection{Agents: []model.AgentID{model.AgentPi}, CommunityTools: []model.CommunityToolID{model.CommunityToolCodeGraph}}
 	targets, err := syncBackupTargetsScoped(home, "", ScopeGlobal, codeGraph, resolveAdapters(codeGraph.Agents))
 	if err != nil || !containsPath(targets, overlaid) {
 		t.Fatalf("retired Pi child release lacks a sync snapshot: %v, %v", targets, err)
@@ -2951,7 +3006,7 @@ func TestRunSyncReleasesRetiredPiSDDAgentsFromCodeGraphManifest(t *testing.T) {
 	}
 	t.Cleanup(func() { refreshPiCodeGraphIfConfigured = previousRefresh })
 
-	result, err := RunSyncWithSelection(home, model.Selection{Agents: []model.AgentID{model.AgentOpenCode}, Persona: model.PersonaNeutral})
+	result, err := RunSyncWithSelection(home, model.Selection{Agents: []model.AgentID{model.AgentPi}, Persona: model.PersonaNeutral})
 	if err != nil {
 		t.Fatalf("RunSyncWithSelection() error = %v", err)
 	}

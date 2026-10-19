@@ -680,10 +680,13 @@ func (r *syncRuntime) stagePlan() pipeline.StagePlan {
 			id:                 "sync:community-tool:codegraph-guidance",
 			homeDir:            r.homeDir,
 			runner:             codeGraphHomeRunner{homeDir: r.homeDir},
+			agents:             r.agentIDs,
 			changedFiles:       &r.changedFiles,
 			guidanceBeforeSync: communitytool.HasAnyCodeGraphGuidance(r.homeDir),
 		})
-		apply = append(apply, piCodeGraphSyncStep{id: "sync:community-tool:pi-codegraph", homeDir: r.homeDir, workspaceDir: r.workspaceDir, changedFiles: &r.changedFiles})
+		if containsAgent(r.agentIDs, model.AgentPi) {
+			apply = append(apply, piCodeGraphSyncStep{id: "sync:community-tool:pi-codegraph", homeDir: r.homeDir, workspaceDir: r.workspaceDir, changedFiles: &r.changedFiles})
+		}
 	}
 	if containsAgent(r.agentIDs, model.AgentAntigravityCLI) {
 		apply = append(apply, antigravityCLIPluginImportStep{
@@ -901,8 +904,10 @@ func syncBackupTargetsScoped(homeDir, workspaceDir string, scope InstallScope, s
 		for _, path := range communitytool.CodeGraphManagedPaths(homeDir) {
 			paths[path] = struct{}{}
 		}
-		for _, path := range communitytool.PiCodeGraphPaths(homeDir, workspaceDir) {
-			paths[path] = struct{}{}
+		if containsAgent(selection.Agents, model.AgentPi) {
+			for _, path := range communitytool.PiCodeGraphPaths(homeDir, workspaceDir) {
+				paths[path] = struct{}{}
+			}
 		}
 	}
 	if !workspace && containsAgent(selection.Agents, model.AgentOpenCode) {
@@ -1273,6 +1278,7 @@ type codeGraphGuidanceSyncStep struct {
 	id           string
 	homeDir      string
 	runner       communitytool.Runner
+	agents       []model.AgentID
 	changedFiles *[]string
 	before       map[string]syncFileSnapshot
 	// guidanceBeforeSync records whether CodeGraph guidance existed before the
@@ -1366,7 +1372,10 @@ func (s *codeGraphGuidanceSyncStep) Run() (runErr error) {
 	}()
 
 	status := communitytool.DetectStatus(model.CommunityToolCodeGraph, s.homeDir, communitytool.DetectorFunc(cmdLookPath))
-	if status.CLI == communitytool.AvailabilityAvailable && communitytool.NeedsOpenCodeCodeGraphReconcile(s.homeDir) {
+	selectedAgents := s.agents
+	if status.CLI == communitytool.AvailabilityAvailable &&
+		(len(selectedAgents) == 0 || containsAgent(selectedAgents, model.AgentOpenCode)) &&
+		communitytool.NeedsOpenCodeCodeGraphReconcile(s.homeDir) {
 		reconciled, err := communitytool.ReconcileOpenCodeCodeGraph(s.homeDir, s.runner)
 		if err != nil {
 			return fmt.Errorf("sync OpenCode CodeGraph wiring: %w", err)
@@ -1375,8 +1384,9 @@ func (s *codeGraphGuidanceSyncStep) Run() (runErr error) {
 			*s.changedFiles = append(*s.changedFiles, reconciled.Files...)
 		}
 	}
-	if status.CLI == communitytool.AvailabilityAvailable && communitytool.NeedsAntigravityCLICodeGraphReconcile(s.homeDir) {
-		reconciled, err := communitytool.ReconcileAntigravityCLICodeGraph(s.homeDir)
+	if status.CLI == communitytool.AvailabilityAvailable &&
+		(len(selectedAgents) == 0 || containsAgent(selectedAgents, model.AgentAntigravityCLI)) {
+		reconciled, err := communitytool.ReconcileAntigravityCLICodeGraphWithAgents(s.homeDir, selectedAgents)
 		if err != nil {
 			return fmt.Errorf("sync Antigravity CLI CodeGraph wiring: %w", err)
 		}
