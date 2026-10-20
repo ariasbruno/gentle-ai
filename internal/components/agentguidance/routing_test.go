@@ -1152,6 +1152,65 @@ func assertAntigravityCanonicalRouting(t *testing.T) {
 			t.Errorf("%s is not a conditional phase rule", file)
 		}
 	}
+	// The core is delivered as sections, so a section dropped, duplicated or
+	// moved into another rule silently removes an obligation. Assert that
+	// module-aware shape, not only individual clauses.
+	coreHeadings := []string{
+		"## Agent Teams Orchestrator (Unified Adapter)",
+		"## Core Role",
+		"## Language Boundary",
+		"## Mandatory ODD",
+		"## Task Size",
+		"## Required Phase Loading",
+		"## Delegation Rules",
+		"## Mechanisms",
+		"## Gentle AI RDD ownership",
+		"## Safety",
+	}
+	headingLines := func(body, heading string) []int {
+		var lines []int
+		for i, line := range strings.Split(body, "\n") {
+			if strings.TrimRight(line, "\r") == heading {
+				lines = append(lines, i)
+			}
+		}
+		return lines
+	}
+	coreRaw, err := os.ReadFile(filepath.Join(rules, "gentle-ai-orchestrator.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	core := string(coreRaw)
+	previous := -1
+	for _, heading := range coreHeadings {
+		found := headingLines(core, heading)
+		if len(found) != 1 {
+			t.Errorf("deployed core carries %q %d times, want exactly once", heading, len(found))
+			continue
+		}
+		if found[0] < previous {
+			t.Errorf("deployed core moves %q before the section it follows", heading)
+		}
+		previous = found[0]
+	}
+	otherRules, err := os.ReadDir(rules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range otherRules {
+		if entry.IsDir() || entry.Name() == "gentle-ai-orchestrator.md" || !strings.HasSuffix(entry.Name(), ".md") {
+			continue
+		}
+		raw, readErr := os.ReadFile(filepath.Join(rules, entry.Name()))
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		for _, heading := range coreHeadings {
+			if len(headingLines(string(raw), heading)) != 0 {
+				t.Errorf("%s duplicates the core section %q", entry.Name(), heading)
+			}
+		}
+	}
 	for _, role := range []string{"gentle-ai-worker", "gentle-ai-verify"} {
 		raw, err := os.ReadFile(filepath.Join(adapter.PluginDir(home), "agents", role, "agent.md"))
 		if err != nil {

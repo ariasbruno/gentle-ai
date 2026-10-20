@@ -127,7 +127,7 @@ Tres guards de assets por runtime lo excluyen de forma nombrada y explicada, no 
 
 **Qué cubre al bundle, entonces:** el gate de drift (bytes y conjunto de archivos contra una transpilación nueva), los 15 tests del propio transpilador ([`main_test.go`](../../scripts/transpile-antigravitycli/main_test.go)) y los del adaptador, que verifican el despliegue de `rules/` y satélites sin depender de su redacción ([`renderNativeRule`](../../internal/agents/antigravitycli/native_rules.go#L31), que solo reescribe rutas y no expande secciones).
 
-**Límite explícito:** el contenido del core por secciones no lo cubre nadie hoy. Una aserción module-aware que recorra los módulos por regla del bundle es una propuesta para upstream, no un cambio de este fork; mientras tanto, este mapa es la declaración de dónde mirar cuando la doctrina de agy cambie.
+**Cobertura ahora:** el contenido del core por secciones **sí** lo cubre una aserción desde el 2026-10-20. [`assertAntigravityCanonicalRouting`](../../internal/components/agentguidance/routing_test.go) despliega el plugin real y, además de las cláusulas por archivo, verifica por módulo que cada una de las diez secciones del core aparezca **exactamente una vez**, en su orden declarado, y que ninguna otra regla del plugin la duplique. Se observó en rojo quitando `## Mechanisms` del core desplegado (`deployed core carries "## Mechanisms" 0 times, want exactly once`). Lo que sigue fuera es el texto *dentro* de cada sección más allá de las cláusulas ya afirmadas: un cambio de redacción que conserve la sección y sus cláusulas pasa, y el gate de drift lo detecta del lado del bundle cuando el generador lo produce.
 
 ## 9. `antigravity-cli` convive con `antigravity` en vez de reemplazarlo
 
