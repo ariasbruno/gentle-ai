@@ -439,6 +439,60 @@ func TestEmittedSkillNamesSurvivePrefixCollisions(t *testing.T) {
 	}
 }
 
+// TestFrontmatterNameAcceptsCRLF keeps a CRLF source from silently losing its
+// declared skill name: an empty name skips normalization and leaves the plugin
+// naming a skill it does not ship under that name.
+func TestFrontmatterNameAcceptsCRLF(t *testing.T) {
+	t.Parallel()
+
+	for name, content := range map[string]string{
+		"lf":   "---\nname: gentle-ai-chained-pr\ndescription: x\n---\n\nbody\n",
+		"crlf": "---\r\nname: gentle-ai-chained-pr\r\ndescription: x\r\n---\r\n\r\nbody\r\n",
+	} {
+		if got := frontmatterName(content); got != "gentle-ai-chained-pr" {
+			t.Errorf("%s frontmatter name = %q, want the declared name", name, got)
+		}
+	}
+}
+
+// TestNormalizeEmittedSkillNamesToleratesMissingSkillsDir treats a destination
+// without a skills tree as "nothing to rename" instead of failing a
+// transpilation that already wrote every other asset.
+func TestNormalizeEmittedSkillNamesToleratesMissingSkillsDir(t *testing.T) {
+	t.Parallel()
+
+	if err := normalizeEmittedSkillNames(t.TempDir()); err != nil {
+		t.Fatalf("a destination without a skills tree must be an empty set, got %v", err)
+	}
+}
+
+// TestReplaceSkillNameRequiresBothTokenBoundaries covers the leading boundary
+// the trailing one cannot see: a name glued to a preceding identifier
+// character is part of a longer token, not a reference to the skill.
+func TestReplaceSkillNameRequiresBothTokenBoundaries(t *testing.T) {
+	t.Parallel()
+
+	const old, replacement = "gentle-ai-chained-pr", "chained-pr"
+	cases := map[string]struct{ in, want string }{
+		"standalone":             {"gentle-ai-chained-pr", "chained-pr"},
+		"backticked":             {"Use `gentle-ai-chained-pr`.", "Use `chained-pr`."},
+		"preceded by space":      {"skill gentle-ai-chained-pr", "skill chained-pr"},
+		"preceded by slash":      {"skills/gentle-ai-chained-pr/SKILL.md", "skills/chained-pr/SKILL.md"},
+		"preceded by name char":  {"xgentle-ai-chained-pr", "xgentle-ai-chained-pr"},
+		"preceded by underscore": {"_gentle-ai-chained-pr", "_gentle-ai-chained-pr"},
+		"followed by name char":  {"gentle-ai-chained-pr-x", "gentle-ai-chained-pr-x"},
+		"later occurrence still replaced": {
+			"xgentle-ai-chained-pr and gentle-ai-chained-pr",
+			"xgentle-ai-chained-pr and chained-pr",
+		},
+	}
+	for name, tc := range cases {
+		if got := replaceSkillName(tc.in, old, replacement); got != tc.want {
+			t.Errorf("%s: replaceSkillName(%q) = %q, want %q", name, tc.in, got, tc.want)
+		}
+	}
+}
+
 // TestCommittedBundleSkillNamesMatchTheirFolders pins the property the AGY
 // plugin loader enforces on the COMMITTED bundle, not only on a fixture: every
 // emitted skill's frontmatter name equals its folder, and no file in the

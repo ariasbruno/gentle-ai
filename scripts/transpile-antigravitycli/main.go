@@ -811,6 +811,12 @@ func normalizeEmittedSkillNames(outputDir string) error {
 	skillsDir := filepath.Join(outputDir, "skills")
 	entries, err := os.ReadDir(skillsDir)
 	if err != nil {
+		// A destination without a skills tree has no names to normalize, so it
+		// is an empty set instead of a failure. A caller that requires skills
+		// fails earlier, when it transpiles them.
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
 		return fmt.Errorf("read emitted skills dir: %w", err)
 	}
 
@@ -873,6 +879,9 @@ func normalizeEmittedSkillNames(outputDir string) error {
 // frontmatterName returns the `name` declared in a document's leading
 // frontmatter block, or an empty string when it declares none.
 func frontmatterName(content string) string {
+	// A CRLF document must declare its name exactly like an LF one; otherwise
+	// the name is lost and the skill keeps a name the plugin cannot load.
+	content = strings.ReplaceAll(content, "\r\n", "\n")
 	rest, ok := strings.CutPrefix(content, "---\n")
 	if !ok {
 		return ""
@@ -892,8 +901,9 @@ func frontmatterName(content string) string {
 }
 
 // replaceSkillName replaces every standalone occurrence of old with new. A
-// match that continues with a name character is left alone, so a skill whose
-// name is a prefix of another's cannot corrupt it.
+// match glued to a name character on either side is left alone, so a skill
+// whose name is a prefix of another's, or part of a longer identifier, cannot
+// be corrupted.
 func replaceSkillName(content, old, new string) string {
 	if old == "" {
 		return content
@@ -905,9 +915,13 @@ func replaceSkillName(content, old, new string) string {
 			break
 		}
 		end := index + len(old)
-		if end < len(content) && isSkillNameChar(content[end]) {
-			out.WriteString(content[:end])
-			content = content[end:]
+		gluedBefore := index > 0 && isSkillNameChar(content[index-1])
+		gluedAfter := end < len(content) && isSkillNameChar(content[end])
+		if gluedBefore || gluedAfter {
+			// Keep scanning from just past the match start, so a later
+			// standalone occurrence is still replaced.
+			out.WriteString(content[:index+1])
+			content = content[index+1:]
 			continue
 		}
 		out.WriteString(content[:index])
