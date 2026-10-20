@@ -136,7 +136,7 @@ Estas referencias sirven para seleccionar controles ya existentes, no para afirm
 
 ## Benchmark driven no equivale a `go test`
 
-**Estado: NO EJECUTADO en la verificación actual (2026-10-20).** La definición de journey y PASS del paquete bench no demuestran que un binario haya completado `j4500`: en esta actualización se ejecutó el módulo bench completo (build, vet y `go test ./...`, 4,796s, sin fallas) y el gate de drift, pero no el journey driven con binarios de producto.
+**Estado: EJECUTADO 2026-10-20.** El journey driven corrió con binarios de producto: `gentle-ai-bench run --binary <producto> --only j4500-antigravity-cli-lifecycle-parity --out <report>` sobre el binario `4.2.1-0.20261020031604-4da998d9f8bb` (sha256 `26a02f3b1078f23c…`) y el bench `f0f10cf527941c75…`; el informe trae la journey `j4500-antigravity-cli-lifecycle-parity` con `status: completed` y sus tres comandos con `exit_code: 0`. El journey usa el mock de agy: completarlo **no** certifica runtime real, autenticación, carga de MCP/reglas ni sandbox, y no se llamó a ningún modelo.
 
 Receta con binarios de producto y bench ya construidos, únicamente bajo autorización de un entorno de fixtures:
 

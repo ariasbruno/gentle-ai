@@ -124,10 +124,10 @@ Filled copy of the AGY update guide (private skill, `task-guide.md`). States: `[
 - `[x]` **9.2 Upstream contribution, separate from compatibility** (human): **nothing goes upstream**. The AGY integration, the canon-first adaptation and the skill-identity normalization stay the fork's work: no issue was opened upstream, no upstream branch was cut, and the upstream pull request the fork's `FORK.md` describes is not started. The verdict is deliberately separate from compatibility — the local compatibility above says nothing about upstream accepting any of it.
 - `[x]` **9.3 What stays open, listed**:
   1. The global suite is not green: five packages fail, and they fail identically on the accepted baseline (`internal/cli`, `internal/components/legacyassets`, `internal/releaseprovenancecmd`, `internal/reviewtransaction`, `internal/shellinstaller`).
-  2. The driven `j4500` journey with product binaries was **not** executed; the bench module's build, vet and tests were.
+  2. ~~The driven `j4500` journey~~ — **executed** on 2026-10-20: `status: completed` with its three commands at `exit_code: 0` on the product binary `4.2.1-0.20261020031604-4da998d9f8bb` and the bench binary, both hashed in the record. The journey uses the fake agy, so it does not certify real runtime, authentication, MCP/rules loading or sandbox, and no model was called.
   3. The adapter's organic test stays unauthorized (real model, authentication, cost).
   4. A real Pi install (`pi install npm:gentle-pi`) was not run; the registry is not authorized here, so the new flag was exercised in dry-run only.
-  5. Whether agy claims the AGY 1.3.5 Auto mode is unclaimed.
+  5. ~~Whether agy claims the AGY 1.3.5 Auto mode~~ — **resolved**: AGY 1.4.2 exposes `--mode` with `accept-edits`, `auto` and `plan` (`agy --help`). The AGY integration does not configure it: the execution mode is the user's session-level choice, so the fork claims nothing about it.
   6. The installed Shell keeps running its own pinned `gentle-ai` 4.2.0; the override is deferred by decision.
   7. The three advisories of the work unit's native review are recorded as separate later work; each was judged unreachable in the current pipeline.
   8. The repository's own `skills/` tree still carries `branch-pr` and `chained-pr` with the namespaced name and older content: a pre-existing divergence, outside this update's surface.
