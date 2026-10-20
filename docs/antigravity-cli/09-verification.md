@@ -136,7 +136,7 @@ Estas referencias sirven para seleccionar controles ya existentes, no para afirm
 
 ## Benchmark driven no equivale a `go test`
 
-**Estado: NO EJECUTADO en la verificación actual.** La definición de journey y PASS del paquete bench no demuestran que un binario haya completado `j4500`.
+**Estado: NO EJECUTADO en la verificación actual (2026-10-20).** La definición de journey y PASS del paquete bench no demuestran que un binario haya completado `j4500`: en esta actualización se ejecutó el módulo bench completo (build, vet y `go test ./...`, 4,796s, sin fallas) y el gate de drift, pero no el journey driven con binarios de producto.
 
 Receta con binarios de producto y bench ya construidos, únicamente bajo autorización de un entorno de fixtures:
 
@@ -154,10 +154,10 @@ El mock agy del journey no es una autorización para usar HOME real. Incluso con
 
 | Control | Comando de referencia | Estado/precaución |
 |---|---|---|
-| Gate contra pin upstream | `go run ./scripts/transpile-antigravitycli --check` | **NO EJECUTADO**. Puede clonar y crear temporales; compara committed HEAD |
-| Gate con fuente local fijada | `go run ./scripts/transpile-antigravitycli --check --source-dir /path/to/gentle-shell` | **NO EJECUTADO**. HEAD local debe coincidir con pin o se usa remoto |
-| Regeneración | `go run ./scripts/transpile-antigravitycli --strict --source-dir /path/to/gentle-shell` | **NO EJECUTADO**. Escribe assets/procedencia; no validación pasiva |
-| Orgánica del adapter | `go test -tags organic -run TestAntigravityCLIAdapterOrganicTransport -v ./internal/reviewerprovider/` | **NO EJECUTADO/NO AUTORIZADO**. Modelo real/autenticación/coste |
+| Gate contra pin upstream | `go run ./scripts/transpile-antigravitycli --check` | **EJECUTADO 2026-10-20** sobre el bundle commiteado: `Drift check passed: committed bundle matches provenance-pinned transpilation.` (exit 0). Compara el árbol commiteado, no la working copy |
+| Gate con fuente local fijada | `go run ./scripts/transpile-antigravitycli --check --source-dir /path/to/gentle-shell` | **EJECUTADO 2026-10-20** con `--strict` contra un clon limpio en el pin `d5d692a68`: mismo resultado, exit 0. El checkout del workspace tiene archivos ignorados y el generador los rechaza, así que la fuente debe ser un clon limpio |
+| Regeneración | `go run ./scripts/transpile-antigravitycli --strict --source-dir /path/to/gentle-shell` | **EJECUTADO 2026-10-20**: dos generaciones desde el pin, idénticas en path, bytes y provenance (39 archivos, hash normalizado `b2023e2b…`), y el árbol commiteado tiene ese mismo hash. Escribe assets/procedencia; no es una validación pasiva |
+| Orgánica del adapter | `go test -tags organic -run TestAntigravityCLIAdapterOrganicTransport -v ./internal/reviewerprovider/` | **NO EJECUTADO/NO AUTORIZADO** al 2026-10-20. Modelo real/autenticación/coste |
 
 La existencia de tests `TestCheckGate*` ejecutados dentro del paquete no permite marcar el gate completo upstream como ejecutado: utilizan fuentes fixtures. La prueba orgánica existente utiliza un prompt sintético sin lineage real: [organicAntigravityCLILensPrompt](../../internal/reviewerprovider/antigravitycli_organic_test.go#L85-L102). Aunque se ejecutara y pasara, no demostraría autoridad RDD o entrega.
 

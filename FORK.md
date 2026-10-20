@@ -9,7 +9,7 @@ upstream pull request described at the bottom.
 
 ## Development branch
 
-`agy/ai-v4.1.1_shell-v4.2.0`
+`agy/ai-v4.2.0_shell-v4.3.0`
 
 Branch naming scheme: `agy/ai-<gentle-ai version>_shell-<gentle-shell version>`. Each version line supersedes the
 previous one and is rebased onto the current upstream `main`. The names of both inputs are in the branch name
@@ -22,7 +22,7 @@ The `go.mod` module path is upstream's (`github.com/gentleman-programming/gentle
 path, which is upstream. Install this fork by building it locally:
 
 ```bash
-git clone -b agy/ai-v4.1.1_shell-v4.2.0 https://github.com/ariasbruno/gentle-ai.git
+git clone -b agy/ai-v4.2.0_shell-v4.3.0 https://github.com/ariasbruno/gentle-ai.git
 cd gentle-ai
 go install ./cmd/gentle-ai
 ```
@@ -53,7 +53,7 @@ pushes to `main`, so opening a pull request from the development branch is cover
 1. Open an issue upstream describing the integration and what this fork already implements.
 2. Only if the issue is accepted, cut a clean branch from `upstream/main`.
 3. Build it by taking the integration commits and leaving the fork-only commits behind:
-   `git rebase --onto upstream/main <first-fork-commit> agy/ai-v4.1.1_shell-v4.2.0`
+   `git rebase --onto upstream/main <first-fork-commit> agy/ai-v4.2.0_shell-v4.3.0`
 4. Verify the result mechanically: `git diff upstream/main..<pr-branch>` must contain none of the paths in the
    table above. If a path from that table appears, a fork-only change was committed together with integration
    work and has to be split.

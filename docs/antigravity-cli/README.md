@@ -3,7 +3,7 @@
 **Gentle AI configura `agy` mediante un plugin y adapta los contratos de Gentle Shell; no convierte agy en Pi ni asume paridad total entre runtimes.** Esta documentación detalla la instalación, arquitectura, decisiones de diseño, revisión RDD, cobertura de pruebas y límites del soporte. Su propósito es orientar a los desarrolladores sobre qué componentes se configuran y permitir a los mantenedores auditar cada integración.
 
 > [!NOTE]
-> La actualización local de esta rama fija **Gentle AI 4.1.1, Gentle Shell 4.2.0 y AGY 1.3.4**. Consultá el [registro incremental](11-upgrade-ai-4.1.1-shell-4.2.0.md) para commits, checks y límites. No implica publicación de la rama, suite global verde ni certificación de modelos autenticados; los comandos de instalación publicados siguen siendo una referencia, no pasos ejecutados en esta tarea.
+> La actualización local de esta rama fija **Gentle AI 4.2.0, Gentle Shell 4.3.0 y AGY 1.4.2**. Consultá el [registro incremental](11-upgrade-ai-4.2.0-shell-4.3.0.md) para commits, checks y límites; el [anterior](11-upgrade-ai-4.1.1-shell-4.2.0.md) queda como historia de la rama. No implica publicación de la rama, suite global verde ni certificación de modelos autenticados; los comandos de instalación publicados siguen siendo una referencia, no pasos ejecutados en esta tarea.
 
 ## Inicio Rápido (Quick Start)
 
@@ -22,7 +22,7 @@ Tomá el artefacto de la [página de releases de este fork](https://github.com/a
 
 #### Opción B: Clonando y compilando desde la rama de desarrollo
 ```bash
-git clone -b agy/ai-v4.1.1_shell-v4.2.0 https://github.com/ariasbruno/gentle-ai.git
+git clone -b agy/ai-v4.2.0_shell-v4.3.0 https://github.com/ariasbruno/gentle-ai.git
 cd gentle-ai
 go install ./cmd/gentle-ai
 ```
@@ -92,7 +92,8 @@ Dependiendo del alcance seleccionado, Gentle AI despliega el bundle completo del
 | Reproducir controles o conocer resultados pendientes | [Registro de verificación](09-verification.md) |
 | Localizar afirmaciones, símbolos, tests y fuentes oficiales | [Índice de fuentes](10-source-index.md) |
 | Distinguir CLI de la integración IDE | [Antigravity IDE frente a CLI](../antigravity-ide-vs-cli.md) |
-| Actualizar incrementalmente a AI 4.1.1 / Shell 4.2.0 / AGY 1.3.4 | [Inputs, checks, reviews y límites de esta actualización](11-upgrade-ai-4.1.1-shell-4.2.0.md) |
+| Actualizar incrementalmente a AI 4.2.0 / Shell 4.3.0 / AGY 1.4.2 | [Inputs, checks, reviews y límites de esta actualización](11-upgrade-ai-4.2.0-shell-4.3.0.md) |
+| Actualizar incrementalmente a AI 4.1.1 / Shell 4.2.0 / AGY 1.3.4 | [Actualización anterior, ya aceptada](11-upgrade-ai-4.1.1-shell-4.2.0.md) |
 
 ## Requisitos previos y verificación de entorno
 
@@ -111,7 +112,7 @@ Esta documentación y la suite de pruebas toman como base el siguiente entorno d
 
 - **Sistema operativo:** Linux `amd64`.
 - **Referencia histórica de Antigravity CLI:** `agy 1.3.0`.
-- **Actualización de esta rama:** `agy 1.3.4` observado en checks estructurales aislados; no se ejecutaron modelos AGY ni instalación real. [Evidencia y límites](11-upgrade-ai-4.1.1-shell-4.2.0.md).
+- **Actualización de esta rama:** `agy 1.4.2` observado en checks estructurales aislados y en una instalación real bajo `HOME` aislado; no se ejecutaron modelos AGY ni una instalación real de Pi. [Evidencia y límites](11-upgrade-ai-4.2.0-shell-4.3.0.md).
 - **Entorno Go:** El proyecto declara compatibilidad base con Go `1.25.10` ([go.mod, líneas 1–3](../../go.mod#L1-L3)) y fue validado con cadenas de herramientas Go 1.25+.
 
 > [!NOTE]
