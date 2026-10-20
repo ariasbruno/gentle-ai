@@ -105,6 +105,7 @@ Dado que `agy` no ejecuta el runtime TypeScript de Pi ni sus extensiones propiet
 | Operaciones CodeGraph built-in | Servidor MCP `gentle-ai_codegraph` | CodeGraph se expone como servidor MCP estándar vía stdio |
 | Rutas canónicas de Pi (`.pi/`) | Rutas de plugin (`.agents/` o `.gemini/`) | Ajuste automático al destino seleccionado (global o workspace) |
 | `name` de skill con namespace (`gentle-ai-<carpeta>`) | `name` igual a la carpeta que emite la fuente | El loader de plugins de `agy` exige que el `name` de una skill coincida con su carpeta, y `agy plugin validate --strict` rechaza el plugin cuando no coincide |
+| Protocolo ODD (7 pasos) ausente del canon | Regla propia `rules/gentle-ai-routing.md` con sólo el protocolo | El canon no lo lleva (0 ocurrencias en `assets/` de Shell): es contrato de runtime, y la redacción de Pi describe el harness de Shell —el `todo` visible, el label de fase, los Mechanisms— que agy no tiene. Exclusión aceptada por runtime, documentada en [08-decisions.md §10](08-decisions.md) |
 
 El renombrado ocurre al final de la transpilación, en [`normalizeEmittedSkillNames`](../../scripts/transpile-antigravitycli/main.go#L810-L874), y arrastra **toda** referencia al nombre viejo dentro del árbol generado (frontmatter, tabla de skills y referencias en el cuerpo), de modo que el plugin nunca nombre una skill que no embarque con ese nombre. La identidad resultante es la que el resto del ecosistema ya usa para las mismas skills: `internal/assets/skills/chained-pr/SKILL.md` declara `name: chained-pr`.
 

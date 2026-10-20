@@ -144,6 +144,43 @@ Tres guards de assets por runtime lo excluyen de forma nombrada y explicada, no 
 
 **Límite no medido:** no se probó una instalación cruzada (instalar una entrada, desinstalar la otra y medir el árbol resultante). Queda anotado en la misma línea que el resto de esta página: no se afirma paridad ni aislamiento entre ambas.
 
+## 10. El protocolo ODD no viene del canon: exclusión aceptada por runtime
+
+**Decisión ratificada por el usuario** en la remediación de canon-first: agy es canon-first para la doctrina de routing, y el protocolo ODD obligatorio —los siete pasos más la línea de recuperación— es la **única** pieza que el canon no carga, porque es un contrato de runtime y no texto de doctrina. La exclusión está aceptada y es explícita, no accidental.
+
+**Mapa verificado por grep sobre el pin `d5d692a6`:**
+
+| Pieza | Dónde vive | ¿Lleva el protocolo ODD? |
+|---|---|---|
+| Canon de Shell (escalera de routing, delegación, TDD, RDD, feature-doc) | `gentle-shell/assets/` → transpilado a `internal/assets/antigravitycli/` | **No**: 0 ocurrencias en todo `assets/` |
+| Protocolo ODD de Pi | `gentle-shell/extensions/gentle-ai.ts:1336` (`ODD_PROTOCOL_HEADING`) y `:1462` (la inyección en vivo); desde 4.2.0 espejado del bundle del contrato (`routing/pi.md`, `:1355`) | **Sí** |
+| Protocolo ODD del resto de runtimes | El renderer del binario, [`writeODDWorkflowProtocol`](../../internal/components/agentguidance/routing.go#L50) | **Sí** |
+| Regla slim de agy | `rules/gentle-ai-routing.md`, escrita por [`injectAntigravityCLIRule`](../../internal/components/agentguidance/inject.go#L351) sobre la ruta canónica de [`inject.go`](../../internal/components/agentguidance/inject.go#L285) | **Sí**, y sólo eso |
+
+**Por qué agy no puede recibir el ODD de Pi.** El bloque que upstream 4.2.0 añadió como `piODDSteps` ([`routing.go`](../../internal/components/agentguidance/routing.go#L23), commit `ef7ff753e`) no es la redacción genérica: es la que describe el harness de Shell. Nombra el `todo` visible que el harness proyecta (*"then create or rebuild the visible `todo` list"*), el label de fase que el harness infiere de la actividad de la sesión (*"the Gentle Shell prompt label is inferred automatically from the primary session's tool activity"*) y, según el propio mensaje de upstream, el enrutado por los *Mechanisms* del orquestador, el cierre del paso 7 y los punteros a assets. **En agy nada de eso existe**: no hay `todo` proyectado, ni label de fase, ni Mechanisms, ni punteros a assets del harness. Entregar ese texto a agy sería ordenarle al agente que ejecute cosas que no puede, y el modelo obedecería con fictionalidad. Por eso el renderer entrega a agy la redacción genérica y la de Pi queda detrás de `if agent == model.AgentPi`.
+
+**Efecto operativo:** el bundle de agy entrega trece reglas, todas del canon salvo una: `gentle-ai-routing.md` (6,9 KB) lleva exactamente el protocolo. Presupuesto always-on: AGENTS.md 17,4 KB + orchestrator 22,5 KB + slim ~4 KB ≈ 44 KB.
+
+### Frente a darle a agy el ODD de Pi
+
+**Beneficio inferido:** una sola redacción del protocolo en todo el ecosistema, y el texto de Pi y el de agy no pueden divergir porque salen del mismo binario.
+
+**Coste observable:** el texto de Pi describe capacidades del harness de Shell que agy no tiene; el agente en agy recibiría instrucciones sobre un `todo` visible y un label de fase que nadie produce.
+
+### Frente a meter el protocolo dentro del canon
+
+**Beneficio inferido:** agy lo recibiría sin regla propia y el bundle no tendría una pieza que no viene de Shell.
+
+**Coste observable:** el canon es doctrina compartida por runtime y el protocolo es contrato de runtime: el propio upstream lo mantiene fuera de los assets y lo espeja desde el bundle del contrato. Meterlo en el canon convertiría una exclusión declarada en una convención silenciosa, y `gentle-shell` sigue siendo la fuente de la que el bundle se transpila byte a byte.
+
+### Frente a duplicar el protocolo en el canon y en la regla slim
+
+**Beneficio inferido:** ninguna de las dos fuentes depende de la otra.
+
+**Coste observable:** dos redacciones del mismo procedimiento que divergen con el próximo cambio del canon, y el bundle deja de ser una transcripción fiel de Shell.
+
+**Quién lo fija:** el contrato protocol-only de agy está pineado por [`TestInjectRoutingAntigravityCLIWritesProtocolOnlyRule`](../../internal/components/agentguidance/inject_test.go#L1003) y [`TestInstallAndSyncKeepAntigravityCLIRoutingGuidanceRoutingOnly`](../../internal/cli/orchestrator_install_test.go#L202), y la frontera desplegada por [`assertAntigravityCanonicalRouting`](../../internal/components/agentguidance/routing_test.go#L1123), que despliega el plugin y verifica las obligaciones reales en `rules/`. La decisión de diseño, con su mapa verificado, está en [`odd/tasks/agy-canon-first-routing.md`](../../odd/tasks/agy-canon-first-routing.md).
+
 ## Decisiones no resueltas por esta documentación
 
 | Límite | Qué falta para resolverlo | Qué no se hizo |
