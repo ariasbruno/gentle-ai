@@ -1,4 +1,4 @@
-# Incremental update: AI 4.2.0 / Shell 4.3.0 / AGY 1.4.3
+# Incremental update: AI 4.2.0 / Shell 4.3.0 / AGY 1.4.4
 
 Status: implemented, verified and recorded locally within the scope below. The global suite is not green — five packages fail, and they fail identically on the accepted baseline — and authenticated AGY model behavior is not certified. This update preserves the accepted AGY integration; no historical fork reconstruction and no upstream PR.
 
@@ -11,12 +11,14 @@ Status: implemented, verified and recorded locally within the scope below. The g
 | AI v4.2.0 | `4acaf4241beae1e0c977c92dfe406a270f8d40de` (peeled release tag; `gh release list` agrees) |
 | Prior Shell provenance | `c41ebd591358d393cf19c5ead981f67640a600ba` |
 | Shell v4.3.0 | `d5d692a6888da9e9844e7e443ee30991fa4b9d14` |
-| Validation runtime | `agy --version`: exit 0, stdout `1.4.3\n`. The target at update time was `1.4.2`; the installed runtime moved to `1.4.3` on 2026-10-20 and every check below was re-run against it |
+| Validation runtime | `agy --version`: exit 0, stdout `1.4.4\n`. The target at update time was `1.4.2`; the installed runtime moved to `1.4.3` on 2026-10-20 and to `1.4.4` on 2026-10-21, and the structural checks named below were re-run against `1.4.4` |
 | Update branch | `agy/ai-v4.2.0_shell-v4.3.0` |
 
 The AGY release source had never been named in this repository: it is `google-antigravity/antigravity-cli`, read with `gh release list --repo google-antigravity/antigravity-cli`, with the changelog in `CHANGELOG.md` on `main` and `agy changelog` in the CLI. Previous validation runtime version was `1.3.4`, three minor releases behind the target. The installed Gentle Shell ships its own pinned `gentle-ai` (`INSTALLER_VERSION = "4.2.0"`, `scripts/gentle-ai-installer.mjs:40`) and runs it unless `GENTLE_SHELL_GENTLE_AI_BIN` overrides it; that override is explicitly deferred for this update.
 
 The `1.4.3` delta is the one the validator needed: `agy plugin validate` now also checks a plugin's hooks, sidecars and component lists, so strict validation covers `hooks.json` and the component counts instead of stopping at skills, subagents and rules. Two further entries touch this integration: subagents and custom agents in Auto mode no longer ask for approval on every command that would leave the terminal sandbox, and the agent keeps track of its most recently started subagents after a conversation is compacted. Under `1.4.3` the deployed plugin validates with zero findings.
+
+The `1.4.4` delta tightens the validator a second time and is the version this report now declares. `agy plugin validate` checks `plugin.json`, MCP server configs, `hooks.json` and sidecar manifests for invalid JSON syntax, unknown fields, bad variable placeholders, unrecognized hook tool matchers and missing hook scripts. Three entries matter for this integration: plugin-bundled subagents no longer lose plugins inherited from the parent session and no longer fail with `mcp spec not found for provider` when `plugins.inherit_user: false` restricts their MCP tools; rules and `SKILL.md` skills discovered from both a standalone customization folder and an enabled plugin no longer load twice; and MCP `tools/call` requests now receive `_meta["antigravity.google/root_conversation_id"]`, which this integration does not read. Releases are read from `google-antigravity/antigravity-cli`: `gh release list` reports `1.4.4` published on 2026-10-21T06:38:01Z, and `agy changelog` prints the same entries. Under `1.4.4` the deployed plugin validates with zero findings (`components`: 10 agents, 1 hook, 3 MCP servers, 13 rules, 0 sidecars, 12 skills), `TestInstalledPluginPassesAGYStrictValidation` passes and `TestAGYStrictValidationDetectsOversizedRule` still proves the 24.000-byte cap is enforced rather than assumed.
 
 ## Baseline evidence
 
