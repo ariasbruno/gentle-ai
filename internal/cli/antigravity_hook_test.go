@@ -731,6 +731,96 @@ func TestAntigravityPreToolUseDeniesSensitiveFilePaths(t *testing.T) {
 	}
 }
 
+// TestAntigravityStopStaysSilentForAMediumCandidate pins the same policy the
+// Claude stop hook and Gentle Shell apply: only a review_due candidate earns a
+// reminder, so a medium candidate closes with a neutral {} even with RDD
+// enabled and START offered.
+func TestAntigravityStopStaysSilentForAMediumCandidate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the review fixture uses POSIX git")
+	}
+	home := reviewModeHome(t)
+	repo := initReviewCLIRepo(t)
+	// A repository that already ignores .atl keeps PreInvocation from creating
+	// an untracked .gitignore, so the candidate is assessable. An unassessable
+	// candidate stays review_due by design and still blocks.
+	if err := os.WriteFile(filepath.Join(repo, ".gitignore"), []byte(".atl\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runReviewCLIGit(t, repo, "add", ".gitignore")
+	runReviewCLIGit(t, repo, "commit", "-qm", "ignore atl")
+	enableReviewStopHookRDD(t, repo)
+	convID := "conv-stop-medium"
+
+	var stdout bytes.Buffer
+	prePayload := fmtAntigravityHookPayload(convID, []string{repo}, 0, "")
+	if err := RunAntigravityCLIHook("PreInvocation", "antigravity-cli", strings.NewReader(prePayload), &stdout, repo); err != nil {
+		t.Fatalf("PreInvocation error: %v", err)
+	}
+	// Stage after the baseline: the candidate must be newer than the session.
+	if err := os.WriteFile(filepath.Join(repo, "tracked.txt"), []byte("changed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stdout.Reset()
+	stopPayload := fmtAntigravityStopPayload(convID, []string{repo}, 5, "model_stop", true)
+	if err := RunAntigravityCLIHook("Stop", "antigravity-cli", strings.NewReader(stopPayload), &stdout, repo); err != nil {
+		t.Fatalf("Stop error: %v", err)
+	}
+	if raw := strings.TrimSpace(stdout.String()); raw != "{}" {
+		t.Fatalf("Stop reminded about a medium candidate: %s", raw)
+	}
+
+	recordRaw, err := os.ReadFile(filepath.Join(home, ".gentle-ai", "review-stop-hook", "v1", convID+".json"))
+	if err != nil {
+		t.Fatalf("read record: %v", err)
+	}
+	var record struct {
+		TargetIdentity string `json:"target_identity"`
+	}
+	if err := json.Unmarshal(recordRaw, &record); err != nil {
+		t.Fatalf("decode record: %v", err)
+	}
+	if record.TargetIdentity != "" {
+		t.Fatalf("Stop recorded a reminder for a medium candidate: %q", recordRaw)
+	}
+}
+
+// TestAntigravityStopBlocksOnAnUnassessableCandidate pins the fail-closed
+// edge of the risk gate: when the candidate cannot be assessed (here, the
+// untracked .gitignore PreInvocation creates in a repository without one),
+// review assess reports review_due so the hook keeps reminding. The hook never
+// chooses --untracked-scope on the operator's behalf.
+func TestAntigravityStopBlocksOnAnUnassessableCandidate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the review fixture uses POSIX git")
+	}
+	reviewModeHome(t)
+	repo := initReviewCLIRepo(t)
+	enableReviewStopHookRDD(t, repo)
+	convID := "conv-stop-unassessable"
+
+	var stdout bytes.Buffer
+	prePayload := fmtAntigravityHookPayload(convID, []string{repo}, 0, "")
+	if err := RunAntigravityCLIHook("PreInvocation", "antigravity-cli", strings.NewReader(prePayload), &stdout, repo); err != nil {
+		t.Fatalf("PreInvocation error: %v", err)
+	}
+	// The fixture has no .gitignore, so PreInvocation created an untracked one.
+	if _, err := os.Stat(filepath.Join(repo, ".gitignore")); err != nil {
+		t.Fatalf("expected PreInvocation to create .gitignore: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "tracked.txt"), []byte("changed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stdout.Reset()
+	stopPayload := fmtAntigravityStopPayload(convID, []string{repo}, 5, "model_stop", true)
+	if err := RunAntigravityCLIHook("Stop", "antigravity-cli", strings.NewReader(stopPayload), &stdout, repo); err != nil {
+		t.Fatalf("Stop error: %v", err)
+	}
+	if !strings.Contains(stdout.String(), `"decision":"continue"`) {
+		t.Fatalf("Stop closed on an unassessable candidate: %s", stdout.String())
+	}
+}
+
 // TestAntigravityStopBlocksUntilConsumed pins the consumed-check: after the
 // first reminder, the Stop keeps blocking the same unreviewed candidate
 // instead of de-silencing on the second attempt. Only a target that
@@ -752,9 +842,9 @@ func TestAntigravityStopBlocksUntilConsumed(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			reviewModeHome(t)
 			repo := initReviewCLIRepo(t)
-			if err := os.WriteFile(filepath.Join(repo, "tracked.txt"), []byte("change\n"), 0o644); err != nil {
-				t.Fatal(err)
-			}
+			// A due candidate: only high risk blocks now, so the consumed-check
+			// is exercised on the same shape the policy reminds about.
+			stageReviewStopHookCandidate(t, repo)
 			blocked := 0
 			convID := fmt.Sprintf("conv-stop-consumed-%d", 0)
 			for i := 0; i < tc.stopCount; i++ {
@@ -787,31 +877,28 @@ func TestAntigravityStopSurfacesPreflightFailure(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(repo, "tracked.txt"), []byte("change\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// Break the review status pipeline by making the review-mode file
-	// unreadable so readGlobalRDDMode fails.
-	modeDir := filepath.Join(os.Getenv("HOME"), ".gentle-ai")
-	if err := os.MkdirAll(modeDir, 0o755); err != nil {
+	// Break the review status pipeline by making the install state undecodable,
+	// so readGlobalRDDMode fails and the preflight cannot resolve.
+	statePath := filepath.Join(os.Getenv("HOME"), ".gentle-ai", "state.json")
+	if err := os.MkdirAll(filepath.Dir(statePath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	modeFile := filepath.Join(modeDir, "review-mode")
-	if err := os.WriteFile(modeFile, []byte("corrupt"), 0o000); err != nil {
-		t.Skipf("cannot write review mode file: %v", err)
+	if err := os.WriteFile(statePath, []byte("{"), 0o644); err != nil {
+		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(modeFile, 0o644) })
 
 	payload := fmtAntigravityStopPayload("conv-stop-silence-test", []string{repo}, 0, "model_stop", true)
 	var stdout bytes.Buffer
 	if err := RunAntigravityCLIHook("Stop", "antigravity-cli", strings.NewReader(payload), &stdout, repo); err != nil {
 		t.Fatalf("RunAntigravityCLIHook: %v", err)
 	}
-	out := stdout.String()
-	if strings.Contains(out, "could not resolve") || strings.Contains(out, "review status") {
-		return // surfaced the pipeline failure
+	var out AntigravityCLIHookOutput
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &out); err != nil {
+		t.Fatalf("decode Stop output %q: %v", stdout.String(), err)
 	}
-	if strings.TrimSpace(out) == "{}" {
-		t.Fatalf("Stop emitted a mute {} for a pipeline failure; want a continue naming the error: %q", out)
+	if out.Decision != "continue" || !strings.Contains(out.Reason, "could not resolve") {
+		t.Fatalf("Stop = %+v, want a continue naming the preflight failure", out)
 	}
-	t.Fatalf("unexpected output: %q", out)
 }
 
 // layer of the guard: shell command lines referencing sensitive paths

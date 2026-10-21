@@ -330,6 +330,16 @@ func handleAntigravityStop(payload AntigravityCLIHookPayload, workspace, agent s
 		}
 	}
 
+	// Only a review_due candidate earns a reminder, by the same in-process
+	// assessment `review assess` publishes: a passive or medium candidate
+	// closes with a neutral {} even while STATUS still reports an unreviewed
+	// candidate. An assessment that cannot answer fails closed to due, so the
+	// reminder is never lost to an assessment error.
+	if !reviewStopHookReviewDue(root, agent) {
+		_, _ = fmt.Fprintln(stdout, "{}")
+		return nil
+	}
+
 	out := AntigravityCLIHookOutput{
 		Decision: "continue",
 	}

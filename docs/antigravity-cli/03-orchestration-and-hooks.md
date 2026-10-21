@@ -90,7 +90,7 @@ El plugin registra cinco eventos. No registra `SessionStart`. La página oficial
 | `PreToolUse` | 10 s | `handleAntigravityPreToolUse` | Delegación, circuit breaker y guard de rutas sensibles; allow/deny |
 | `PostToolUse` | 10 s | `handleAntigravityPostToolUse` | No-op portable: `{}` |
 | `PostInvocation` | 30 s | `handleAntigravityPostInvocation` | No-op portable: `{}` |
-| `Stop` | 60 s | `handleAntigravityStop` | Solo stop idle/model: bloquea el cierre ante revisión pendiente |
+| `Stop` | 60 s | `handleAntigravityStop` | Solo stop idle/model: bloquea el cierre ante un candidato `review_due` |
 
 Definición: [`antigravityCLIPluginHooksJSON`](../../internal/agents/antigravitycli/adapter.go#L407-L470); dispatch y handlers: [antigravity_hook.go, líneas 88–172](../../internal/cli/antigravity_hook.go#L88-L172), [Stop](../../internal/cli/antigravity_hook.go#L212-L282). Timeouts son configuración solicitada al cliente, no medición de ejecución.
 
@@ -153,17 +153,21 @@ Cuando inicia una nueva interacción (`InvocationNum == 0`), el hook ejecuta tar
 - Asegura la exclusión de metadatos de sincronización (`.atl`).
 - Registra el punto base (baseline) del repositorio si RDD está activo.
 
-## `Stop`: cierre bloqueado ante revisión pendiente
+## `Stop`: cierre bloqueado ante un candidato de alto riesgo
 
-Si el modelo finaliza su turno (`model_stop`) y el sistema queda desocupado (`fullyIdle == true`), el hook comprueba si existen cambios de código sin revisar:
-- Si detecta cambios pendientes en un repositorio con RDD activo, emite `decision: "continue"`. Según el contrato oficial de hooks, `continue` **impide que el agente termine y lo reinserta en el loop de ejecución**, con el `reason` inyectado como mensaje de sistema — es un bloqueo del cierre, no un recordatorio decorativo:
+Si el modelo finaliza su turno (`model_stop`) y el sistema queda desocupado (`fullyIdle == true`), el hook comprueba si existe un candidato sin revisar **y** si ese candidato es `review_due`:
+- Resuelve el target y exige `Action=start` (cambios trackeados sin revisar). No exige un `NextTransition` ejecutable: archivos no trackeados pueden dejar el estado en `collect` aunque exista un candidato válido.
+- Consulta la misma evaluación in-process que publica `review assess` (`reviewStopHookReviewDue`). Un candidato pasivo o medio (`review_due == false`) cierra con `{}`. Una evaluación que no puede responder **falla cerrada a due**, así el recordatorio no se pierde por un error de assess; un candidato inassessable (por ejemplo, archivos no trackeados sin declarar) también queda `review_due`, porque el hook no elige `--untracked-scope` por el operador.
+- De-silencia en dos casos acotados: el candidato es el baseline registrado en la primera invocación (anterior a la sesión) o el operador rechazó el consentimiento hace menos de 15 minutos.
+- Si corresponde, emite `decision: "continue"`. Según el contrato oficial de hooks, `continue` **impide que el agente termine y lo reinserta en el loop de ejecución**, con el `reason` inyectado como mensaje de sistema — es un bloqueo del cierre, no un recordatorio decorativo:
   ```json
   {
     "decision": "continue",
-    "reason": "Receipt-Driven Development: unreviewed candidate changes detected since session baseline. Please run gentle-ai review status preflight before completing."
+    "reason": "Receipt-Driven Development: unreviewed candidate changes detected since session baseline (target sha256:…). Run the STATUS preflight: … Then run the provider-issued START unchanged: …. This Stop keeps blocking until the review is consumed."
   }
   ```
-- Si no hay cambios nuevos o la revisión ya fue abordada (baseline comparable o record previo del mismo target), emite `{}` permitiendo que la sesión cierre con normalidad.
+- El recordatorio **no** de-silencia por sí mismo: el mismo candidato sigue bloqueando hasta que el estado avance (consumed-check), para que ignorar el primer aviso no alcance para cerrar. `agy` corta el bloqueo tras un número configurable de continuaciones consecutivas.
+- Sin candidato, sin RDD activo o sin repositorio, emite `{}` y la sesión cierra con normalidad.
 
 ## Política de seguridad y respuestas de los hooks
 
@@ -178,7 +182,8 @@ Los hooks de Gentle AI operan con un enfoque de seguridad estricto (*fail-closed
 | 3 llamadas consecutivas idénticas (Circuit Breaker) | `deny` | Interrumpe bucles infinitos repetitivos del modelo |
 | Ejecución normal de herramientas | `{}` o `allow` | Permite la ejecución de la herramienta por parte de `agy` |
 | Eventos posteriores (`PostToolUse`, `PostInvocation`) | `{}` | No bloqueantes, no interfieren con la respuesta del agente |
-| Cierre con cambios pendientes de revisión | `continue` | Bloquea el cierre: el loop continúa con el reason inyectado como mensaje de sistema; un record previo del mismo target de-silencia la repetición (dedup), sin certificar revisión completada |
+| Cierre con un candidato `review_due` | `continue` | Bloquea el cierre: el loop continúa con el reason inyectado como mensaje de sistema. El recordatorio no de-silencia por sí mismo: el mismo candidato sigue bloqueando hasta que el estado avance (consumed-check) |
+| Cierre con un candidato pasivo o medio | `{}` | No es `review_due`: la sesión cierra sin recordatorio |
 | Cierre estándar sin pendientes | `{}` | Permite el cierre normal de la interacción |
 
 **Campos opcionales del envelope de respuesta:** el tipo `AntigravityCLIHookOutput` declara además `injectSteps` (array) y `terminationBehavior` (string), con sus nombres JSON fijados por un test de serialización: [`antigravity_hook_test.go`](../../internal/cli/antigravity_hook_test.go#L546-L563). **Ningún handler los emite hoy**: la integración responde únicamente `{}`, `decision` o `reason`. Que el tipo los declare y que el test fije su serialización no prueba que `agy` los interprete ni que exista un comportamiento de terminación asociado.
