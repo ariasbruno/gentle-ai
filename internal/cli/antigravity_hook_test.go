@@ -1001,6 +1001,100 @@ func TestAntigravityStopStaysQuietWhenTheCandidateIsOnlyCommitted(t *testing.T) 
 	}
 }
 
+// TestAntigravityStopNamesTheCommittedRangeCandidate pins the reason text of
+// the committed-range case: the candidate is the committed range, the
+// worktree has no pending changes, and the review needs a base ref. Telling
+// the model that unreviewed changes were detected sends it after a worktree
+// diff that does not exist.
+func TestAntigravityStopNamesTheCommittedRangeCandidate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the review fixture uses POSIX git")
+	}
+	reviewModeHome(t)
+	repo := initReviewCLIRepo(t)
+	if err := os.WriteFile(filepath.Join(repo, ".gitignore"), []byte(".atl\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runReviewCLIGit(t, repo, "add", ".gitignore")
+	runReviewCLIGit(t, repo, "commit", "-qm", "ignore atl")
+	enableReviewStopHookRDD(t, repo)
+	convID := "conv-stop-committed-range"
+
+	var stdout bytes.Buffer
+	prePayload := fmtAntigravityHookPayload(convID, []string{repo}, 0, "")
+	if err := RunAntigravityCLIHook("PreInvocation", "antigravity-cli", strings.NewReader(prePayload), &stdout, repo); err != nil {
+		t.Fatalf("PreInvocation error: %v", err)
+	}
+	// The model commits its work: the worktree is clean again and the
+	// candidate is the committed range that grew.
+	if err := os.WriteFile(filepath.Join(repo, "tracked.txt"), []byte("committed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runReviewCLIGit(t, repo, "add", "-A")
+	runReviewCLIGit(t, repo, "commit", "-qm", "work")
+	stdout.Reset()
+	stopPayload := fmtAntigravityStopPayload(convID, []string{repo}, 5, "model_stop", true)
+	if err := RunAntigravityCLIHook("Stop", "antigravity-cli", strings.NewReader(stopPayload), &stdout, repo); err != nil {
+		t.Fatalf("Stop error: %v", err)
+	}
+	var out AntigravityCLIHookOutput
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &out); err != nil {
+		t.Fatalf("decode Stop output %q: %v", stdout.String(), err)
+	}
+	if out.Decision != "continue" {
+		t.Fatalf("Stop did not block on an unreviewed committed range: %+v", out)
+	}
+	if !strings.Contains(out.Reason, "committed") {
+		t.Fatalf("Stop did not name the committed range: %s", out.Reason)
+	}
+	if strings.Contains(out.Reason, "unreviewed candidate changes detected") {
+		t.Fatalf("Stop claimed unreviewed changes with a clean worktree: %s", out.Reason)
+	}
+}
+
+// TestAntigravityStopReasonReflectsReceiptSettlement pins that the reason
+// stops promising a block the receipt no longer delivers: once a session
+// write is attributed to the ledger, the reminder settles with the content.
+func TestAntigravityStopReasonReflectsReceiptSettlement(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the review fixture uses POSIX git")
+	}
+	reviewModeHome(t)
+	repo := initReviewCLIRepo(t)
+	if err := os.WriteFile(filepath.Join(repo, ".gitignore"), []byte(".atl\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runReviewCLIGit(t, repo, "add", ".gitignore")
+	runReviewCLIGit(t, repo, "commit", "-qm", "ignore atl")
+	enableReviewStopHookRDD(t, repo)
+	convID := "conv-stop-reason"
+
+	var stdout bytes.Buffer
+	prePayload := fmtAntigravityHookPayload(convID, []string{repo}, 0, "")
+	if err := RunAntigravityCLIHook("PreInvocation", "antigravity-cli", strings.NewReader(prePayload), &stdout, repo); err != nil {
+		t.Fatalf("PreInvocation error: %v", err)
+	}
+
+	recordAntigravitySessionWrite(t, convID, repo, filepath.Join(repo, "service-token.ts"))
+	stageReviewStopHookCandidate(t, repo)
+
+	stdout.Reset()
+	stopPayload := fmtAntigravityStopPayload(convID, []string{repo}, 5, "model_stop", true)
+	if err := RunAntigravityCLIHook("Stop", "antigravity-cli", strings.NewReader(stopPayload), &stdout, repo); err != nil {
+		t.Fatalf("Stop error: %v", err)
+	}
+	var out AntigravityCLIHookOutput
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &out); err != nil {
+		t.Fatalf("decode Stop output %q: %v", stdout.String(), err)
+	}
+	if strings.Contains(out.Reason, "keeps blocking until the review is consumed") {
+		t.Fatalf("Stop promised a block its receipt no longer delivers: %s", out.Reason)
+	}
+	if !strings.Contains(out.Reason, "content generation") {
+		t.Fatalf("Stop did not describe the receipt settlement: %s", out.Reason)
+	}
+}
+
 // recordAntigravitySessionWrite simulates a completed write_to_file call, the
 // PostToolUse observation the per-conversation mutation ledger records.
 func recordAntigravitySessionWrite(t *testing.T, convID, repo, path string) {

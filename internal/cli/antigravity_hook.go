@@ -177,6 +177,39 @@ func recordAntigravityCLIMutation(home, conversationID, toolName, path string) {
 	_, _ = file.Write(append(encoded, '\n'))
 }
 
+// antigravityStopCandidateKind names what the candidate behind a Stop really
+// is, so the reminder tells the model what it is looking at instead of
+// claiming unreviewed changes when the worktree has none.
+type antigravityStopCandidateKind int
+
+const (
+	// antigravityStopCandidateChanges is a candidate with pending changes to
+	// review.
+	antigravityStopCandidateChanges antigravityStopCandidateKind = iota
+	// antigravityStopCandidateCommittedRange is the committed range: the
+	// worktree has no pending changes and the review needs a base ref.
+	antigravityStopCandidateCommittedRange
+	// antigravityStopCandidateUntrackedSelection is a candidate whose review
+	// is waiting for the untracked selection to be declared.
+	antigravityStopCandidateUntrackedSelection
+)
+
+// antigravityStopCandidateOf classifies the candidate from the STATUS
+// transition the hook already resolved.
+func antigravityStopCandidateOf(status ReviewTargetStatusResult) antigravityStopCandidateKind {
+	if status.NextTransition == nil {
+		return antigravityStopCandidateChanges
+	}
+	switch status.NextTransition.ReasonCode {
+	case "empty_candidate_base_ref_required":
+		return antigravityStopCandidateCommittedRange
+	case "intended_untracked_selection_required":
+		return antigravityStopCandidateUntrackedSelection
+	default:
+		return antigravityStopCandidateChanges
+	}
+}
+
 // antigravityCLIMutationLedgerState returns the state of the conversation's
 // mutation ledger for one repository root: how many entries the ledger holds
 // in total, how many of them were written under root, and how many of those
@@ -449,12 +482,24 @@ func handleAntigravityStop(payload AntigravityCLIHookPayload, workspace, agent s
 	// the Claude stop hook's reason text so AGY models get the same actionable
 	// detail instead of a generic "run preflight" that they may not act on.
 	statusCommand := fmt.Sprintf("gentle-ai review status --cwd %s --contract %s --agent %s --next-transition", root, ReviewIntegrationContractV2, agent)
-	reason := "Receipt-Driven Development: unreviewed candidate changes detected since session baseline (target " + targetIdentity + ")."
+	reason := "Receipt-Driven Development: "
+	switch antigravityStopCandidateOf(status) {
+	case antigravityStopCandidateCommittedRange:
+		reason += "unreviewed committed work detected since session baseline (target " + targetIdentity + "). The worktree has no pending changes: the candidate is the committed range, and the review needs a base ref to compare against."
+	case antigravityStopCandidateUntrackedSelection:
+		reason += "unreviewed candidate changes detected since session baseline (target " + targetIdentity + "). Some files are not trackable yet: the review needs the untracked selection to be declared."
+	default:
+		reason += "unreviewed candidate changes detected since session baseline (target " + targetIdentity + ")."
+	}
 	reason += " Run the STATUS preflight: " + statusCommand
 	if status.NextTransition != nil && status.NextTransition.Execute != nil && status.NextTransition.Execute.Command != "" {
 		reason += ". Then run the provider-issued START unchanged: " + status.NextTransition.Execute.Command
 	}
-	reason += ". This Stop keeps blocking until the review is consumed."
+	if ledgerTracked && ledgerUnderRoot > 0 {
+		reason += ". This Stop reminds once per content generation: it stays quiet while the candidate's content does not change."
+	} else {
+		reason += ". This Stop keeps blocking until the review is consumed."
+	}
 	out.Reason = reason
 	enc, _ := json.Marshal(out)
 	_, _ = fmt.Fprintln(stdout, string(enc))

@@ -159,13 +159,19 @@ Si el modelo finaliza su turno (`model_stop`) y el sistema queda desocupado (`fu
 - Resuelve el target y exige `Action=start` (cambios trackeados sin revisar). No exige un `NextTransition` ejecutable: archivos no trackeados pueden dejar el estado en `collect` aunque exista un candidato válido.
 - Consulta la misma evaluación in-process que publica `review assess` (`reviewStopHookReviewDue`). Un candidato pasivo o medio (`review_due == false`) cierra con `{}`. Una evaluación que no puede responder **falla cerrada a due**, así el recordatorio no se pierde por un error de assess; un candidato inassessable (por ejemplo, archivos no trackeados sin declarar) también queda `review_due`, porque el hook no elige `--untracked-scope` por el operador.
 - De-silencia en dos casos acotados: el candidato es el baseline registrado en la primera invocación (anterior a la sesión) o el operador rechazó el consentimiento hace menos de 15 minutos.
-- Si corresponde, emite `decision: "continue"`. Según el contrato oficial de hooks, `continue` **impide que el agente termine y lo reinserta en el loop de ejecución**, con el `reason` inyectado como mensaje de sistema — es un bloqueo del cierre, no un recordatorio decorativo:
+- Si corresponde, emite `decision: "continue"`. Según el contrato oficial de hooks, `continue` **impide que el agente termine y lo reinserta en el loop de ejecución**, con el `reason` inyectado como mensaje de sistema — es un bloqueo del cierre, no un recordatorio decorativo. El `reason` nombra lo que el candidato **es**, según el `reason_code` de la transición que el hook ya resolvió:
+  | `reason_code` | Candidato | Qué dice el `reason` |
+  |---|---|---|
+  | `fresh_target_ready` | cambios pendientes | "unreviewed candidate changes detected since session baseline" |
+  | `empty_candidate_base_ref_required` | rango commiteado (el worktree no tiene cambios pendientes) | "unreviewed committed work detected … the review needs a base ref to compare against" |
+  | `intended_untracked_selection_required` | cambios pendientes + archivos sin trackear sin declarar | "unreviewed candidate changes detected … the review needs the untracked selection to be declared" |
   ```json
   {
     "decision": "continue",
-    "reason": "Receipt-Driven Development: unreviewed candidate changes detected since session baseline (target sha256:…). Run the STATUS preflight: … Then run the provider-issued START unchanged: …. This Stop keeps blocking until the review is consumed."
+    "reason": "Receipt-Driven Development: unreviewed candidate changes detected since session baseline (target sha256:…). Run the STATUS preflight: … Then run the provider-issued START unchanged: …. This Stop reminds once per content generation: it stays quiet while the candidate's content does not change."
   }
   ```
+  La cola del `reason` sigue la política: si el recibo puede liquidar la generación, dice que el Stop calla mientras el contenido no cambie; si el ledger no puede atribuir el candidato, dice que el Stop sigue bloqueando hasta que la revisión se consuma.
 - El recordatorio se consume como un recibo, igual que en Gentle Shell: `PostToolUse` registra cada escritura completada en el ledger de la sesión (`~/.gentle-ai/antigravity-mutations/v1/`), y el recordatorio liquida el prefijo que cubrió. Una escritura posterior gana su propio recordatorio.
 - El recibo liquida además el **contenido** del candidato (`projection.current_candidate_tree`, la huella del árbol del workspace): es estable al commitear y cambia en cuanto cambia el contenido de cualquier archivo. Hace falta porque un subagente corre en su propia conversación y sus escrituras nunca entran al ledger del padre — sin esa huella, un recordatorio podría liquidarse sobre trabajo que nadie revisó.
 - Cuando el ledger **no puede atribuir** el candidato (la sesión no registró escrituras bajo ese repositorio, o usó una herramienta que el ledger no observa), el recordatorio **no** se consume: el mismo candidato sigue bloqueando hasta que el estado avance (consumed-check), para que ignorar el primer aviso no alcance para cerrar. `agy` corta el bloqueo tras un número configurable de continuaciones consecutivas.
