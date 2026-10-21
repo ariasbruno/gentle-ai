@@ -97,6 +97,27 @@ aprobación de candidato   ≠ permiso humano para commit/push
 
 No se ofrece una secuencia manual fija de comandos RDD en esta guía. El padre/controlador debe usar operaciones y bindings emitidos por el contrato nativo vigente; un ejemplo antiguo de START/CAPTURE no autoriza repetir tokens en otra transacción.
 
+### Transcripts de agy: qué archivo llega al hook
+
+El payload del hook entrega `transcriptPath`, y ese campo apunta al log **sin truncar** de la sesión:
+
+```text
+~/.gemini/antigravity-cli/brain/<conversationId>/.system_generated/logs/transcript_full.jsonl
+```
+
+El payload del statusline lleva otro campo, `transcript_path`, que en 1.4.4 apunta a `~/.gemini/antigravity/brain/<id>/...`: la raíz del producto IDE, no la del CLI. En una sesión de `agy` ese path no existe, y nuestro código no lo lee — sólo queda guardado en `~/.gentle-ai/statusline-last-payload.json`. No es una fuente válida de rutas.
+
+Los dos logs de la misma conversación no tienen la misma forma, y la diferencia rompe cualquier parser que asuma una sola:
+
+| Archivo | `tool_calls[].args.Subagents` | `truncated_fields` |
+| --- | --- | --- |
+| `transcript.jsonl` | string JSON, cortado a 2.048 caracteres | presente en los registros largos |
+| `transcript_full.jsonl` | array ya decodificado | ausente |
+
+Un parser que exija string funciona sobre el truncado y devuelve cero sobre el que realmente recibe el hook; uno que exija array falla al revés. La forma correcta de leer ese campo es aceptar las dos.
+
+El artefacto de una lente tampoco aparece en el transcript del padre, en ninguna de las dos formas. En este runtime la captura es en proceso (`CapturesInProcess`): el resultado entra por `review capture-result`, no como mensaje del padre. El transcript del padre sirve para ver los despachos —`invoke_subagent` con el `TypeName` del agente—, no para encontrar artefactos.
+
 ### Corrección acotada de salida del proveedor
 
 La capa compartida, no el adaptador, permite una re-invocación correctiva ante rechazo de admisión cuando el rol la considera retryable. Añade feedback exacto al prompt original, preserva rechazos fuera del authority store y respeta el presupuesto de contexto: [`reviewProviderCaptureRetry`](../../internal/cli/review_provider_correction.go#L143-L183).
