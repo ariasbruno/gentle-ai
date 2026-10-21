@@ -1,4 +1,4 @@
-# Incremental update: AI 4.2.0 / Shell 4.3.0 / AGY 1.4.2
+# Incremental update: AI 4.2.0 / Shell 4.3.0 / AGY 1.4.3
 
 Status: implemented, verified and recorded locally within the scope below. The global suite is not green — five packages fail, and they fail identically on the accepted baseline — and authenticated AGY model behavior is not certified. This update preserves the accepted AGY integration; no historical fork reconstruction and no upstream PR.
 
@@ -11,10 +11,12 @@ Status: implemented, verified and recorded locally within the scope below. The g
 | AI v4.2.0 | `4acaf4241beae1e0c977c92dfe406a270f8d40de` (peeled release tag; `gh release list` agrees) |
 | Prior Shell provenance | `c41ebd591358d393cf19c5ead981f67640a600ba` |
 | Shell v4.3.0 | `d5d692a6888da9e9844e7e443ee30991fa4b9d14` |
-| Validation runtime | `agy --version`: exit 0, stdout `1.4.2\n` |
+| Validation runtime | `agy --version`: exit 0, stdout `1.4.3\n`. The target at update time was `1.4.2`; the installed runtime moved to `1.4.3` on 2026-10-20 and every check below was re-run against it |
 | Update branch | `agy/ai-v4.2.0_shell-v4.3.0` |
 
 The AGY release source had never been named in this repository: it is `google-antigravity/antigravity-cli`, read with `gh release list --repo google-antigravity/antigravity-cli`, with the changelog in `CHANGELOG.md` on `main` and `agy changelog` in the CLI. Previous validation runtime version was `1.3.4`, three minor releases behind the target. The installed Gentle Shell ships its own pinned `gentle-ai` (`INSTALLER_VERSION = "4.2.0"`, `scripts/gentle-ai-installer.mjs:40`) and runs it unless `GENTLE_SHELL_GENTLE_AI_BIN` overrides it; that override is explicitly deferred for this update.
+
+The `1.4.3` delta is the one the validator needed: `agy plugin validate` now also checks a plugin's hooks, sidecars and component lists, so strict validation covers `hooks.json` and the component counts instead of stopping at skills, subagents and rules. Two further entries touch this integration: subagents and custom agents in Auto mode no longer ask for approval on every command that would leave the terminal sandbox, and the agent keeps track of its most recently started subagents after a conversation is compacted. Under `1.4.3` the deployed plugin validates with zero findings.
 
 ## Baseline evidence
 
