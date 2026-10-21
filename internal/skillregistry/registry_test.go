@@ -2,6 +2,7 @@ package skillregistry
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -9,6 +10,77 @@ import (
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/antigravity"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/trae"
 )
+
+// TestEnsureATLIgnoredLeavesNoFileInTheRepository pins that the registry
+// does not create a .gitignore in a repository that has none. Creating one
+// is a change to the user's work, and an untracked file makes every review
+// candidate unassessable ("untracked files require an explicit
+// declaration"), which turns the reminder into a permanent block. The rule
+// is local runtime state, so it goes to the repository's local exclude file,
+// which git applies to this clone only.
+func TestEnsureATLIgnoredLeavesNoFileInTheRepository(t *testing.T) {
+	cwd := t.TempDir()
+	runRegistryGit(t, cwd, "init", "-q")
+
+	if err := EnsureATLIgnored(cwd); err != nil {
+		t.Fatalf("EnsureATLIgnored() error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(cwd, ".gitignore")); !os.IsNotExist(err) {
+		t.Fatalf("EnsureATLIgnored created a .gitignore in the repository: %v", err)
+	}
+	exclude, err := os.ReadFile(filepath.Join(cwd, ".git", "info", "exclude"))
+	if err != nil {
+		t.Fatalf("read local exclude: %v", err)
+	}
+	if !strings.Contains(string(exclude), atlIgnoreEntry) {
+		t.Fatalf("local exclude missing the %q rule:\n%s", atlIgnoreEntry, exclude)
+	}
+	if err := os.MkdirAll(filepath.Join(cwd, RegistryRelPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cwd, RegistryRelPath, "skill-registry.md"), []byte("registry\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if status := runRegistryGit(t, cwd, "status", "--porcelain"); strings.TrimSpace(status) != "" {
+		t.Fatalf("the registry left work in the worktree:\n%s", status)
+	}
+}
+
+// TestEnsureATLIgnoredKeepsAnExistingGitignore pins that a repository that
+// already ignores .atl through its own .gitignore keeps that file: the rule
+// stays shared with the team instead of moving to a local-only exclude.
+func TestEnsureATLIgnoredKeepsAnExistingGitignore(t *testing.T) {
+	cwd := t.TempDir()
+	runRegistryGit(t, cwd, "init", "-q")
+	if err := os.WriteFile(filepath.Join(cwd, ".gitignore"), []byte("node_modules\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := EnsureATLIgnored(cwd); err != nil {
+		t.Fatalf("EnsureATLIgnored() error = %v", err)
+	}
+	gitignore, err := os.ReadFile(filepath.Join(cwd, ".gitignore"))
+	if err != nil {
+		t.Fatalf("read .gitignore: %v", err)
+	}
+	if !strings.Contains(string(gitignore), "node_modules") || !strings.Contains(string(gitignore), atlIgnoreEntry) {
+		t.Fatalf(".gitignore does not carry both rules:\n%s", gitignore)
+	}
+	exclude, err := os.ReadFile(filepath.Join(cwd, ".git", "info", "exclude"))
+	if err == nil && strings.Contains(string(exclude), atlIgnoreEntry) {
+		t.Fatalf("the rule was duplicated into the local exclude:\n%s", exclude)
+	}
+}
+
+func runRegistryGit(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return string(out)
+}
 
 func TestRegenerateWritesRegistryAndCacheThenHitsCache(t *testing.T) {
 	cwd := t.TempDir()

@@ -382,10 +382,10 @@ func handleAntigravityStop(payload AntigravityCLIHookPayload, workspace, agent s
 
 	// A candidate is guardable when STATUS reports Action=start, meaning there
 	// are unreviewed tracked changes. We do not gate on NextTransition here
-	// because the workspace may contain untracked files (e.g. .gitignore
-	// written by the PreInvocation skillregistry step) that cause STATUS to
-	// return collect/intended_untracked_selection_required even when there is
-	// a valid candidate — the Action field reflects the candidate state
+	// because the workspace may contain untracked files (the operator's own,
+	// or the model's) that cause STATUS to return
+	// collect/intended_untracked_selection_required even when there is a
+	// valid candidate — the Action field reflects the candidate state
 	// independently of untracked-file resolution.
 	if targetIdentity == "" || status.Action != reviewtransaction.TargetStatusActionStart {
 		_, _ = fmt.Fprintln(stdout, "{}")

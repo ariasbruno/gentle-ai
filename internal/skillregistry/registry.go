@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/filemerge"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/components/localexclude"
 )
 
 const (
@@ -196,13 +197,41 @@ func List(cwd, home string) []SkillEntry {
 	return dedupeBySkillName(entries, cwd)
 }
 
+// EnsureATLIgnored makes sure the local runtime state directory is ignored
+// by git.
+//
+// A repository that already has a .gitignore gets the rule there, so the
+// whole team shares it. A repository without one does not get a new file:
+// creating a .gitignore is a change to the user's work, and an untracked
+// file makes every review candidate unassessable ("untracked files require
+// an explicit declaration"), which turns the review reminder into a
+// permanent block. The rule is local runtime state, so it goes to the
+// repository's local exclude file instead, which git applies to this clone
+// only and which never enters a diff.
 func EnsureATLIgnored(cwd string) error {
 	gitignorePath := filepath.Join(cwd, ".gitignore")
 	existingBytes, err := os.ReadFile(gitignorePath)
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("read .gitignore: %w", err)
 	}
-	existing := string(existingBytes)
+	if err == nil {
+		return writeATLIgnoreEntry(gitignorePath, string(existingBytes))
+	}
+	// The repository has no .gitignore. Prefer the local exclude file so the
+	// worktree stays as the user left it. Without a repository there is no
+	// exclude file to write, and the rule has no effect anyway, so the
+	// .gitignore remains the fallback.
+	if err := localexclude.EnsureForDirectory(cwd, atlIgnoreEntry, "# Local AI runtime state"); err == nil {
+		return nil
+	}
+	return writeATLIgnoreEntry(gitignorePath, "")
+}
+
+// writeATLIgnoreEntry adds the .atl rule to an ignore file when it is not
+// there yet. The write is atomic, guarding against concurrent startup hooks
+// (Codex + OpenCode + Claude) racing on the same file, matching how the
+// registry file is written.
+func writeATLIgnoreEntry(path, existing string) error {
 	for _, line := range strings.Split(existing, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == ".atl" || trimmed == atlIgnoreEntry {
@@ -217,10 +246,8 @@ func EnsureATLIgnored(cwd string) error {
 	if !strings.Contains(existing, "# Local AI runtime state") && !strings.Contains(existing, "# Local Pi runtime state") {
 		header = "# Local AI runtime state\n"
 	}
-	// Atomic write guards against concurrent startup hooks (Codex + OpenCode +
-	// Claude) racing on .gitignore, matching how the registry file is written.
-	if _, err := filemerge.WriteFileAtomic(gitignorePath, []byte(existing+prefix+header+atlIgnoreEntry+"\n"), 0o644); err != nil {
-		return fmt.Errorf("write .gitignore: %w", err)
+	if _, err := filemerge.WriteFileAtomic(path, []byte(existing+prefix+header+atlIgnoreEntry+"\n"), 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
 	}
 	return nil
 }

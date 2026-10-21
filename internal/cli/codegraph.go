@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/gentleman-programming/gentle-ai/v4/internal/components/localexclude"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
 )
 
@@ -56,50 +57,7 @@ const codeGraphExcludeEntry = ".codegraph/"
 // otherwise stay untracked and leak into diffs. Only the worktree's local
 // exclude file changes; tracked files and .gitignore are never edited.
 func excludeCodeGraphIndexLocally(root string) error {
-	output, err := exec.Command("git", "-C", root, "rev-parse", "--is-inside-work-tree", "--show-toplevel", "--git-path", "info/exclude").Output()
-	if err != nil {
-		return fmt.Errorf("resolve git exclude file: %w", err)
-	}
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	if len(lines) != 3 || lines[0] != "true" {
-		// refusal:by-design world-action: only a warning; initialization continues and there is no worktree whose exclude file could change.
-		return fmt.Errorf("%q is not a git work tree", root)
-	}
-	if topLevel, err := filepath.EvalSymlinks(lines[1]); err != nil || topLevel != root {
-		// refusal:by-design world-action: only a warning; initialization continues and an enclosing repository's exclude file must not change.
-		return fmt.Errorf("%q is not the git work tree root", root)
-	}
-	exclude := lines[2]
-	if !filepath.IsAbs(exclude) {
-		exclude = filepath.Join(root, exclude)
-	}
-
-	content, err := os.ReadFile(exclude)
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	for _, line := range strings.Split(string(content), "\n") {
-		switch strings.TrimSpace(line) {
-		case ".codegraph", ".codegraph/", "/.codegraph", "/.codegraph/":
-			return nil
-		}
-	}
-	entry := codeGraphExcludeEntry + "\n"
-	if len(content) > 0 && content[len(content)-1] != '\n' {
-		entry = "\n" + entry
-	}
-	if err := os.MkdirAll(filepath.Dir(exclude), 0o755); err != nil {
-		return err
-	}
-	file, err := os.OpenFile(exclude, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	if _, err := file.WriteString(entry); err != nil {
-		_ = file.Close()
-		return err
-	}
-	return file.Close()
+	return localexclude.EnsureInWorkTree(root, codeGraphExcludeEntry, "")
 }
 
 const codeGraphHelp = `gentle-ai codegraph — Initialize a project's CodeGraph index

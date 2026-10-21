@@ -786,10 +786,10 @@ func TestAntigravityStopStaysSilentForAMediumCandidate(t *testing.T) {
 }
 
 // TestAntigravityStopBlocksOnAnUnassessableCandidate pins the fail-closed
-// edge of the risk gate: when the candidate cannot be assessed (here, the
-// untracked .gitignore PreInvocation creates in a repository without one),
-// review assess reports review_due so the hook keeps reminding. The hook never
-// chooses --untracked-scope on the operator's behalf.
+// edge of the risk gate: when the candidate cannot be assessed (here, an
+// untracked file the operator has not declared), review assess reports
+// review_due so the hook keeps reminding. The hook never chooses
+// --untracked-scope on the operator's behalf.
 func TestAntigravityStopBlocksOnAnUnassessableCandidate(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("the review fixture uses POSIX git")
@@ -804,9 +804,10 @@ func TestAntigravityStopBlocksOnAnUnassessableCandidate(t *testing.T) {
 	if err := RunAntigravityCLIHook("PreInvocation", "antigravity-cli", strings.NewReader(prePayload), &stdout, repo); err != nil {
 		t.Fatalf("PreInvocation error: %v", err)
 	}
-	// The fixture has no .gitignore, so PreInvocation created an untracked one.
-	if _, err := os.Stat(filepath.Join(repo, ".gitignore")); err != nil {
-		t.Fatalf("expected PreInvocation to create .gitignore: %v", err)
+	// The hook leaves no untracked file of its own, so the untracked
+	// population here is the operator's own work.
+	if err := os.WriteFile(filepath.Join(repo, "notes.md"), []byte("notes\n"), 0o644); err != nil {
+		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(repo, "tracked.txt"), []byte("changed\n"), 0o644); err != nil {
 		t.Fatal(err)

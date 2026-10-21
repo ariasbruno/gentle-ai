@@ -150,7 +150,7 @@ Sin conversationId, toolCall o nombre, el circuit breaker retorna allow — el g
 
 Cuando inicia una nueva interacción (`InvocationNum == 0`), el hook ejecuta tareas de sincronización inicial en segundo plano:
 - Refresca el índice de skills.
-- Asegura la exclusión de metadatos de sincronización (`.atl`).
+- Asegura la exclusión de metadatos de sincronización (`.atl`). Si el repositorio ya tiene `.gitignore`, la regla se suma ahí; si no lo tiene, la regla va al archivo local de exclusión de git (`.git/info/exclude`), **no** se crea un `.gitignore` en el repo del usuario: un archivo sin trackear vuelve inasableable todo candidato de revisión y el recordatorio quedaría bloqueando siempre.
 - Registra el punto base (baseline) del repositorio si RDD está activo.
 
 ## `Stop`: cierre bloqueado ante un candidato de alto riesgo
