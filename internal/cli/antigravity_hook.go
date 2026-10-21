@@ -398,8 +398,16 @@ func handleAntigravityStop(payload AntigravityCLIHookPayload, workspace, agent s
 	// recorded no write under this repository, or wrote through a tool the
 	// ledger does not observe -- keeps the strict consumed-check: the Stop
 	// keeps blocking until the review is consumed.
+	//
+	// The receipt settles the candidate's content, not only the session's own
+	// writes. A subagent runs in its own conversation and its writes never
+	// enter this ledger, so a ledger-only consumption would settle over work
+	// nobody reviewed. The content fingerprint (the workspace snapshot tree)
+	// is stable across a commit and changes whenever any file's content
+	// changes, so unattributed work re-arms the reminder.
 	ledgerRecords, ledgerUnderRoot, ledgerPending := 0, 0, 0
 	ledgerTracked := false
+	contentTree := status.Projection.CurrentCandidateTree
 	if payload.ConversationID != "" && reviewStopHookSessionIDPattern.MatchString(payload.ConversationID) {
 		home, herr := os.UserHomeDir()
 		if herr != nil {
@@ -413,9 +421,11 @@ func handleAntigravityStop(payload AntigravityCLIHookPayload, workspace, agent s
 		}
 		ledgerTracked = true
 		ledgerRecords, ledgerUnderRoot, ledgerPending = antigravityCLIMutationLedgerState(home, payload.ConversationID, root, record.ConsumedMutationCount)
-		if ledgerUnderRoot > 0 && ledgerPending == 0 {
+		if ledgerUnderRoot > 0 && ledgerPending == 0 &&
+			contentTree != "" && record.ConsumedContentTree == contentTree {
 			// Every write this session recorded under this repository was
-			// already reminded: this generation is settled.
+			// already reminded, and the candidate's content has not moved
+			// since: this generation is settled.
 			_, _ = fmt.Fprintln(stdout, "{}")
 			return nil
 		}
@@ -454,9 +464,11 @@ func handleAntigravityStop(payload AntigravityCLIHookPayload, workspace, agent s
 	}
 	// Consumption happens after the reminder is delivered, and only for the
 	// writes this session recorded: the receipt settles the prefix the
-	// reminder covered, so a later write earns its own reminder.
+	// reminder covered, so a later write earns its own reminder, and it
+	// settles the content the reminder covered, so work this session cannot
+	// attribute earns one too.
 	if ledgerTracked && ledgerUnderRoot > 0 {
-		_ = recordReviewStopHookConsumedMutations(payload.ConversationID, ledgerRecords)
+		_ = recordReviewStopHookConsumption(payload.ConversationID, ledgerRecords, contentTree)
 	}
 
 	return nil

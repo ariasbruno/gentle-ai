@@ -886,6 +886,121 @@ func TestAntigravityStopRemindsOncePerMutationGeneration(t *testing.T) {
 	}
 }
 
+// TestAntigravityStopRemindsWhenUnattributedWorkChangesTheCandidate pins the
+// gap F2 left open: a subagent writes in its own conversation and its writes
+// never enter the parent's mutation ledger, so a ledger-only consumption
+// would settle the reminder over work nobody reviewed. The reminder settles
+// the candidate's content, so work the session cannot attribute re-arms it.
+func TestAntigravityStopRemindsWhenUnattributedWorkChangesTheCandidate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the review fixture uses POSIX git")
+	}
+	reviewModeHome(t)
+	repo := initReviewCLIRepo(t)
+	if err := os.WriteFile(filepath.Join(repo, ".gitignore"), []byte(".atl\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runReviewCLIGit(t, repo, "add", ".gitignore")
+	runReviewCLIGit(t, repo, "commit", "-qm", "ignore atl")
+	enableReviewStopHookRDD(t, repo)
+	convID := "conv-stop-unattributed"
+
+	var stdout bytes.Buffer
+	prePayload := fmtAntigravityHookPayload(convID, []string{repo}, 0, "")
+	if err := RunAntigravityCLIHook("PreInvocation", "antigravity-cli", strings.NewReader(prePayload), &stdout, repo); err != nil {
+		t.Fatalf("PreInvocation error: %v", err)
+	}
+
+	recordAntigravitySessionWrite(t, convID, repo, filepath.Join(repo, "service-token.ts"))
+	stageReviewStopHookCandidate(t, repo)
+
+	stopPayload := fmtAntigravityStopPayload(convID, []string{repo}, 5, "model_stop", true)
+	stdout.Reset()
+	if err := RunAntigravityCLIHook("Stop", "antigravity-cli", strings.NewReader(stopPayload), &stdout, repo); err != nil {
+		t.Fatalf("Stop error: %v", err)
+	}
+	if !strings.Contains(stdout.String(), `"decision":"continue"`) {
+		t.Fatalf("Stop did not remind about a due candidate: %s", stdout.String())
+	}
+
+	// Same content, no new mutation: settled.
+	stdout.Reset()
+	if err := RunAntigravityCLIHook("Stop", "antigravity-cli", strings.NewReader(stopPayload), &stdout, repo); err != nil {
+		t.Fatalf("Stop error: %v", err)
+	}
+	if raw := strings.TrimSpace(stdout.String()); raw != "{}" {
+		t.Fatalf("Stop reminded twice for one content generation: %s", raw)
+	}
+
+	// Work the session cannot attribute: a subagent's write, with no entry in
+	// the parent's ledger. The content changed, so the reminder re-arms.
+	writeReviewStartCandidate(t, repo, "service-token.ts", "export const token = 2;\n", 0o644)
+	stdout.Reset()
+	if err := RunAntigravityCLIHook("Stop", "antigravity-cli", strings.NewReader(stopPayload), &stdout, repo); err != nil {
+		t.Fatalf("Stop error: %v", err)
+	}
+	if !strings.Contains(stdout.String(), `"decision":"continue"`) {
+		t.Fatalf("Stop settled over work it cannot attribute: %s", stdout.String())
+	}
+
+	// And that generation settles too.
+	stdout.Reset()
+	if err := RunAntigravityCLIHook("Stop", "antigravity-cli", strings.NewReader(stopPayload), &stdout, repo); err != nil {
+		t.Fatalf("Stop error: %v", err)
+	}
+	if raw := strings.TrimSpace(stdout.String()); raw != "{}" {
+		t.Fatalf("Stop reminded twice for one content generation: %s", raw)
+	}
+}
+
+// TestAntigravityStopStaysQuietWhenTheCandidateIsOnlyCommitted pins the
+// fingerprint the receipt settles: the workspace content tree, which is
+// stable across a commit. Committing the same content is not new work, so
+// the reminder does not re-arm and the session closes.
+func TestAntigravityStopStaysQuietWhenTheCandidateIsOnlyCommitted(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the review fixture uses POSIX git")
+	}
+	reviewModeHome(t)
+	repo := initReviewCLIRepo(t)
+	if err := os.WriteFile(filepath.Join(repo, ".gitignore"), []byte(".atl\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runReviewCLIGit(t, repo, "add", ".gitignore")
+	runReviewCLIGit(t, repo, "commit", "-qm", "ignore atl")
+	enableReviewStopHookRDD(t, repo)
+	convID := "conv-stop-committed"
+
+	var stdout bytes.Buffer
+	prePayload := fmtAntigravityHookPayload(convID, []string{repo}, 0, "")
+	if err := RunAntigravityCLIHook("PreInvocation", "antigravity-cli", strings.NewReader(prePayload), &stdout, repo); err != nil {
+		t.Fatalf("PreInvocation error: %v", err)
+	}
+
+	recordAntigravitySessionWrite(t, convID, repo, filepath.Join(repo, "service-token.ts"))
+	stageReviewStopHookCandidate(t, repo)
+
+	stopPayload := fmtAntigravityStopPayload(convID, []string{repo}, 5, "model_stop", true)
+	stdout.Reset()
+	if err := RunAntigravityCLIHook("Stop", "antigravity-cli", strings.NewReader(stopPayload), &stdout, repo); err != nil {
+		t.Fatalf("Stop error: %v", err)
+	}
+	if !strings.Contains(stdout.String(), `"decision":"continue"`) {
+		t.Fatalf("Stop did not remind about a due candidate: %s", stdout.String())
+	}
+
+	// The same content, now committed: the fingerprint does not move.
+	runReviewCLIGit(t, repo, "add", "-A")
+	runReviewCLIGit(t, repo, "commit", "-qm", "candidate")
+	stdout.Reset()
+	if err := RunAntigravityCLIHook("Stop", "antigravity-cli", strings.NewReader(stopPayload), &stdout, repo); err != nil {
+		t.Fatalf("Stop error: %v", err)
+	}
+	if raw := strings.TrimSpace(stdout.String()); raw != "{}" {
+		t.Fatalf("Stop re-armed for a commit of the same content: %s", raw)
+	}
+}
+
 // recordAntigravitySessionWrite simulates a completed write_to_file call, the
 // PostToolUse observation the per-conversation mutation ledger records.
 func recordAntigravitySessionWrite(t *testing.T, convID, repo, path string) {

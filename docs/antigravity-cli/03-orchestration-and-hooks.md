@@ -166,7 +166,8 @@ Si el modelo finaliza su turno (`model_stop`) y el sistema queda desocupado (`fu
     "reason": "Receipt-Driven Development: unreviewed candidate changes detected since session baseline (target sha256:…). Run the STATUS preflight: … Then run the provider-issued START unchanged: …. This Stop keeps blocking until the review is consumed."
   }
   ```
-- El recordatorio se consume como un recibo, igual que en Gentle Shell: `PostToolUse` registra cada escritura completada en el ledger de la sesión (`~/.gentle-ai/antigravity-mutations/v1/`), y el recordatorio liquida el prefijo que cubrió. Una escritura posterior gana su propio recordatorio; el mismo candidato no vuelve a avisar mientras no haya mutaciones nuevas.
+- El recordatorio se consume como un recibo, igual que en Gentle Shell: `PostToolUse` registra cada escritura completada en el ledger de la sesión (`~/.gentle-ai/antigravity-mutations/v1/`), y el recordatorio liquida el prefijo que cubrió. Una escritura posterior gana su propio recordatorio.
+- El recibo liquida además el **contenido** del candidato (`projection.current_candidate_tree`, la huella del árbol del workspace): es estable al commitear y cambia en cuanto cambia el contenido de cualquier archivo. Hace falta porque un subagente corre en su propia conversación y sus escrituras nunca entran al ledger del padre — sin esa huella, un recordatorio podría liquidarse sobre trabajo que nadie revisó.
 - Cuando el ledger **no puede atribuir** el candidato (la sesión no registró escrituras bajo ese repositorio, o usó una herramienta que el ledger no observa), el recordatorio **no** se consume: el mismo candidato sigue bloqueando hasta que el estado avance (consumed-check), para que ignorar el primer aviso no alcance para cerrar. `agy` corta el bloqueo tras un número configurable de continuaciones consecutivas.
 - Sin candidato, sin RDD activo o sin repositorio, emite `{}` y la sesión cierra con normalidad.
 

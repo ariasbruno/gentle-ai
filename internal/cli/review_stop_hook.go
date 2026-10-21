@@ -79,6 +79,13 @@ type reviewStopHookReminderRecord struct {
 	// reminder settles the mutations recorded up to that point, and a later
 	// write earns the next reminder. Zero means nothing was consumed yet.
 	ConsumedMutationCount int `json:"consumed_mutation_count,omitempty"`
+	// ConsumedContentTree is the candidate's content fingerprint when the
+	// reminder was delivered (the workspace snapshot tree, stable across a
+	// commit and different whenever any file's content changes). It settles
+	// the content the reminder covered, so work this session cannot
+	// attribute -- a subagent's write, an external edit -- re-arms the
+	// reminder instead of passing unnoticed.
+	ConsumedContentTree string `json:"consumed_content_tree,omitempty"`
 }
 
 // RunReviewStopHook is the `gentle-ai review stop-hook` entry point. Claude
@@ -461,13 +468,14 @@ func recordReviewStopHookReminder(sessionID, targetIdentity string) (silent bool
 	return false, err
 }
 
-// recordReviewStopHookConsumedMutations records how many entries of the
-// session mutation ledger the conversation's reminder already covered. The
-// watermark advances only forward, and it settles the prefix recorded so far:
-// a write that lands while the review is being consumed stays pending and
-// earns its own reminder. An invalid session id is a silent no-op.
-func recordReviewStopHookConsumedMutations(sessionID string, count int) error {
-	if !reviewStopHookSessionIDPattern.MatchString(sessionID) || count <= 0 {
+// recordReviewStopHookConsumption records what the conversation's reminder
+// settled: how many entries of the session mutation ledger it covered, and
+// the candidate's content fingerprint at that moment. The watermark advances
+// only forward, and it settles the prefix recorded so far: a write that
+// lands while the review is being consumed stays pending and earns its own
+// reminder. An invalid session id is a silent no-op.
+func recordReviewStopHookConsumption(sessionID string, count int, contentTree string) error {
+	if !reviewStopHookSessionIDPattern.MatchString(sessionID) {
 		return nil
 	}
 	home, err := os.UserHomeDir()
@@ -479,11 +487,16 @@ func recordReviewStopHookConsumedMutations(sessionID string, count int) error {
 	if err != nil {
 		return err
 	}
-	if record.ConsumedMutationCount >= count {
+	if count > 0 && record.ConsumedMutationCount >= count && record.ConsumedContentTree == contentTree {
 		return nil
 	}
 	record.Schema = reviewStopHookReminderSchema
-	record.ConsumedMutationCount = count
+	if count > record.ConsumedMutationCount {
+		record.ConsumedMutationCount = count
+	}
+	if contentTree != "" {
+		record.ConsumedContentTree = contentTree
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
