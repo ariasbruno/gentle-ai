@@ -826,6 +826,77 @@ func TestAntigravityStopBlocksOnAnUnassessableCandidate(t *testing.T) {
 // instead of de-silencing on the second attempt. Only a target that
 // predates the session (baseline match) or an explicit consent refusal
 // (stale marker) may pass.
+// TestAntigravityStopRemindsOncePerMutationGeneration pins the receipt
+// semantics Gentle Shell applies: a write this session recorded earns one
+// reminder, and the next write earns the next one. The same generation does
+// not earn a second reminder while no new mutation is pending.
+func TestAntigravityStopRemindsOncePerMutationGeneration(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the review fixture uses POSIX git")
+	}
+	reviewModeHome(t)
+	repo := initReviewCLIRepo(t)
+	// A repository that already ignores .atl keeps PreInvocation from creating
+	// an untracked .gitignore, so the candidate stays assessable.
+	if err := os.WriteFile(filepath.Join(repo, ".gitignore"), []byte(".atl\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runReviewCLIGit(t, repo, "add", ".gitignore")
+	runReviewCLIGit(t, repo, "commit", "-qm", "ignore atl")
+	enableReviewStopHookRDD(t, repo)
+	convID := "conv-stop-generation"
+
+	var stdout bytes.Buffer
+	prePayload := fmtAntigravityHookPayload(convID, []string{repo}, 0, "")
+	if err := RunAntigravityCLIHook("PreInvocation", "antigravity-cli", strings.NewReader(prePayload), &stdout, repo); err != nil {
+		t.Fatalf("PreInvocation error: %v", err)
+	}
+
+	// A session write the ledger records, plus the candidate it produced.
+	recordAntigravitySessionWrite(t, convID, repo, filepath.Join(repo, "service-token.ts"))
+	stageReviewStopHookCandidate(t, repo)
+
+	stopPayload := fmtAntigravityStopPayload(convID, []string{repo}, 5, "model_stop", true)
+	stdout.Reset()
+	if err := RunAntigravityCLIHook("Stop", "antigravity-cli", strings.NewReader(stopPayload), &stdout, repo); err != nil {
+		t.Fatalf("Stop error: %v", err)
+	}
+	if !strings.Contains(stdout.String(), `"decision":"continue"`) {
+		t.Fatalf("Stop did not remind about a due candidate: %s", stdout.String())
+	}
+
+	// Same generation, no new mutation: quiet.
+	stdout.Reset()
+	if err := RunAntigravityCLIHook("Stop", "antigravity-cli", strings.NewReader(stopPayload), &stdout, repo); err != nil {
+		t.Fatalf("Stop error: %v", err)
+	}
+	if raw := strings.TrimSpace(stdout.String()); raw != "{}" {
+		t.Fatalf("Stop reminded twice for one mutation generation: %s", raw)
+	}
+
+	// A new mutation earns a new reminder.
+	recordAntigravitySessionWrite(t, convID, repo, filepath.Join(repo, "api", "service-token.ts"))
+	writeReviewStartCandidate(t, repo, "api/service-token.ts", "export const token = 1;\n", 0o644)
+	stdout.Reset()
+	if err := RunAntigravityCLIHook("Stop", "antigravity-cli", strings.NewReader(stopPayload), &stdout, repo); err != nil {
+		t.Fatalf("Stop error: %v", err)
+	}
+	if !strings.Contains(stdout.String(), `"decision":"continue"`) {
+		t.Fatalf("Stop did not remind about a new mutation generation: %s", stdout.String())
+	}
+}
+
+// recordAntigravitySessionWrite simulates a completed write_to_file call, the
+// PostToolUse observation the per-conversation mutation ledger records.
+func recordAntigravitySessionWrite(t *testing.T, convID, repo, path string) {
+	t.Helper()
+	payload := fmtAntigravityToolCallPayload(convID, "write_to_file", map[string]any{"TargetFile": path}, 1)
+	var stdout bytes.Buffer
+	if err := RunAntigravityCLIHook("PostToolUse", "antigravity-cli", strings.NewReader(payload), &stdout, repo); err != nil {
+		t.Fatalf("PostToolUse error: %v", err)
+	}
+}
+
 func TestAntigravityStopBlocksUntilConsumed(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("the review fixture uses POSIX git")

@@ -73,6 +73,12 @@ type reviewStopHookReminderRecord struct {
 	// resume; while the identity keeps changing, reminding would only push the
 	// caller back into the same unexecutable negotiation.
 	LastSeenTargetIdentity string `json:"last_seen_target_identity,omitempty"`
+	// ConsumedMutationCount is how many entries of the session mutation
+	// ledger this conversation's reminder already covered. It is the
+	// consumption watermark Gentle Shell keeps in its receipt ledger: a
+	// reminder settles the mutations recorded up to that point, and a later
+	// write earns the next reminder. Zero means nothing was consumed yet.
+	ConsumedMutationCount int `json:"consumed_mutation_count,omitempty"`
 }
 
 // RunReviewStopHook is the `gentle-ai review stop-hook` entry point. Claude
@@ -453,6 +459,40 @@ func recordReviewStopHookReminder(sessionID, targetIdentity string) (silent bool
 	}
 	_, err = filemerge.WriteFileAtomic(path, payload, 0o644)
 	return false, err
+}
+
+// recordReviewStopHookConsumedMutations records how many entries of the
+// session mutation ledger the conversation's reminder already covered. The
+// watermark advances only forward, and it settles the prefix recorded so far:
+// a write that lands while the review is being consumed stays pending and
+// earns its own reminder. An invalid session id is a silent no-op.
+func recordReviewStopHookConsumedMutations(sessionID string, count int) error {
+	if !reviewStopHookSessionIDPattern.MatchString(sessionID) || count <= 0 {
+		return nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("resolve user home directory: %w", err)
+	}
+	path := reviewStopHookRecordPath(home, sessionID)
+	record, _, err := readReviewStopHookRecord(path)
+	if err != nil {
+		return err
+	}
+	if record.ConsumedMutationCount >= count {
+		return nil
+	}
+	record.Schema = reviewStopHookReminderSchema
+	record.ConsumedMutationCount = count
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	payload, err := json.Marshal(record)
+	if err != nil {
+		return err
+	}
+	_, err = filemerge.WriteFileAtomic(path, payload, 0o644)
+	return err
 }
 
 // reviewStopHookReviewDue reports review_due for the current candidate by

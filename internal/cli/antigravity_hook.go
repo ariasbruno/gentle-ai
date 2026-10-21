@@ -177,6 +177,67 @@ func recordAntigravityCLIMutation(home, conversationID, toolName, path string) {
 	_, _ = file.Write(append(encoded, '\n'))
 }
 
+// antigravityCLIMutationLedgerState returns the state of the conversation's
+// mutation ledger for one repository root: how many entries the ledger holds
+// in total, how many of them were written under root, and how many of those
+// are still pending after the consumed watermark. A malformed line (a partial
+// append from a concurrent write) is skipped instead of failing the read.
+//
+// The watermark counts ledger entries, not writes under root, so consuming
+// settles the prefix recorded so far and a write that lands during the
+// review stays pending: the same consumption semantics Gentle Shell applies
+// to its receipt ledger.
+func antigravityCLIMutationLedgerState(home, conversationID, root string, consumed int) (records int, underRoot int, pending int) {
+	if conversationID == "" {
+		return 0, 0, 0
+	}
+	data, err := os.ReadFile(antigravityCLIMutationLedgerPath(home, conversationID))
+	if err != nil {
+		return 0, 0, 0
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var record antigravityCLIMutationRecord
+		if json.Unmarshal([]byte(line), &record) != nil {
+			continue
+		}
+		records++
+		if !antigravityCLIMutationUnderRoot(record.Path, root) {
+			continue
+		}
+		underRoot++
+		if records > consumed {
+			pending++
+		}
+	}
+	return records, underRoot, pending
+}
+
+// antigravityCLIMutationUnderRoot reports whether a recorded mutation path
+// belongs to the reviewed repository. A relative path cannot be attributed
+// and counts as outside every root, so the gate keeps its strict behavior
+// instead of settling a write it cannot place.
+func antigravityCLIMutationUnderRoot(path, root string) bool {
+	if path == "" || root == "" {
+		return false
+	}
+	clean := filepath.Clean(path)
+	if !filepath.IsAbs(clean) {
+		return false
+	}
+	rel, err := filepath.Rel(filepath.Clean(root), clean)
+	if err != nil {
+		return false
+	}
+	if rel == "." {
+		return true
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
 // PostToolUse records completed file writes in the per-conversation mutation
 // ledger (the Gentle Shell tool_result equivalent) and returns the
 // contract-mandated {} — PostToolUse has no decision vocabulary.
@@ -330,6 +391,36 @@ func handleAntigravityStop(payload AntigravityCLIHookPayload, workspace, agent s
 		}
 	}
 
+	// The session mutation ledger turns the reminder into a receipt: a write
+	// this session recorded earns one reminder, and the next write earns the
+	// next one. That is the consumption contract Gentle Shell applies to its
+	// receipt ledger. A candidate the ledger cannot attribute -- the session
+	// recorded no write under this repository, or wrote through a tool the
+	// ledger does not observe -- keeps the strict consumed-check: the Stop
+	// keeps blocking until the review is consumed.
+	ledgerRecords, ledgerUnderRoot, ledgerPending := 0, 0, 0
+	ledgerTracked := false
+	if payload.ConversationID != "" && reviewStopHookSessionIDPattern.MatchString(payload.ConversationID) {
+		home, herr := os.UserHomeDir()
+		if herr != nil {
+			_, _ = fmt.Fprintln(stdout, "{}")
+			return nil
+		}
+		record, _, rerr := readReviewStopHookRecord(reviewStopHookRecordPath(home, payload.ConversationID))
+		if rerr != nil {
+			_, _ = fmt.Fprintln(stdout, "{}")
+			return nil
+		}
+		ledgerTracked = true
+		ledgerRecords, ledgerUnderRoot, ledgerPending = antigravityCLIMutationLedgerState(home, payload.ConversationID, root, record.ConsumedMutationCount)
+		if ledgerUnderRoot > 0 && ledgerPending == 0 {
+			// Every write this session recorded under this repository was
+			// already reminded: this generation is settled.
+			_, _ = fmt.Fprintln(stdout, "{}")
+			return nil
+		}
+	}
+
 	// Only a review_due candidate earns a reminder, by the same in-process
 	// assessment `review assess` publishes: a passive or medium candidate
 	// closes with a neutral {} even while STATUS still reports an unreviewed
@@ -360,6 +451,12 @@ func handleAntigravityStop(payload AntigravityCLIHookPayload, workspace, agent s
 
 	if payload.ConversationID != "" {
 		_, _ = recordReviewStopHookReminder(payload.ConversationID, targetIdentity)
+	}
+	// Consumption happens after the reminder is delivered, and only for the
+	// writes this session recorded: the receipt settles the prefix the
+	// reminder covered, so a later write earns its own reminder.
+	if ledgerTracked && ledgerUnderRoot > 0 {
+		_ = recordReviewStopHookConsumedMutations(payload.ConversationID, ledgerRecords)
 	}
 
 	return nil
