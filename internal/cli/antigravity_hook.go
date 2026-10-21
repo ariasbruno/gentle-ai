@@ -266,21 +266,6 @@ func handleAntigravityStop(payload AntigravityCLIHookPayload, workspace, agent s
 		return nil
 	}
 
-	// Review coverage runs before the review-state gate so a lens that never
-	// reported is named directly instead of surfacing as a generic unreviewed
-	// candidate. It fails open by design.
-	if home, homeErr := os.UserHomeDir(); homeErr == nil {
-		if out := antigravityReviewCoverageDecision(payload, home); out != nil {
-			encoded, err := json.Marshal(out)
-			if err != nil {
-				_, _ = fmt.Fprintln(stdout, "{}")
-				return nil
-			}
-			_, _ = fmt.Fprintln(stdout, string(encoded))
-			return nil
-		}
-	}
-
 	ctx := context.Background()
 	root, targetIdentity, status, ok, err := antigravityResolveTargetIdentity(ctx, workspace)
 	// The pipeline failure stays visible: the model sees why the preflight

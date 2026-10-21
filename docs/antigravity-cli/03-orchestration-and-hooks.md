@@ -165,25 +165,6 @@ Si el modelo finaliza su turno (`model_stop`) y el sistema queda desocupado (`fu
   ```
 - Si no hay cambios nuevos o la revisión ya fue abordada (baseline comparable o record previo del mismo target), emite `{}` permitiendo que la sesión cierre con normalidad.
 
-### Cobertura de lentes en el cierre
-
-Un turno que despachó lentes de revisión y recibió menos artefactos que los despachados se evalúa **antes** de la compuerta de RDD: el hook reinserta el turno con el detalle en el `reason` en vez de dejarlo cerrar. No decide sobre el candidato ni sobre la autoridad; sólo cuenta entregas.
-
-El transcript del padre es la única fuente, y es privado del runtime, no un contrato: se lee línea por línea como JSON y todo registro desconocido se ignora — [`antigravityReviewCoverageFromTranscript`](../../internal/cli/antigravity_review_coverage.go#L54-L94).
-
-| Qué se cuenta | Cómo se reconoce |
-|---|---|
-| Lentes despachadas | Registros `PLANNER_RESPONSE` con `tool_calls[].name == "invoke_subagent"`; el campo `Subagents` de `args` es un documento JSON codificado como string, y se cuentan sólo los `TypeName` del conjunto de revisión (`review-risk`, `review-resilience`, `review-readability`, `review-reliability`) |
-| Artefactos devueltos | Registros `SYSTEM_MESSAGE` cuyo `content` trae `sender=` y, después de `content=`, un objeto que abre con `{` y contiene `subject_hash` y `findings` en el prefijo visible |
-
-Ese reconocimiento es de forma, no de admisión: un artefacto truncado cuenta igual como devuelto, y los campos que caen fuera del límite de truncación no se inspeccionan. La admisión es otra capa ([05](05-review-transport.md)).
-
-- **Tope de dos rebotes.** El contador por conversación se persiste en `~/.gentle-ai/antigravity-review-coverage/v1/<conversationId>.json`; al segundo el gate calla y el cierre sigue con las comprobaciones que ya existían. Una red de seguridad que puede iterar sin fin es peor que no tenerla.
-- **Fail-open.** Transcript ausente, ilegible, con una línea inesperada o con error de escaneo no bloquea el cierre.
-- **Apagador.** `GENTLE_AI_AGY_REVIEW_COVERAGE=off` desactiva el gate para esa sesión; cualquier otro valor, incluido ausente, lo mantiene activo.
-
-[`antigravityReviewCoverageDecision`](../../internal/cli/antigravity_review_coverage.go#L185-L213), invocado al inicio de `handleAntigravityStop` ([`antigravity_hook.go`, línea 273](../../internal/cli/antigravity_hook.go#L273)).
-
 ## Política de seguridad y respuestas de los hooks
 
 Los hooks de Gentle AI operan con un enfoque de seguridad estricto (*fail-closed* ante cargas corruptas o bucles, y *no-op* transparente para eventos posteriores):
