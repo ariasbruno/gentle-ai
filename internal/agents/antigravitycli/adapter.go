@@ -721,6 +721,18 @@ func (a *Adapter) DeployPluginTreeToDir(pluginDir string) error {
 	for _, path := range legacyFiles {
 		_ = os.Remove(path)
 	}
+	// Empty directories are invisible to every other check: the plugin validator
+	// reports nothing for them, and a fresh deploy can never contain one. Pruning
+	// the last file of a legacy directory leaves exactly that tombstone (the SDD
+	// support directory is one), so the prune drops the directory too. os.Remove
+	// refuses a non-empty directory, which is the guard: contents are never
+	// touched.
+	legacyDirs := []string{
+		filepath.Join(pluginDir, "support"),
+	}
+	for _, dir := range legacyDirs {
+		_ = os.Remove(dir)
+	}
 	// Prune stale skills: remove any skill directories in plugin skills/ that are
 	// not present in the current bundle (validSkills). This subsumes the legacy
 	// per-name SDD skills list and catches any stale selected skills from the
