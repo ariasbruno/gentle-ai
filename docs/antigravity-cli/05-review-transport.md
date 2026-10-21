@@ -97,6 +97,21 @@ aprobación de candidato   ≠ permiso humano para commit/push
 
 No se ofrece una secuencia manual fija de comandos RDD en esta guía. El padre/controlador debe usar operaciones y bindings emitidos por el contrato nativo vigente; un ejemplo antiguo de START/CAPTURE no autoriza repetir tokens en otra transacción.
 
+### El artefacto de lente no es stdout
+
+En agy el artefacto de una lente no llega como resultado de herramienta: `invoke_subagent` es asíncrono y devuelve `conversationId` y `logAbsoluteUri`, y el resultado aparece después como `SYSTEM_MESSAGE` en el transcript del padre, con el id del despacho como `sender`. El adaptador de `Review` lee el proceso del reviewer; el orquestador ve el artefacto como mensaje.
+
+Dos consecuencias, y las dos acotan lo que se puede afirmar:
+
+- **El transcript del padre trunca el contenido.** Sobre transcripts reales, 31 de 38 `SYSTEM_MESSAGE` traían `truncated_fields: ["content"]` y el máximo sin truncar fue 4.085 bytes. Sólo se inspecciona el prefijo visible; un artefacto puede estar completo en el log del subagente y truncado en el del padre.
+- **Contar entregas no es admitir resultados.** Que cada lente despachada haya devuelto algo se verifica en el cierre ([03](03-orchestration-and-hooks.md)); que el objeto sea correcto, canónico y esté ligado al candidato se decide en admisión, con la autoridad del contrato nativo.
+
+```text
+artefacto devuelto        ≠ artefacto admitido
+prefijo visible           ≠ resultado completo
+cobertura de lentes       ≠ cobertura de autoridad
+```
+
 ### Corrección acotada de salida del proveedor
 
 La capa compartida, no el adaptador, permite una re-invocación correctiva ante rechazo de admisión cuando el rol la considera retryable. Añade feedback exacto al prompt original, preserva rechazos fuera del authority store y respeta el presupuesto de contexto: [`reviewProviderCaptureRetry`](../../internal/cli/review_provider_correction.go#L143-L183).
@@ -120,6 +135,7 @@ Tests leídos de la capa compartida: [`TestProviderCaptureRetriesOnceWithAdmissi
 | Cancelación | Adaptador/caller | Error de contexto | No confundir con verdict |
 | Stdout vacío/espacios | Adaptador | `produced no final message` | No admisión |
 | Stdout no vacío pero objeto incorrecto | Core proveedor | Rechazo de admisión | Posible corrección acotada |
+| Artefacto devuelto pero truncado en el transcript del padre | Runtime del transcript | `truncated_fields: ["content"]` | Cuenta como devuelto; la forma se decide en admisión |
 | Binding/inspection incorrectos | Core proveedor | Rechazo | No acreditar inspección por prose |
 | Routing JSON malformed | Resolver de modelos | `InvalidReviewRoutingError` | Fallar antes de crear reviewer con default silencioso |
 | Aprobación/delivery no resuelta | Controlador nativo | Estado/operación del lifecycle | Fuera de responsabilidad del adaptador |
