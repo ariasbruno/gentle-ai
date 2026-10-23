@@ -195,3 +195,37 @@ func TestRunStatusLineDumpsPayload(t *testing.T) {
 		t.Errorf("dump permissions wrong: %v %v", info.Mode().Perm(), err)
 	}
 }
+
+func TestRunStatusLineSilencedWhenPluginDisabled(t *testing.T) {
+	home := t.TempDir()
+	configDir := filepath.Join(home, ".gemini", "config")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(configDir, "config.json")
+	if err := os.WriteFile(configPath, []byte(`{"plugins":{"gentle-ai":{"enabled":false}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	payload := `{"cwd": "/home/user/project", "terminal_width": 200}`
+	// Statusline mode
+	got := runStatusLineTest(t, nil, payload, home)
+	if got != "" {
+		t.Errorf("expected empty statusline when plugin is disabled, got %q", got)
+	}
+
+	// Title mode
+	gotTitle := runStatusLineTest(t, []string{"--title"}, payload, home)
+	if gotTitle != "" {
+		t.Errorf("expected empty title when plugin is disabled, got %q", gotTitle)
+	}
+
+	// When enabled is true, it renders
+	if err := os.WriteFile(configPath, []byte(`{"plugins":{"gentle-ai":{"enabled":true}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gotEnabled := runStatusLineTest(t, nil, payload, home)
+	if !strings.Contains(gotEnabled, "✿") {
+		t.Errorf("expected statusline to render when plugin is enabled, got %q", gotEnabled)
+	}
+}

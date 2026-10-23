@@ -49,6 +49,21 @@ func runStatusLine(args []string, stdin io.Reader, stdout io.Writer, homeDir str
 	dumpStatusLinePayload(homeDir, raw)
 	payload, parseErr := statusline.ParsePayload(raw)
 
+	var cwd string
+	if payload != nil {
+		cwd = payload.Cwd
+	}
+	if cwdOverride != "" {
+		cwd = cwdOverride
+	}
+	if cwd == "" {
+		cwd, _ = os.Getwd()
+	}
+
+	if isAntigravityPluginDisabled(homeDir, cwd) {
+		return nil
+	}
+
 	if title {
 		if parseErr != nil {
 			_, _ = fmt.Fprintln(stdout, statusline.RenderTitle(nil))
@@ -64,14 +79,6 @@ func runStatusLine(args []string, stdin io.Reader, stdout io.Writer, homeDir str
 	}
 
 	config := statusline.LoadConfig(homeDir)
-
-	cwd := payload.Cwd
-	if cwdOverride != "" {
-		cwd = cwdOverride
-	}
-	if cwd == "" {
-		cwd, _ = os.Getwd()
-	}
 
 	// The PreToolUse hook still records phase files (S12 infra), but the
 	// statusline no longer displays a label (L19: bare petal).
@@ -189,4 +196,47 @@ func dumpStatusLinePayload(home string, raw []byte) {
 		return
 	}
 	_ = os.WriteFile(path, raw, 0o600)
+}
+
+// isAntigravityPluginDisabled reports whether the gentle-ai plugin is explicitly
+// disabled in Antigravity's config.json (either workspace or global).
+func isAntigravityPluginDisabled(homeDir, cwd string) bool {
+	// Check workspace config first if cwd is provided
+	if cwd != "" {
+		for _, rel := range []string{
+			filepath.Join(cwd, ".gemini", "config", "config.json"),
+			filepath.Join(cwd, ".gemini", "config.json"),
+		} {
+			if disabled, ok := checkPluginDisabledInConfig(rel); ok {
+				return disabled
+			}
+		}
+	}
+	// Check global config (~/.gemini/config/config.json)
+	if homeDir != "" {
+		globalPath := filepath.Join(homeDir, ".gemini", "config", "config.json")
+		if disabled, ok := checkPluginDisabledInConfig(globalPath); ok {
+			return disabled
+		}
+	}
+	return false
+}
+
+func checkPluginDisabledInConfig(path string) (disabled bool, found bool) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false, false
+	}
+	var root struct {
+		Plugins map[string]struct {
+			Enabled *bool `json:"enabled"`
+		} `json:"plugins"`
+	}
+	if err := json.Unmarshal(data, &root); err != nil {
+		return false, false
+	}
+	if p, ok := root.Plugins["gentle-ai"]; ok && p.Enabled != nil {
+		return !*p.Enabled, true
+	}
+	return false, false
 }
