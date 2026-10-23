@@ -169,12 +169,11 @@ func agentOverlay(id model.AgentID, homeDir string) []byte {
 		return geminiCLIOverlayJSON
 	case model.AgentQwenCode:
 		return qwenCodeOverlayJSON
-	case model.AgentAntigravity:
-		// Antigravity manages permissions via IDE UI (Artifact Review Policy /
-		// Terminal Command Auto Execution). No injectable settings.json schema.
+	case model.AgentAntigravity, model.AgentAntigravityCLI:
+		// Antigravity and Antigravity CLI manage permissions via IDE UI or
+		// dynamically in-process via the PreToolUse hook. No static settings.json
+		// permissions overlay is injected.
 		return nil
-	case model.AgentAntigravityCLI:
-		return antigravityCLIOverlayForHome(homeDir)
 	case model.AgentVSCodeCopilot:
 		return vscodeCopilotOverlayJSON
 	case model.AgentCursor:

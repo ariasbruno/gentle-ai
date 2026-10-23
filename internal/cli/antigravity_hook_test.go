@@ -752,7 +752,7 @@ func TestAntigravityPreToolUseDeniesSensitiveFilePaths(t *testing.T) {
 		{"view envish name", "view_file", map[string]any{"AbsolutePath": "/project/ENV.txt"}, false},
 		{"view pemx", "view_file", map[string]any{"AbsolutePath": "/project/server.pemx"}, false},
 		{"view secretsmith", "view_file", map[string]any{"AbsolutePath": "/project/secretsmith.go"}, false},
-		{"command asks instead of denying", "run_command", map[string]any{"CommandLine": "cat .env"}, false}, // the ask layer is tested separately
+		{"ordinary command not denied", "run_command", map[string]any{"CommandLine": "ls -la"}, false},
 		{"file tool without path", "view_file", map[string]any{}, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -1230,18 +1230,15 @@ func TestAntigravityStopSurfacesPreflightFailure(t *testing.T) {
 	}
 }
 
-// layer of the guard: shell command lines referencing sensitive paths
-// surface an ask decision (an approval prompt) instead of a hard deny,
-// because sensitive-looking substrings inside shell strings (a commit
-// message, a documentation grep) are plausible false positives the operator
-// can dismiss, and ask respects the user's Always Allow choices. File tools
-// keep their hard deny.
-func TestAntigravityPreToolUseAsksForSensitiveCommandLines(t *testing.T) {
+// TestAntigravityPreToolUseDeniesSensitiveCommandLines pins that shell command
+// lines referencing sensitive paths are denied directly to prevent leaking
+// secrets (e.g. cat .env) even if the base binary is allowed.
+func TestAntigravityPreToolUseDeniesSensitiveCommandLines(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	for _, test := range []struct {
-		name    string
-		command string
-		wantAsk bool
+		name     string
+		command  string
+		wantDeny bool
 	}{
 		{"cat env", "cat .env", true},
 		{"grep ssh key", "grep token ~/.ssh/id_rsa", true},
@@ -1265,15 +1262,73 @@ func TestAntigravityPreToolUseAsksForSensitiveCommandLines(t *testing.T) {
 			if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
 				t.Fatalf("decode hook output %q: %v", stdout.String(), err)
 			}
-			if test.wantAsk {
-				if output.Decision != "ask" {
-					t.Fatalf("decision = %q, want ask (output %q)", output.Decision, stdout.String())
+			if test.wantDeny {
+				if output.Decision != "deny" {
+					t.Fatalf("decision = %q, want deny (output %q)", output.Decision, stdout.String())
 				}
-				if !strings.Contains(output.Reason, "Sensitive") {
+				if !strings.Contains(output.Reason, "sensitive path") {
 					t.Fatalf("reason = %q, want the sensitive-path guard explanation", output.Reason)
 				}
-			} else if output.Decision == "ask" || output.Decision == "deny" {
-				t.Fatalf("decision = %q for an ordinary command (output %q)", output.Decision, stdout.String())
+			} else {
+				if output.Decision != "ask" {
+					t.Fatalf("decision = %q, want ask for an ordinary command (output %q)", output.Decision, stdout.String())
+				}
+			}
+		})
+	}
+}
+
+// TestAntigravityPreToolUseForcesAskForDestructiveCommandLines pins that
+// destructive commands (rm -rf, git reset --hard, git push --force, etc.)
+// return force_ask to prompt the user interactively, bypassing cached allow rules.
+func TestAntigravityPreToolUseForcesAskForDestructiveCommandLines(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	for _, test := range []struct {
+		name         string
+		command      string
+		wantForceAsk bool
+	}{
+		{"rm rf simple", "rm -rf /tmp/foo", true},
+		{"rm r", "rm -r mydir", true},
+		{"rm f", "rm -f file.txt", true},
+		{"rm fr", "rm -fr dir", true},
+		{"sudo rm rf", "sudo rm -rf /var/log/app", true},
+		{"git reset hard", "git reset --hard", true},
+		{"git reset hard HEAD~1", "git reset --hard HEAD~1", true},
+		{"git push force", "git push origin main --force", true},
+		{"git push -f", "git push origin main -f", true},
+		{"git clean -fd", "git clean -fd", true},
+		{"git clean -f", "git clean -f", true},
+		{"git branch -D", "git branch -D feature", true},
+		{"chmod 777 recursive", "chmod -R 777 .", true},
+		{"chown recursive", "chown -R user:group /app", true},
+		{"chained command with rm rf", "npm test && rm -rf dist", true},
+		{"ordinary git status", "git status", false},
+		{"ordinary git push", "git push origin main", false},
+		{"ordinary git clean dry-run", "git clean -n", false},
+		{"ordinary rm without r or f", "rm test.txt", false},
+		{"ordinary file edit", "echo 'hello' > test.txt", false},
+		{"go test", "go test ./...", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			payload := fmtAntigravityToolCallPayload("conv-destructive-commands", "run_command", map[string]any{"CommandLine": test.command}, 1)
+			var stdout bytes.Buffer
+			if err := RunAntigravityCLIHook("PreToolUse", "antigravity-cli", strings.NewReader(payload), &stdout, ""); err != nil {
+				t.Fatalf("RunAntigravityCLIHook() error = %v", err)
+			}
+			var output AntigravityCLIHookOutput
+			if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
+				t.Fatalf("decode hook output %q: %v", stdout.String(), err)
+			}
+			if test.wantForceAsk {
+				if output.Decision != "force_ask" {
+					t.Fatalf("decision = %q, want force_ask (output %q)", output.Decision, stdout.String())
+				}
+				if !strings.Contains(output.Reason, "Destructive command detected") {
+					t.Fatalf("reason = %q, want destructive command explanation", output.Reason)
+				}
+			} else if output.Decision == "force_ask" || output.Decision == "deny" {
+				t.Fatalf("decision = %q for non-destructive command (output %q)", output.Decision, stdout.String())
 			}
 		})
 	}

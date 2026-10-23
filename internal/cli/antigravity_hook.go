@@ -717,15 +717,19 @@ func antigravityCLISensitiveToolPath(call *AntigravityCLIToolCall) (string, bool
 // antigravityCLISensitiveCommandPattern is the run_command variant of the
 // sensitive set: command lines are tokenized on whitespace and each token
 // is matched like a path, with .aws broadened from the credentials file to
-// the whole directory. A match asks for approval instead of denying,
-// because a sensitive-looking substring inside a shell string (a commit
-// message, a documentation grep) is a plausible false positive the operator
-// can dismiss, and ask respects the user's Always Allow choices.
+// the whole directory. Shell command lines referencing sensitive paths are
+// denied directly to prevent leaking secrets via commands like `cat .env`.
 var antigravityCLISensitiveCommandPattern = regexp.MustCompile(`(?:^|/)\.env(?:\.[^/]+)?$|(?:^|/)\.ssh(?:/|$)|(?:^|/)\.credentials(?:/|$)|(?:^|/)\.aws(?:/|$)|\.(?:pem|key)$|(?:^|/)\.config/gh/hosts\.yml$|(?:^|/)Library/Keychains(?:/|$)|(?:^|/)secrets(?:/|$)`)
+
+// antigravityCLIDestructiveCommandPattern identifies destructive shell
+// commands that can cause irreversible data loss or unrecoverable git states.
+// In Antigravity CLI, these must return "force_ask" so the CLI always prompts
+// the operator interactively, even if the base binary is on the allow list.
+var antigravityCLIDestructiveCommandPattern = regexp.MustCompile(`(?i)(?:^|[;&|]\s*)\s*(?:(?:sudo\s+)?rm\s+-[a-z0-9]*[rf]|git\s+reset\s+--hard|git\s+push\s+(?:[^\s;&|]+\s+)*--force\b|git\s+push\s+(?:[^\s;&|]+\s+)*-f\b|git\s+clean\s+-[a-z0-9]*f|git\s+branch\s+-[a-z0-9]*D\b|chmod\s+-[a-z0-9]*R\s+777|chown\s+-[a-z0-9]*R|mkfs\b|dd\s+if=)`)
 
 // antigravityCLISensitiveCommandLine reports whether a run_command line
 // references a sensitive path. The line is split on whitespace and each
-// token is matched like a file path; a match surfaces an ask decision.
+// token is matched like a file path; a match surfaces a deny decision.
 func antigravityCLISensitiveCommandLine(call *AntigravityCLIToolCall) (string, bool) {
 	if call == nil || call.Name != "run_command" {
 		return "", false
@@ -738,6 +742,24 @@ func antigravityCLISensitiveCommandLine(call *AntigravityCLIToolCall) (string, b
 		if antigravityCLISensitiveCommandPattern.MatchString(filepath.ToSlash(token)) {
 			return token, true
 		}
+	}
+	return "", false
+}
+
+// antigravityCLIDestructiveCommandLine reports whether a run_command line
+// matches known destructive patterns (e.g. rm -rf, git reset --hard,
+// git push --force).
+func antigravityCLIDestructiveCommandLine(call *AntigravityCLIToolCall) (string, bool) {
+	if call == nil || call.Name != "run_command" {
+		return "", false
+	}
+	line, _ := antigravityCLIRequiredString(call.Args, "CommandLine")
+	if line == "" {
+		return "", false
+	}
+	match := antigravityCLIDestructiveCommandPattern.FindString(line)
+	if match != "" {
+		return strings.TrimSpace(match), true
 	}
 	return "", false
 }
@@ -755,13 +777,20 @@ func handleAntigravityPreToolUse(payload AntigravityCLIHookPayload, _ string, st
 	if path, blocked := antigravityCLISensitiveToolPath(payload.ToolCall); blocked {
 		return writeAntigravityPreToolUseDecision(stdout, "deny", "Sensitive file path is blocked by the Gentle AI permissions guard: "+path)
 	}
-	// Command lines mentioning sensitive paths ask instead of denying: a
-	// sensitive-looking substring in a shell string is a plausible false
-	// positive, and ask respects the user's Always Allow choices.
+	// Command lines referencing sensitive paths (secrets) are denied directly to
+	// prevent bypassing file guards with commands like `cat .env`.
 	if token, sensitive := antigravityCLISensitiveCommandLine(payload.ToolCall); sensitive {
-		return writeAntigravityPreToolUseDecision(stdout, "ask", "Sensitive file path in the command line requires your approval: "+token)
+		return writeAntigravityPreToolUseDecision(stdout, "deny", "Command line references sensitive path blocked by the Gentle AI permissions guard: "+token)
+	}
+	// Destructive commands (rm -rf, git reset --hard, etc.) require interactive
+	// user confirmation via force_ask, which bypasses cached allow rules.
+	if cmd, destructive := antigravityCLIDestructiveCommandLine(payload.ToolCall); destructive {
+		return writeAntigravityPreToolUseDecision(stdout, "force_ask", "Destructive command detected ("+cmd+"). Requires explicit confirmation.")
 	}
 	if payload.ConversationID == "" || payload.ToolCall == nil || payload.ToolCall.Name == "" {
+		if payload.ToolCall != nil && payload.ToolCall.Name == "run_command" {
+			return writeAntigravityPreToolUseDecision(stdout, "ask", "")
+		}
 		return allowPreToolUse(stdout)
 	}
 
@@ -827,5 +856,8 @@ func handleAntigravityPreToolUse(payload AntigravityCLIHookPayload, _ string, st
 		return nil
 	}
 
+	if payload.ToolCall.Name == "run_command" {
+		return writeAntigravityPreToolUseDecision(stdout, "ask", "")
+	}
 	return allowPreToolUse(stdout)
 }

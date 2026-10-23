@@ -747,50 +747,21 @@ func TestInjectAntigravitySkipsPermissions(t *testing.T) {
 	}
 }
 
-// TestInjectAntigravityCLIDeniesAbsoluteSensitiveHomePaths pins the
-// home-absolute deny rules: the vendor schema resolves bare file targets
-// against workspace roots only, so the user's real .ssh/.credentials/.aws,
-// the GitHub hosts token file and the macOS Keychains are protected only
-// when the overlay names them by absolute path derived from the injected
-// home directory.
-func TestInjectAntigravityCLIDeniesAbsoluteSensitiveHomePaths(t *testing.T) {
+// TestInjectAntigravityCLISkipsSettingsOverlay pins the decision that
+// Gentle AI does not inject static permission overlays into Antigravity CLI's
+// settings.json: guards are evaluated dynamically in-process by the PreToolUse hook.
+func TestInjectAntigravityCLISkipsSettingsOverlay(t *testing.T) {
 	home := t.TempDir()
 	adapter := antigravitycli.NewAdapter()
-	if _, err := Inject(home, adapter); err != nil {
+	res, err := Inject(home, adapter)
+	if err != nil {
 		t.Fatalf("Inject() error = %v", err)
 	}
-	raw, err := os.ReadFile(adapter.SettingsPath(home))
-	if err != nil {
-		t.Fatalf("read settings file: %v", err)
+	if res.Changed {
+		t.Fatalf("Inject() changed = true, want false")
 	}
-	var settings struct {
-		Permissions struct {
-			Deny []string `json:"deny"`
-		} `json:"permissions"`
-	}
-	if err := json.Unmarshal(raw, &settings); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	deniedSet := make(map[string]bool, len(settings.Permissions.Deny))
-	for _, rule := range settings.Permissions.Deny {
-		deniedSet[rule] = true
-	}
-	slashHome := strings.TrimSuffix(filepath.ToSlash(home), "/")
-	for _, target := range []string{
-		slashHome + "/.ssh",
-		slashHome + "/.credentials",
-		slashHome + "/.aws",
-		slashHome + "/.config/gh/hosts.yml",
-		slashHome + "/Library/Keychains",
-	} {
-		t.Run(target, func(t *testing.T) {
-			if !deniedSet["read_file("+target+")"] {
-				t.Errorf("deny missing read_file(%s); got %v", target, settings.Permissions.Deny)
-			}
-			if !deniedSet["write_file("+target+")"] {
-				t.Errorf("deny missing write_file(%s); got %v", target, settings.Permissions.Deny)
-			}
-		})
+	if _, err := os.Stat(adapter.SettingsPath(home)); !os.IsNotExist(err) {
+		t.Fatalf("settings file should not be created for Antigravity CLI, got err = %v", err)
 	}
 }
 
@@ -1157,7 +1128,7 @@ func TestKilocodePermissionsKeepBaseDuplicateKeyBehavior(t *testing.T) {
 	}
 }
 
-func TestInjectAntigravityCLIPreservesUserSettingsAndInjectsDeniedResources(t *testing.T) {
+func TestInjectAntigravityCLIPreservesUserSettingsWithoutInjectingOverlay(t *testing.T) {
 	home := t.TempDir()
 	adapter := antigravitycli.NewAdapter()
 	settingsPath := adapter.SettingsPath(home)
@@ -1176,8 +1147,8 @@ func TestInjectAntigravityCLIPreservesUserSettingsAndInjectsDeniedResources(t *t
 	if err != nil {
 		t.Fatalf("Inject() error = %v", err)
 	}
-	if !result.Changed {
-		t.Fatal("Inject() result.Changed = false, want true on first run")
+	if result.Changed {
+		t.Fatal("Inject() result.Changed = true, want false (no static overlay injected)")
 	}
 
 	content, err := os.ReadFile(settingsPath)
@@ -1190,75 +1161,13 @@ func TestInjectAntigravityCLIPreservesUserSettingsAndInjectsDeniedResources(t *t
 		t.Fatalf("unmarshal: %v", err)
 	}
 
-	// Preserves user settings
+	// Preserves user settings unchanged
 	if scheme, ok := settings["colorScheme"].(string); !ok || scheme != "tokyo night" {
 		t.Errorf("user setting colorScheme was lost or changed; got %v", settings["colorScheme"])
 	}
 
-	perms, ok := settings["permissions"].(map[string]any)
-	if !ok {
-		t.Fatalf("permissions object missing from settings: %v", settings)
-	}
-
-	deniedList, ok := perms["deny"].([]any)
-	if !ok {
-		t.Fatalf("permissions.deny missing or not an array: %v", perms)
-	}
-
-	deniedSet := make(map[string]bool, len(deniedList))
-	for _, item := range deniedList {
-		if s, ok := item.(string); ok {
-			deniedSet[s] = true
-		}
-	}
-
-	requiredDenies := []string{
-		"command(rm -rf)",
-		"command(sudo rm -rf)",
-		"command(git reset --hard)",
-		"command(git clean -fd)",
-		"command(git push --force)",
-		"command(chmod -R 777)",
-		"command(chown -R)",
-		"read_file(.env)",
-		"write_file(.env)",
-		"read_file(.env.local)",
-		"write_file(.env.local)",
-		"read_file(.env.development)",
-		"write_file(.env.development)",
-		"read_file(.env.dev)",
-		"write_file(.env.dev)",
-		"read_file(.env.production)",
-		"write_file(.env.production)",
-		"read_file(.env.prod)",
-		"write_file(.env.prod)",
-		"read_file(.env.test)",
-		"write_file(.env.test)",
-		"read_file(.env.staging)",
-		"write_file(.env.staging)",
-		"read_file(.env.qa)",
-		"write_file(.env.qa)",
-		"read_file(.ssh)",
-		"write_file(.ssh)",
-		"read_file(.credentials)",
-		"write_file(.credentials)",
-		"read_file(.aws)",
-		"write_file(.aws)",
-	}
-
-	for _, req := range requiredDenies {
-		if !deniedSet[req] {
-			t.Errorf("deny missing required rule %q", req)
-		}
-	}
-
-	// Test idempotency: second injection should produce Changed = false
-	secondResult, err := Inject(home, adapter)
-	if err != nil {
-		t.Fatalf("second Inject() error = %v", err)
-	}
-	if secondResult.Changed {
-		t.Error("second Inject() result.Changed = true, want false (idempotent)")
+	if _, hasPerms := settings["permissions"]; hasPerms {
+		t.Fatalf("permissions object should not be injected into settings: %v", settings)
 	}
 }
 

@@ -1068,9 +1068,6 @@ func (s antigravityCLIPluginImportStep) Run() error {
 		if err := agy.EnsurePluginImportedToDir(context.Background(), s.homeDir, pluginDir); err != nil {
 			return fmt.Errorf("import Antigravity CLI plugin: %w", err)
 		}
-		if err := agy.EnsureStatusLineSettings(s.homeDir); err != nil {
-			return fmt.Errorf("register Antigravity CLI status line: %w", err)
-		}
 	}
 	return nil
 }
