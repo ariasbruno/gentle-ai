@@ -41,8 +41,17 @@ func TestAntigravityCLIAdapterOrganicTransport(t *testing.T) {
 		if len(bytes.TrimSpace(raw)) == 0 {
 			t.Fatal("organic agy returned empty bytes")
 		}
+		cleaned := bytes.TrimSpace(raw)
+		if bytes.HasPrefix(cleaned, []byte("```")) {
+			if idx := bytes.IndexByte(cleaned, '\n'); idx != -1 {
+				cleaned = cleaned[idx+1:]
+			}
+			if idx := bytes.LastIndex(cleaned, []byte("```")); idx != -1 {
+				cleaned = bytes.TrimSpace(cleaned[:idx])
+			}
+		}
 		var decoded map[string]any
-		if err := json.Unmarshal(raw, &decoded); err != nil {
+		if err := json.Unmarshal(cleaned, &decoded); err != nil {
 			t.Fatalf("organic agy output is not one JSON object: %v\nraw: %s", err, raw)
 		}
 		subjectHash, _ := decoded["subject_hash"].(string)

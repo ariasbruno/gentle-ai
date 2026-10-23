@@ -282,6 +282,11 @@ func handleAntigravityPostToolUse(payload AntigravityCLIHookPayload, _ string, s
 				home, _ := os.UserHomeDir()
 				recordAntigravityCLIMutation(home, payload.ConversationID, payload.ToolCall.Name, path)
 			}
+		case "write_file", "edit_file":
+			if path, ok := antigravityCLIRequiredString(payload.ToolCall.Args, "Path"); ok {
+				home, _ := os.UserHomeDir()
+				recordAntigravityCLIMutation(home, payload.ConversationID, payload.ToolCall.Name, path)
+			}
 		}
 	}
 	_, _ = fmt.Fprintln(stdout, "{}")
@@ -355,7 +360,7 @@ func antigravityResolveTargetIdentity(ctx context.Context, repo string) (root, t
 }
 
 func handleAntigravityStop(payload AntigravityCLIHookPayload, workspace, agent string, stdout io.Writer) error {
-	if payload.TerminationReason != "model_stop" || !payload.FullyIdle {
+	if (payload.TerminationReason != "model_stop" && payload.TerminationReason != "NO_TOOL_CALL") || !payload.FullyIdle {
 		_, _ = fmt.Fprintln(stdout, "{}")
 		return nil
 	}
@@ -601,33 +606,52 @@ func validateAntigravityCLIInvokeSubagentArgs(args map[string]any) string {
 	if args == nil {
 		return antigravityCLIInvokeSubagentMalformedReason
 	}
-	rawSubagents, ok := args[antigravityCLISubagentsKey]
-	if !ok {
-		return antigravityCLIInvokeSubagentMalformedReason
-	}
-	subagents, ok := rawSubagents.([]any)
-	if !ok || len(subagents) == 0 {
-		return antigravityCLIInvokeSubagentMalformedReason
-	}
-	for index, rawSubagent := range subagents {
-		subagent, ok := rawSubagent.(map[string]any)
-		if !ok {
-			return fmt.Sprintf("Antigravity invoke_subagent Subagents[%d] is not an object.", index)
+	rawSubagents, hasSubagents := args[antigravityCLISubagentsKey]
+	if hasSubagents {
+		subagents, ok := rawSubagents.([]any)
+		if !ok || len(subagents) == 0 {
+			return antigravityCLIInvokeSubagentMalformedReason
 		}
-		if _, ok := antigravityCLIRequiredString(subagent, antigravityCLISubagentTypeKey); !ok {
-			return fmt.Sprintf("Antigravity invoke_subagent Subagents[%d] has no valid TypeName.", index)
-		}
-		if _, ok := antigravityCLIRequiredString(subagent, antigravityCLISubagentRoleKey); !ok {
-			return fmt.Sprintf("Antigravity invoke_subagent Subagents[%d] has no valid Role.", index)
-		}
-		if _, ok := antigravityCLIRequiredString(subagent, antigravityCLISubagentPromptKey); !ok {
-			return fmt.Sprintf("Antigravity invoke_subagent Subagents[%d] has no valid Prompt.", index)
-		}
-		if _, exists := subagent[antigravityCLISubagentSpaceKey]; exists {
-			workspaceName, ok := antigravityCLIRequiredString(subagent, antigravityCLISubagentSpaceKey)
-			if !ok || !antigravityCLIValidWorkspace(workspaceName) {
-				return fmt.Sprintf("Antigravity invoke_subagent Subagents[%d] has an invalid Workspace.", index)
+		for index, rawSubagent := range subagents {
+			subagent, ok := rawSubagent.(map[string]any)
+			if !ok {
+				return fmt.Sprintf("Antigravity invoke_subagent Subagents[%d] is not an object.", index)
 			}
+			if reason := validateAntigravityCLISingleSubagentSpec(subagent, fmt.Sprintf("Subagents[%d]", index)); reason != "" {
+				return reason
+			}
+		}
+		return ""
+	}
+
+	// Flat native AGY format: invoke_subagent(TypeName, Role, Prompt, Workspace?, Model?)
+	if _, ok := args[antigravityCLISubagentTypeKey]; ok {
+		return validateAntigravityCLISingleSubagentSpec(args, "args")
+	}
+	if _, ok := args[antigravityCLISubagentRoleKey]; ok {
+		return validateAntigravityCLISingleSubagentSpec(args, "args")
+	}
+	if _, ok := args[antigravityCLISubagentPromptKey]; ok {
+		return validateAntigravityCLISingleSubagentSpec(args, "args")
+	}
+
+	return antigravityCLIInvokeSubagentMalformedReason
+}
+
+func validateAntigravityCLISingleSubagentSpec(subagent map[string]any, label string) string {
+	if _, ok := antigravityCLIRequiredString(subagent, antigravityCLISubagentTypeKey); !ok {
+		return fmt.Sprintf("Antigravity invoke_subagent %s has no valid TypeName.", label)
+	}
+	if _, ok := antigravityCLIRequiredString(subagent, antigravityCLISubagentRoleKey); !ok {
+		return fmt.Sprintf("Antigravity invoke_subagent %s has no valid Role.", label)
+	}
+	if _, ok := antigravityCLIRequiredString(subagent, antigravityCLISubagentPromptKey); !ok {
+		return fmt.Sprintf("Antigravity invoke_subagent %s has no valid Prompt.", label)
+	}
+	if _, exists := subagent[antigravityCLISubagentSpaceKey]; exists {
+		workspaceName, ok := antigravityCLIRequiredString(subagent, antigravityCLISubagentSpaceKey)
+		if !ok || !antigravityCLIValidWorkspace(workspaceName) {
+			return fmt.Sprintf("Antigravity invoke_subagent %s has an invalid Workspace.", label)
 		}
 	}
 	return ""
@@ -669,8 +693,12 @@ func antigravityCLISensitiveToolPath(call *AntigravityCLIToolCall) (string, bool
 	switch call.Name {
 	case "view_file":
 		argument = "AbsolutePath"
+	case "read_file":
+		argument = "Path"
 	case "write_to_file", "replace_file_content", "multi_replace_file_content":
 		argument = "TargetFile"
+	case "write_file", "edit_file":
+		argument = "Path"
 	case "grep_search":
 		argument = "SearchPath"
 	default:

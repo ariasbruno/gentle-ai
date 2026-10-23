@@ -67,6 +67,7 @@ func TestAntigravityHookStopOutcomes(t *testing.T) {
 		wantReminder      bool
 	}{
 		{name: "fully idle model stop continues", terminationReason: "model_stop", fullyIdle: true, wantDecision: "continue", wantReminder: true},
+		{name: "fully idle NO_TOOL_CALL continues", terminationReason: "NO_TOOL_CALL", fullyIdle: true, wantDecision: "continue", wantReminder: true},
 		{name: "non-idle model stop stays neutral", terminationReason: "model_stop", fullyIdle: false},
 		{name: "non-model stop stays neutral", terminationReason: "max_steps_exceeded", fullyIdle: true},
 	}
@@ -158,29 +159,42 @@ func fmtAntigravityHookPayload(convID string, wsPaths []string, invNum int, term
 }
 
 // TestAntigravityPostToolUseRecordsMutations pins the functional PostToolUse:
-// completed write_to_file calls record a mutation in the per-conversation
+// completed write_to_file and write_file/edit_file calls record a mutation in the per-conversation
 // ledger, mirroring Gentle Shell's tool_result handler.
 func TestAntigravityPostToolUseRecordsMutations(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	payload := `{"conversationId":"conv-mut-test","toolCall":{"name":"write_to_file","args":{"TargetFile":"/project/src/main.go"}},"stepIdx":5,"error":""}`
-	var stdout bytes.Buffer
-	if err := RunAntigravityCLIHook("PostToolUse", "antigravity-cli", strings.NewReader(payload), &stdout, home); err != nil {
-		t.Fatalf("RunAntigravityCLIHook: %v", err)
-	}
-	if strings.TrimSpace(stdout.String()) != "{}" {
-		t.Fatalf("PostToolUse output = %q, want contract-mandated {}", stdout.String())
-	}
-	ledgerPath := antigravityCLIMutationLedgerPath(home, "conv-mut-test")
-	data, err := os.ReadFile(ledgerPath)
-	if err != nil {
-		t.Fatalf("mutation ledger not created: %v", err)
-	}
-	if !strings.Contains(string(data), `"path":"/project/src/main.go"`) {
-		t.Fatalf("ledger entry missing path: %s", data)
-	}
-	if !strings.Contains(string(data), `"tool_name":"write_to_file"`) {
-		t.Fatalf("ledger entry missing tool name: %s", data)
+	for _, tc := range []struct {
+		name string
+		args map[string]any
+		wantPath string
+	}{
+		{name: "write_to_file", args: map[string]any{"TargetFile": "/project/src/main.go"}, wantPath: "/project/src/main.go"},
+		{name: "write_file", args: map[string]any{"Path": "/project/src/new.go"}, wantPath: "/project/src/new.go"},
+		{name: "edit_file", args: map[string]any{"Path": "/project/src/edit.go"}, wantPath: "/project/src/edit.go"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			convID := "conv-mut-" + tc.name
+			payload := fmtAntigravityToolCallPayload(convID, tc.name, tc.args, 5)
+			var stdout bytes.Buffer
+			if err := RunAntigravityCLIHook("PostToolUse", "antigravity-cli", strings.NewReader(payload), &stdout, home); err != nil {
+				t.Fatalf("RunAntigravityCLIHook: %v", err)
+			}
+			if strings.TrimSpace(stdout.String()) != "{}" {
+				t.Fatalf("PostToolUse output = %q, want contract-mandated {}", stdout.String())
+			}
+			ledgerPath := antigravityCLIMutationLedgerPath(home, convID)
+			data, err := os.ReadFile(ledgerPath)
+			if err != nil {
+				t.Fatalf("mutation ledger not created: %v", err)
+			}
+			if !strings.Contains(string(data), fmt.Sprintf(`"path":%q`, tc.wantPath)) {
+				t.Fatalf("ledger entry missing path: %s", data)
+			}
+			if !strings.Contains(string(data), fmt.Sprintf(`"tool_name":%q`, tc.name)) {
+				t.Fatalf("ledger entry missing tool name: %s", data)
+			}
+		})
 	}
 }
 
@@ -648,6 +662,36 @@ func TestAntigravityHookPreToolUseInvokeSubagentValidation(t *testing.T) {
 			want:       "deny",
 			wantReason: "is not an object",
 		},
+		{
+			name: "native flat subagent allowed",
+			args: map[string]any{
+				"TypeName": "DeepCoder",
+				"Role":     "Deep Coder",
+				"Prompt":   "Write code.",
+			},
+			want: "allow",
+		},
+		{
+			name: "native flat subagent with valid workspace",
+			args: map[string]any{
+				"TypeName":  "DeepCoder",
+				"Role":      "Deep Coder",
+				"Prompt":    "Write code.",
+				"Workspace": "inherit",
+			},
+			want: "allow",
+		},
+		{
+			name: "native flat subagent with invalid workspace",
+			args: map[string]any{
+				"TypeName":  "DeepCoder",
+				"Role":      "Deep Coder",
+				"Prompt":    "Write code.",
+				"Workspace": "invalid-workspace",
+			},
+			want:       "deny",
+			wantReason: "invalid Workspace",
+		},
 	}
 
 	for _, test := range tests {
@@ -697,6 +741,10 @@ func TestAntigravityPreToolUseDeniesSensitiveFilePaths(t *testing.T) {
 		{"view keychain", "view_file", map[string]any{"AbsolutePath": "/Users/u/Library/Keychains/login.keychain-db"}, true},
 		{"view secrets dir file", "view_file", map[string]any{"AbsolutePath": "/project/secrets/token"}, true},
 		{"write env variant", "write_to_file", map[string]any{"TargetFile": "/project/.env.local"}, true},
+		{"native write_file env variant", "write_file", map[string]any{"Path": "/project/.env.local"}, true},
+		{"native edit_file env", "edit_file", map[string]any{"Path": "/project/app/.env"}, true},
+		{"native read_file ssh key", "read_file", map[string]any{"Path": "/home/u/.ssh/id_ed25519"}, true},
+		{"native write_file ordinary", "write_file", map[string]any{"Path": "/project/src/main.go"}, false},
 		{"replace env", "replace_file_content", map[string]any{"TargetFile": "/project/app/.env"}, true},
 		{"multi replace pem", "multi_replace_file_content", map[string]any{"TargetFile": "/project/cert.pem"}, true},
 		{"grep ssh dir", "grep_search", map[string]any{"SearchPath": "/home/u/.ssh"}, true},
