@@ -210,7 +210,7 @@ func antigravityCLIReviewModelsPath(home string) string {
 	return filepath.Join(home, ".gemini", "config", "plugins", "gentle-ai", "review-models.json")
 }
 
-func TestResolveAntigravityCLIReviewRoutingFallbackToLegacy(t *testing.T) {
+func TestResolveAntigravityCLIReviewRoutingIgnoresLegacyPath(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
@@ -228,8 +228,8 @@ func TestResolveAntigravityCLIReviewRoutingFallbackToLegacy(t *testing.T) {
 	if assignmentKeyMissing {
 		t.Fatal("assignmentKeyMissing = true, want false")
 	}
-	if got.Model != "gemini-3.8-flash-low" {
-		t.Fatalf("got model = %q, want gemini-3.8-flash-low", got.Model)
+	if got.Model != "" {
+		t.Fatalf("got model = %q, want empty (legacy path must be ignored)", got.Model)
 	}
 }
 

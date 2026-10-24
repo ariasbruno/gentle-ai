@@ -22,7 +22,7 @@ El adaptador [`antigravitycli`](../../internal/agents/antigravitycli/adapter.go)
 └── settings.json                    # configuración de usuario (no inyecta overlay estático)
 ```
 
-`GlobalConfigDir` y `SettingsPath`: [adapter.go, líneas 206–225](../../internal/agents/antigravitycli/adapter.go#L206-L225). La ruta de modelos canónica se ubica dentro del plugin (`~/.gemini/config/plugins/gentle-ai/review-models.json`), con fallback legado a `~/.gemini/antigravity-cli/gentle-ai/review-models.json`: [`AntigravityReviewModelsPath`](../../internal/reviewerprovider/antigravitycli_routing.go#L75-L83).
+`GlobalConfigDir` y `SettingsPath`: [adapter.go, líneas 206–225](../../internal/agents/antigravitycli/adapter.go#L206-L225). La ruta de modelos se ubica dentro del plugin (`~/.gemini/config/plugins/gentle-ai/review-models.json`) como configuración opcional del usuario: [`AntigravityReviewModelsPath`](../../internal/reviewerprovider/antigravitycli_routing.go#L75-L83).
 
 ### 2. Árbol canónico escrito por Gentle AI
 
@@ -31,7 +31,7 @@ El adaptador [`antigravitycli`](../../internal/agents/antigravitycli/adapter.go)
 ├── import_manifest.json
 └── plugins/gentle-ai/
     ├── plugin.json
-    ├── review-models.json           # asignaciones de modelos de revisión (preset economy por defecto)
+    ├── review-models.json           # asignaciones de modelos de revisión (opcional, configurable por el usuario)
     ├── mcp_config.json
     ├── hooks.json
     ├── hooks/{hook.sh,hook.cmd}

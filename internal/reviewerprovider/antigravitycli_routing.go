@@ -81,15 +81,6 @@ func AntigravityReviewModelsPath() (string, error) {
 	return filepath.Join(home, ".gemini", "config", "plugins", "gentle-ai", "review-models.json"), nil
 }
 
-// AntigravityLegacyReviewModelsPath returns the legacy fallback path to review-models.json.
-func AntigravityLegacyReviewModelsPath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("locate antigravity-cli routing home: %w", err)
-	}
-	return filepath.Join(home, ".gemini", "antigravity-cli", "gentle-ai", "review-models.json"), nil
-}
-
 func resolveAntigravityReviewModelsFile() (path string, data []byte, err error) {
 	canonicalPath, err := AntigravityReviewModelsPath()
 	if err != nil {
@@ -101,18 +92,6 @@ func resolveAntigravityReviewModelsFile() (path string, data []byte, err error) 
 	}
 	if !os.IsNotExist(err) {
 		return canonicalPath, nil, fmt.Errorf("read antigravity-cli routing %s: %w", canonicalPath, err)
-	}
-
-	legacyPath, err := AntigravityLegacyReviewModelsPath()
-	if err != nil {
-		return canonicalPath, nil, nil
-	}
-	data, err = os.ReadFile(legacyPath)
-	if err == nil {
-		return legacyPath, data, nil
-	}
-	if !os.IsNotExist(err) {
-		return legacyPath, nil, fmt.Errorf("read antigravity-cli routing %s: %w", legacyPath, err)
 	}
 	return canonicalPath, nil, nil
 }

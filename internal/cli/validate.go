@@ -82,7 +82,7 @@ func NormalizeInstallFlags(flags InstallFlags, detection system.DetectionResult)
 		return InstallInput{}, err
 	}
 	if scope == ScopeWorkspace && containsAgent(selection.Agents, model.AgentAntigravityCLI) && slices.Contains(selection.Components, model.ComponentTheme) {
-		return InstallInput{}, fmt.Errorf("theme component for antigravity-cli requires --scope global (Antigravity CLI settings are global only); rerun gentle-ai install --agent antigravity-cli --scope global --include-theme")
+		return InstallInput{}, fmt.Errorf("theme component for antigravity-cli requires --scope global (Antigravity CLI settings are global only); rerun with --scope global --include-theme")
 	}
 	// Rejected here, before the runtime is created or anything is written.
 	if flags.ClaudeOrchestratorModules {

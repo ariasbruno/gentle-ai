@@ -1123,8 +1123,8 @@ func TestDeployPluginTree(t *testing.T) {
 	}
 
 	reviewModelsFile := filepath.Join(pluginDir, "review-models.json")
-	if _, err := os.Stat(reviewModelsFile); err != nil {
-		t.Errorf("missing deployed review-models.json: %v", err)
+	if _, err := os.Stat(reviewModelsFile); !os.IsNotExist(err) {
+		t.Errorf("review-models.json must not be auto-deployed by default; found %v", err)
 	}
 
 	// Verify 10 ODD subagents

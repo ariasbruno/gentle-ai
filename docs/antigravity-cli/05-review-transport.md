@@ -154,7 +154,7 @@ No equiparar «stdout devuelto intacto» con «core no canonicaliza»: el adapta
 Ruta exclusiva del usuario:
 
 ```text
-~/.gemini/antigravity-cli/gentle-ai/review-models.json
+~/.gemini/config/plugins/gentle-ai/review-models.json
 ```
 
 Hay seis keys: risk, readability, reliability, resilience, refuter y validator con prefijo `review-`: [`CanonicalReviewRoles`](../../internal/reviewerprovider/antigravitycli_routing.go#L103-L113).
