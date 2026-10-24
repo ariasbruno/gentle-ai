@@ -12,7 +12,7 @@ name: Fork CI
 on:
   push:
     branches:
-      - agy/ai-v4.1.1_shell-v4.2.0
+      - agy/ai-v4.2.0_shell-v4.3.0
   workflow_dispatch:
 
 jobs:

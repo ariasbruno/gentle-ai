@@ -26,8 +26,13 @@ require_env GITHUB_REPOSITORY
 require_env GITHUB_SHA
 require_env GH_TOKEN
 
-workflow_ref=${RELEASE_REQUIRED_WORKFLOW:-ci.yml}
-workflow_name=CI
+if [[ "$GITHUB_REPOSITORY" == "ariasbruno/gentle-ai" ]]; then
+  workflow_ref=${RELEASE_REQUIRED_WORKFLOW:-fork-ci.yml}
+  workflow_name="Fork CI"
+else
+  workflow_ref=${RELEASE_REQUIRED_WORKFLOW:-ci.yml}
+  workflow_name=CI
+fi
 
 runs=$(gh api --paginate \
   "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_ref/runs?head_sha=$GITHUB_SHA&per_page=100" \

@@ -165,8 +165,8 @@ func TestAntigravityPostToolUseRecordsMutations(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	for _, tc := range []struct {
-		name string
-		args map[string]any
+		name     string
+		args     map[string]any
 		wantPath string
 	}{
 		{name: "write_to_file", args: map[string]any{"TargetFile": "/project/src/main.go"}, wantPath: "/project/src/main.go"},

@@ -46,7 +46,7 @@ tag_sha=$(git rev-parse "refs/tags/$tag^{commit}")
 
 # Fork plumbing: this fork tags its releases from the development branch instead
 # of main, so the branch a fork release may be tagged from is named once here.
-fork_release_branch=${FORK_RELEASE_BRANCH:-agy/ai-v4.1.1_shell-v4.2.0}
+fork_release_branch=${FORK_RELEASE_BRANCH:-agy/ai-v4.2.0_shell-v4.3.0}
 
 release_branch=${RELEASE_BRANCH:-main}
 if [[ "$GITHUB_REPOSITORY" == "ariasbruno/gentle-ai" && -z "${RELEASE_BRANCH:-}" ]]; then
