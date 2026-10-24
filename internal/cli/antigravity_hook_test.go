@@ -198,6 +198,91 @@ func TestAntigravityPostToolUseRecordsMutations(t *testing.T) {
 	}
 }
 
+// TestAntigravityPostToolUseRecordsEngramSave pins that completing a mem_save
+// tool call inspects the transcript and records the saved observation ID in the engram state.
+func TestAntigravityPostToolUseRecordsEngramSave(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cwd := filepath.Join(home, "project")
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	transcriptPath := filepath.Join(home, "transcript.jsonl")
+	transcriptContent := `{"step_index":1,"type":"GENERIC","content":"{\"id\":3450,\"project\":\"gentle-ai\",\"sync_id\":\"obs-9a61cc\"}"}` + "\n"
+	if err := os.WriteFile(transcriptPath, []byte(transcriptContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	convID := "conv-engram-test"
+	payload := `{
+		"conversationId": "` + convID + `",
+		"transcriptPath": "` + transcriptPath + `",
+		"workspacePaths": ["` + cwd + `"],
+		"toolCall": {
+			"name": "call_mcp_tool",
+			"args": {
+				"ServerName": "gentle-ai_engram",
+				"ToolName": "mem_save",
+				"Arguments": "{\"project\":\"gentle-ai\"}"
+			}
+		}
+	}`
+
+	var stdout bytes.Buffer
+	if err := RunAntigravityCLIHook("PostToolUse", "antigravity-cli", strings.NewReader(payload), &stdout, cwd); err != nil {
+		t.Fatalf("RunAntigravityCLIHook: %v", err)
+	}
+
+	state := readEngramProjectStatus(home, "gentle-ai")
+	if state.Status != "✓ saved #3450" {
+		t.Fatalf("expected engram status '✓ saved #3450', got %q", state.Status)
+	}
+	if state.ConversationID != convID {
+		t.Fatalf("expected conversationID %q, got %q", convID, state.ConversationID)
+	}
+
+	// Triangulation 1: mem_update tool call
+	updateTranscript := filepath.Join(home, "transcript_update.jsonl")
+	updateContent := `{"step_index":2,"type":"GENERIC","content":"{\"id\":3451,\"project\":\"gentle-ai\"}"}` + "\n"
+	_ = os.WriteFile(updateTranscript, []byte(updateContent), 0o644)
+	payloadUpdate := `{
+		"conversationId": "` + convID + `",
+		"transcriptPath": "` + updateTranscript + `",
+		"workspacePaths": ["` + cwd + `"],
+		"toolCall": {
+			"name": "mem_update",
+			"args": {"project": "gentle-ai"}
+		}
+	}`
+	stdout.Reset()
+	if err := RunAntigravityCLIHook("PostToolUse", "antigravity-cli", strings.NewReader(payloadUpdate), &stdout, cwd); err != nil {
+		t.Fatalf("RunAntigravityCLIHook mem_update: %v", err)
+	}
+	state = readEngramProjectStatus(home, "gentle-ai")
+	if state.Status != "✓ updated #3451" {
+		t.Fatalf("expected engram status '✓ updated #3451', got %q", state.Status)
+	}
+
+	// Triangulation 2: Unrelated tool call does not mutate engram status
+	payloadUnrelated := `{
+		"conversationId": "` + convID + `",
+		"workspacePaths": ["` + cwd + `"],
+		"toolCall": {
+			"name": "read_file",
+			"args": {"Path": "/some/path"}
+		}
+	}`
+	stdout.Reset()
+	if err := RunAntigravityCLIHook("PostToolUse", "antigravity-cli", strings.NewReader(payloadUnrelated), &stdout, cwd); err != nil {
+		t.Fatalf("RunAntigravityCLIHook read_file: %v", err)
+	}
+	state = readEngramProjectStatus(home, "gentle-ai")
+	if state.Status != "✓ updated #3451" {
+		t.Fatalf("unrelated tool should not overwrite engram status, got %q", state.Status)
+	}
+}
+
 func fmtAntigravityStopPayload(convID string, wsPaths []string, invNum int, termReason string, fullyIdle bool) string {
 	m := map[string]any{
 		"conversationId":    convID,

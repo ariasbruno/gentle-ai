@@ -140,6 +140,16 @@ const (
 	tagChanges   = "changes"
 )
 
+const (
+	shortcutFull    = ansiDim + "? for shortcuts" + ansiReset
+	shortcutCompact = ansiDim + "?" + ansiReset
+
+	// agyBoxMargin reserves columns for agy's container borders (1 column on the left
+	// and 1 on the right) plus 1 column margin so right-aligned text never collides
+	// with or gets clipped by the container's right border.
+	agyBoxMargin = 3
+)
+
 var dropOrder = []string{tagQuota, tagCost, tagCtx, tagSubagents, tagJobs, tagChanges, tagMem, tagRDD, tagTasklist}
 
 type segment struct {
@@ -165,6 +175,8 @@ type Extras struct {
 	// EngramProject is the Engram project name of the payload cwd (empty
 	// drops the name part of the 🧠 segment).
 	EngramProject string
+	// EngramStatus is the dynamic memory state: "ready", "✓ saved #N", etc.
+	EngramStatus string
 	// Tasklist is the parsed ODD feature-doc task state (S17); Total == 0
 	// hides the segment.
 	Tasklist TasklistStats
@@ -465,12 +477,21 @@ func buildSegments(p *Payload, config Config, extras Extras) []segment {
 		}
 	}
 
-	if config.Visibility.Engram && extras.Observations > 0 {
-		full := fmt.Sprintf("🧠 %d", extras.Observations)
-		if extras.EngramProject != "" {
-			full = fmt.Sprintf("🧠 %s %s·%s %d", extras.EngramProject, ansiDim, ansiReset, extras.Observations)
+	if config.Visibility.Engram {
+		if extras.EngramStatus != "" {
+			full := fmt.Sprintf("🧠 %s %s·%s %s", extras.EngramProject, ansiDim, ansiReset, extras.EngramStatus)
+			if extras.EngramProject == "" {
+				full = fmt.Sprintf("🧠 %s", extras.EngramStatus)
+			}
+			compact := fmt.Sprintf("🧠 %s", extras.EngramStatus)
+			segmentOf(tagMem, full, compact)
+		} else if extras.Observations > 0 {
+			full := fmt.Sprintf("🧠 %d", extras.Observations)
+			if extras.EngramProject != "" {
+				full = fmt.Sprintf("🧠 %s %s·%s %d", extras.EngramProject, ansiDim, ansiReset, extras.Observations)
+			}
+			segmentOf(tagMem, full, fmt.Sprintf("🧠 %d", extras.Observations))
 		}
-		segmentOf(tagMem, full, fmt.Sprintf("🧠 %d", extras.Observations))
 	}
 
 	if config.Visibility.RDD && extras.RDDMode != "" {
@@ -514,6 +535,31 @@ func joinSegments(segs []segment) string {
 	return strings.Join(parts, separator)
 }
 
+// fitLine attempts to layout leftLine and rightText within width.
+// If rightText is non-empty, it right-aligns rightText flush against width
+// with at least 1 space of padding between them ("una cosa en cada punta"),
+// reserving agyBoxMargin columns for agy's container borders and margin.
+// If both fit, it returns the formatted line and true.
+func fitLine(leftLine, rightText string, width int) (string, bool) {
+	leftWidth := visibleWidth(leftLine)
+	if rightText == "" {
+		if leftWidth <= width {
+			return leftLine, true
+		}
+		return "", false
+	}
+	targetWidth := width - agyBoxMargin
+	if targetWidth < 20 {
+		targetWidth = width - 1
+	}
+	rightWidth := visibleWidth(rightText)
+	if leftWidth+1+rightWidth <= targetWidth {
+		padding := targetWidth - leftWidth - rightWidth
+		return leftLine + strings.Repeat(" ", padding) + rightText, true
+	}
+	return "", false
+}
+
 // Render builds the final status line for one payload (S3): the density-
 // adapted segments first, then the width-driven cascade — each class in
 // dropOrder first switches to its compact form, then is dropped — and a
@@ -528,12 +574,30 @@ func Render(payload *Payload, config Config, extras Extras) string {
 	}
 	segs := buildSegments(payload, config, extras)
 
-	line := joinSegments(segs)
-	if visibleWidth(line) <= width {
+	rightText := ""
+	if config.Visibility.Shortcuts {
+		if config.Density == DensityCompact {
+			rightText = shortcutCompact
+		} else {
+			rightText = shortcutFull
+		}
+	}
+
+	leftLine := joinSegments(segs)
+	if line, ok := fitLine(leftLine, rightText, width); ok {
 		return line
 	}
 
 	for _, drop := range dropOrder {
+		// Before dropping high-priority ODD/review/memory segments, try compacting
+		// rightText to free up width while keeping shortcuts visible.
+		if (drop == tagMem || drop == tagRDD || drop == tagTasklist) && rightText == shortcutFull {
+			rightText = shortcutCompact
+			if line, ok := fitLine(leftLine, rightText, width); ok {
+				return line
+			}
+		}
+
 		// Compact step: switch every segment of the class to its compact
 		// form when one exists.
 		compacted := false
@@ -544,8 +608,8 @@ func Render(payload *Payload, config Config, extras Extras) string {
 			}
 		}
 		if compacted {
-			line = joinSegments(segs)
-			if visibleWidth(line) <= width {
+			leftLine = joinSegments(segs)
+			if line, ok := fitLine(leftLine, rightText, width); ok {
 				return line
 			}
 		}
@@ -557,17 +621,33 @@ func Render(payload *Payload, config Config, extras Extras) string {
 			}
 		}
 		segs = kept
-		line = joinSegments(segs)
-		if visibleWidth(line) <= width {
+		leftLine = joinSegments(segs)
+		if line, ok := fitLine(leftLine, rightText, width); ok {
 			return line
 		}
 	}
 
+	// After all dropOrder classes are dropped, try compacting rightText if it was full.
+	if rightText == shortcutFull {
+		rightText = shortcutCompact
+		if line, ok := fitLine(leftLine, rightText, width); ok {
+			return line
+		}
+	}
+
+	// If it still doesn't fit, drop rightText and check leftLine alone.
+	if rightText != "" {
+		rightText = ""
+		if visibleWidth(leftLine) <= width {
+			return leftLine
+		}
+	}
+
 	// Final truncation of whatever survives (the petal block at minimum).
-	if plain := stripANSI(line); utf8.RuneCountInString(plain) > width {
+	if plain := stripANSI(leftLine); utf8.RuneCountInString(plain) > width {
 		return string([]rune(plain)[:width-1]) + "…"
 	}
-	return line
+	return leftLine
 }
 
 // RenderTitle renders the --title mode: the terminal window title, plain

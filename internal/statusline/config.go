@@ -26,6 +26,7 @@ type Visibility struct {
 	ContextWarning bool
 	Engram         bool
 	Tasklist       bool
+	Shortcuts      bool
 }
 
 // Config is the user-owned status line configuration loaded from
@@ -49,6 +50,7 @@ func DefaultConfig() Config {
 			ContextWarning: true,
 			Engram:         true,
 			Tasklist:       true,
+			Shortcuts:      true,
 		},
 	}
 }
@@ -67,6 +69,7 @@ type configFile struct {
 		ContextWarning *bool `json:"contextWarning"`
 		Engram         *bool `json:"engram"`
 		Tasklist       *bool `json:"tasklist"`
+		Shortcuts      *bool `json:"shortcuts"`
 	} `json:"visibility"`
 }
 
@@ -116,6 +119,9 @@ func LoadConfig(homeDir string) Config {
 		}
 		if file.Visibility.Tasklist != nil {
 			config.Visibility.Tasklist = *file.Visibility.Tasklist
+		}
+		if file.Visibility.Shortcuts != nil {
+			config.Visibility.Shortcuts = *file.Visibility.Shortcuts
 		}
 	}
 	return config

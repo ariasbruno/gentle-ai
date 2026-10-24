@@ -34,6 +34,92 @@ type engramCacheRecord struct {
 	Observations int    `json:"observations"`
 }
 
+type engramProjectState struct {
+	Status         string `json:"status"` // e.g. "ready", "✓ saved #3450"
+	ConversationID string `json:"conversation_id,omitempty"`
+	TS             int64  `json:"ts"`
+}
+
+type engramStateFile struct {
+	Projects map[string]engramProjectState `json:"projects"`
+}
+
+func engramStatePath(home string) string {
+	return filepath.Join(home, ".gentle-ai", "statusline-engram-state.json")
+}
+
+// statusLineEngramStatus returns the project name and dynamic memory status
+// ("ready", "✓ saved #3450", etc.) for the current project and conversation.
+// If no state has been saved for this conversation yet, status defaults to "ready".
+// An empty project string indicates that engram is not active for the workspace.
+func statusLineEngramStatus(home, cwd, conversationID string) (project, status string) {
+	if home == "" || cwd == "" {
+		return "", ""
+	}
+	p, obs := statusLineEngramStats(home, cwd)
+	if p == "" && obs == 0 {
+		return "", ""
+	}
+	project = p
+
+	state := readEngramProjectStatus(home, project)
+	if state.Status != "" {
+		if conversationID == "" || state.ConversationID == "" || state.ConversationID == conversationID {
+			return project, state.Status
+		}
+	}
+	return project, "ready"
+}
+
+func readEngramProjectStatus(home, project string) engramProjectState {
+	var file engramStateFile
+	raw, err := os.ReadFile(engramStatePath(home))
+	if err != nil {
+		return engramProjectState{}
+	}
+	if err := json.Unmarshal(raw, &file); err != nil {
+		return engramProjectState{}
+	}
+	if file.Projects == nil {
+		return engramProjectState{}
+	}
+	return file.Projects[project]
+}
+
+func writeEngramProjectStatus(home, project, status, conversationID string) {
+	if home == "" || project == "" || status == "" {
+		return
+	}
+	var file engramStateFile
+	raw, err := os.ReadFile(engramStatePath(home))
+	if err == nil {
+		_ = json.Unmarshal(raw, &file)
+	}
+	if file.Projects == nil {
+		file.Projects = make(map[string]engramProjectState)
+	}
+	file.Projects[project] = engramProjectState{
+		Status:         status,
+		ConversationID: conversationID,
+		TS:             time.Now().Unix(),
+	}
+	encoded, err := json.Marshal(file)
+	if err != nil {
+		return
+	}
+	path := engramStatePath(home)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return
+	}
+	temporary := path + ".tmp"
+	if err := os.WriteFile(temporary, encoded, 0o644); err != nil {
+		return
+	}
+	if err := os.Rename(temporary, path); err != nil {
+		_ = os.Remove(temporary)
+	}
+}
+
 func engramCachePath(home string) string {
 	return filepath.Join(home, ".gentle-ai", "statusline-engram-cache.json")
 }

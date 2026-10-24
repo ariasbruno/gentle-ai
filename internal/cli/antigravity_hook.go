@@ -276,21 +276,175 @@ func antigravityCLIMutationUnderRoot(path, root string) bool {
 // contract-mandated {} — PostToolUse has no decision vocabulary.
 func handleAntigravityPostToolUse(payload AntigravityCLIHookPayload, _ string, stdout io.Writer) error {
 	if payload.ToolCall != nil && payload.Error == "" {
+		home, _ := os.UserHomeDir()
 		switch payload.ToolCall.Name {
 		case "write_to_file", "replace_file_content", "multi_replace_file_content":
 			if path, ok := antigravityCLIRequiredString(payload.ToolCall.Args, "TargetFile"); ok {
-				home, _ := os.UserHomeDir()
 				recordAntigravityCLIMutation(home, payload.ConversationID, payload.ToolCall.Name, path)
 			}
 		case "write_file", "edit_file":
 			if path, ok := antigravityCLIRequiredString(payload.ToolCall.Args, "Path"); ok {
-				home, _ := os.UserHomeDir()
 				recordAntigravityCLIMutation(home, payload.ConversationID, payload.ToolCall.Name, path)
 			}
 		}
+
+		recordAntigravityEngramPostToolUse(home, payload)
 	}
 	_, _ = fmt.Fprintln(stdout, "{}")
 	return nil
+}
+
+var (
+	engramObservationIDPattern     = regexp.MustCompile(`id["\\]*:\s*(\d+)`)
+	engramObservationSyncIDPattern = regexp.MustCompile(`(obs-[a-f0-9]{8,})`)
+	engramProjectInResultPattern   = regexp.MustCompile(`project["\\]*:\s*["\\]*([^\\",]+)["\\]*`)
+)
+
+func resolveTranscriptPath(home string, payload AntigravityCLIHookPayload) string {
+	if payload.TranscriptPath != "" {
+		if _, err := os.Stat(payload.TranscriptPath); err == nil {
+			return payload.TranscriptPath
+		}
+	}
+	if payload.ConversationID != "" && home != "" {
+		canonical := filepath.Join(home, ".gemini", "antigravity-cli", "brain", payload.ConversationID, ".system_generated", "logs", "transcript.jsonl")
+		if _, err := os.Stat(canonical); err == nil {
+			return canonical
+		}
+	}
+	return ""
+}
+
+func recordAntigravityEngramPostToolUse(home string, payload AntigravityCLIHookPayload) {
+	if payload.ToolCall == nil {
+		return
+	}
+
+	verb := ""
+	switch payload.ToolCall.Name {
+	case "mem_save", "mem_session_summary":
+		verb = "saved"
+	case "mem_update":
+		verb = "updated"
+	case "call_mcp_tool":
+		if tn, ok := payload.ToolCall.Args["ToolName"].(string); ok {
+			switch tn {
+			case "mem_save", "mem_session_summary":
+				verb = "saved"
+			case "mem_update":
+				verb = "updated"
+			}
+		}
+	default:
+		if strings.HasSuffix(payload.ToolCall.Name, "mem_save") || strings.HasSuffix(payload.ToolCall.Name, "mem_session_summary") {
+			verb = "saved"
+		} else if strings.HasSuffix(payload.ToolCall.Name, "mem_update") {
+			verb = "updated"
+		}
+	}
+
+	if verb == "" {
+		return
+	}
+
+	// 1. Try to extract project from tool call arguments
+	project := ""
+	if p, ok := payload.ToolCall.Args["project"].(string); ok {
+		project = p
+	}
+	if project == "" {
+		if argsStr, ok := payload.ToolCall.Args["Arguments"].(string); ok {
+			var parsedArgs map[string]any
+			if json.Unmarshal([]byte(argsStr), &parsedArgs) == nil {
+				if p, ok := parsedArgs["project"].(string); ok {
+					project = p
+				}
+			}
+		}
+	}
+
+	// 2. Read tail of transcript to extract observation ID (and project if not yet known)
+	idStr := ""
+	transcriptFile := resolveTranscriptPath(home, payload)
+	if transcriptFile != "" {
+		data, err := os.ReadFile(transcriptFile)
+		if err == nil && len(data) > 0 {
+			tail := data
+			if len(tail) > 16384 {
+				tail = tail[len(tail)-16384:]
+			}
+			content := string(tail)
+
+			lines := strings.Split(strings.TrimSpace(content), "\n")
+			for i := len(lines) - 1; i >= 0; i-- {
+				line := strings.TrimSpace(lines[i])
+				if line == "" {
+					continue
+				}
+				var step struct {
+					Content string `json:"content"`
+				}
+				if json.Unmarshal([]byte(line), &step) != nil || step.Content == "" {
+					continue
+				}
+				idx := strings.Index(step.Content, `{"`)
+				if idx < 0 {
+					continue
+				}
+				var toolResult struct {
+					ID      int    `json:"id"`
+					SyncID  string `json:"sync_id"`
+					Project string `json:"project"`
+				}
+				if json.Unmarshal([]byte(step.Content[idx:]), &toolResult) == nil {
+					if toolResult.ID > 0 {
+						idStr = fmt.Sprintf("#%d", toolResult.ID)
+					} else if toolResult.SyncID != "" {
+						idStr = "#" + toolResult.SyncID
+					}
+					if project == "" && toolResult.Project != "" {
+						project = toolResult.Project
+					}
+					if idStr != "" {
+						break
+					}
+				}
+			}
+
+			if idStr == "" {
+				if idMatches := engramObservationIDPattern.FindAllStringSubmatch(content, -1); len(idMatches) > 0 {
+					idStr = "#" + idMatches[len(idMatches)-1][1]
+				} else if syncMatches := engramObservationSyncIDPattern.FindAllStringSubmatch(content, -1); len(syncMatches) > 0 {
+					idStr = "#" + syncMatches[len(syncMatches)-1][1]
+				}
+			}
+
+			if project == "" {
+				if projMatches := engramProjectInResultPattern.FindAllStringSubmatch(content, -1); len(projMatches) > 0 {
+					project = projMatches[len(projMatches)-1][1]
+				}
+			}
+		}
+	}
+
+	// Fallback project detection from workspace if still empty
+	if project == "" && len(payload.WorkspacePaths) > 0 {
+		project, _ = statusLineEngramStats(home, payload.WorkspacePaths[0])
+	}
+	if project == "" {
+		return
+	}
+
+	if strings.HasPrefix(idStr, "#obs-") && len(idStr) > 13 {
+		idStr = idStr[:13]
+	}
+
+	status := fmt.Sprintf("✓ %s", verb)
+	if idStr != "" {
+		status = fmt.Sprintf("✓ %s %s", verb, idStr)
+	}
+
+	writeEngramProjectStatus(home, project, status, payload.ConversationID)
 }
 
 func handleAntigravityPostInvocation(_ AntigravityCLIHookPayload, _ string, stdout io.Writer) error {

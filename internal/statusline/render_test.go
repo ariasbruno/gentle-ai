@@ -436,6 +436,20 @@ func TestRenderMemSegment(t *testing.T) {
 	if strings.Contains(line, "🧠") {
 		t.Errorf("engram segment shown with zero observations: %s", line)
 	}
+
+	// Status line with dynamic Engram status: ready and saved #id
+	extras.EngramProject = "gentle-ai"
+	extras.EngramStatus = "ready"
+	line = Render(payload, DefaultConfig(), extras)
+	if !strings.Contains(stripANSI(line), "🧠 gentle-ai · ready") {
+		t.Errorf("engram ready status missing: %s", line)
+	}
+
+	extras.EngramStatus = "✓ saved #3450"
+	line = Render(payload, DefaultConfig(), extras)
+	if !strings.Contains(stripANSI(line), "🧠 gentle-ai · ✓ saved #3450") {
+		t.Errorf("engram saved status missing: %s", line)
+	}
 }
 
 // TestSubagentCount pins the defensive subagents handling.
@@ -705,5 +719,57 @@ func TestQuotaCountdownFormatting(t *testing.T) {
 				t.Errorf("quotaCountdown(%v) = %q, want %q", tc.seconds, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestRenderShortcutsRightAligned pins the right-aligned shortcuts indicator
+// ("una cosa en cada punta") flush against the terminal width with dimmed styling.
+func TestRenderShortcutsRightAligned(t *testing.T) {
+	payload := mustPayload(t, `{
+		"cwd": "/home/user/project",
+		"model": {"display_name": "Gemini 3.8 Flash"},
+		"terminal_width": 120,
+		"cycle_mode": "auto"
+	}`)
+
+	// 1. Default / comfortable: full "? for shortcuts" right-aligned flush to width 120 (accounting for agyBoxMargin).
+	line := Render(payload, DefaultConfig(), defaultExtras())
+	plain := stripANSI(line)
+	if !strings.HasPrefix(plain, "✿ auto · Gemini 3.8 Flash") {
+		t.Errorf("left tip missing petal/model: %s", line)
+	}
+	if !strings.HasSuffix(plain, "? for shortcuts") {
+		t.Errorf("right tip missing '? for shortcuts': %s", line)
+	}
+	wantWidth := 120 - agyBoxMargin
+	if got := visibleWidth(line); got != wantWidth {
+		t.Errorf("visibleWidth = %d, want %d", got, wantWidth)
+	}
+	if !strings.Contains(line, ansiDim+"? for shortcuts"+ansiReset) {
+		t.Errorf("shortcuts text not styled in ansiDim: %s", line)
+	}
+
+	// 2. Compact density: compacts to "?" on the right.
+	compactCfg := DefaultConfig()
+	compactCfg.Density = DensityCompact
+	lineCompact := Render(payload, compactCfg, defaultExtras())
+	plainCompact := stripANSI(lineCompact)
+	if !strings.HasSuffix(plainCompact, "?") || strings.HasSuffix(plainCompact, "? for shortcuts") {
+		t.Errorf("compact density did not shorten to '?': %s", lineCompact)
+	}
+	if got := visibleWidth(lineCompact); got != wantWidth {
+		t.Errorf("compact visibleWidth = %d, want %d", got, wantWidth)
+	}
+
+	// 3. Disabled visibility: no shortcut hint, no trailing padding to width 120.
+	disabledCfg := DefaultConfig()
+	disabledCfg.Visibility.Shortcuts = false
+	lineDisabled := Render(payload, disabledCfg, defaultExtras())
+	plainDisabled := stripANSI(lineDisabled)
+	if strings.Contains(plainDisabled, "?") {
+		t.Errorf("shortcuts visible when disabled: %s", lineDisabled)
+	}
+	if got := visibleWidth(lineDisabled); got == 120 {
+		t.Errorf("disabled shortcuts should not pad to width 120: got %d", got)
 	}
 }

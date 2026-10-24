@@ -20,7 +20,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 		t.Error("tasklist/engram default to visible")
 	}
 	if !config.Visibility.RDD || !config.Visibility.Agents || !config.Visibility.UsageCost ||
-		!config.Visibility.ModelDetails || !config.Visibility.ContextWarning {
+		!config.Visibility.ModelDetails || !config.Visibility.ContextWarning || !config.Visibility.Shortcuts {
 		t.Errorf("visibility flags not all visible by default: %+v", config.Visibility)
 	}
 }
@@ -58,7 +58,8 @@ func TestLoadConfigValues(t *testing.T) {
 			"agents": false,
 			"usageCost": false,
 			"modelDetails": false,
-			"contextWarning": false
+			"contextWarning": false,
+			"shortcuts": false
 		}
 	}`
 	if err := os.WriteFile(filepath.Join(dir, "statusline.json"), []byte(raw), 0o644); err != nil {
@@ -72,7 +73,7 @@ func TestLoadConfigValues(t *testing.T) {
 		t.Error("changes=false not honored")
 	}
 	if config.Visibility.RDD || config.Visibility.Agents || config.Visibility.UsageCost ||
-		config.Visibility.ModelDetails || config.Visibility.ContextWarning {
+		config.Visibility.ModelDetails || config.Visibility.ContextWarning || config.Visibility.Shortcuts {
 		t.Errorf("visibility not honored: %+v", config.Visibility)
 	}
 }

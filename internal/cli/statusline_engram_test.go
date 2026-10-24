@@ -126,6 +126,33 @@ func TestStatusLineEngramFailuresHideSegment(t *testing.T) {
 	}
 }
 
+// TestStatusLineEngramStatusDefaultReady verifies that engram status defaults to "ready"
+// when no memories have been saved in the conversation, updates upon save, and resets for new conversations.
+func TestStatusLineEngramStatusDefaultReady(t *testing.T) {
+	home := t.TempDir()
+	cwd := t.TempDir()
+	t.Setenv("HOME", home)
+	_ = fakeEngramOnPATH(t, 918)
+
+	project, status := statusLineEngramStatus(home, cwd, "conv-1")
+	if project != "gentle-ai" || status != "ready" {
+		t.Errorf("status = (%q, %q), want (gentle-ai, ready)", project, status)
+	}
+
+	// Record a saved memory: status updates to "✓ saved #3450"
+	writeEngramProjectStatus(home, "gentle-ai", "✓ saved #3450", "conv-1")
+	project, status = statusLineEngramStatus(home, cwd, "conv-1")
+	if project != "gentle-ai" || status != "✓ saved #3450" {
+		t.Errorf("status after save = (%q, %q), want (gentle-ai, ✓ saved #3450)", project, status)
+	}
+
+	// A different conversation ID starts at "ready"
+	project, status = statusLineEngramStatus(home, cwd, "conv-2")
+	if project != "gentle-ai" || status != "ready" {
+		t.Errorf("status for new conv = (%q, %q), want (gentle-ai, ready)", project, status)
+	}
+}
+
 // TestRunStatusLineRendersEngramSegment pins the end-to-end segment.
 func TestRunStatusLineRendersEngramSegment(t *testing.T) {
 	home := t.TempDir()
@@ -141,7 +168,13 @@ func TestRunStatusLineRendersEngramSegment(t *testing.T) {
 		"terminal_width": 200
 	}`
 	line := runStatusLineTest(t, nil, payload, home)
-	if !strings.Contains(stripStatusLineANSI(line), "🧠 gentle-ai · 314") {
-		t.Errorf("engram segment missing: %s", line)
+	if !strings.Contains(stripStatusLineANSI(line), "🧠 gentle-ai · ready") {
+		t.Errorf("engram ready segment missing: %s", line)
+	}
+
+	writeEngramProjectStatus(home, "gentle-ai", "✓ saved #314", "")
+	line = runStatusLineTest(t, nil, payload, home)
+	if !strings.Contains(stripStatusLineANSI(line), "🧠 gentle-ai · ✓ saved #314") {
+		t.Errorf("engram saved segment missing: %s", line)
 	}
 }

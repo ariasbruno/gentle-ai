@@ -90,7 +90,11 @@ func runStatusLine(args []string, stdin io.Reader, stdout io.Writer, homeDir str
 		extras.Changes = statusLineGitChangesCached(homeDir, cwd)
 	}
 	if config.Visibility.Engram {
-		extras.EngramProject, extras.Observations = statusLineEngramStats(homeDir, cwd)
+		var conversationID string
+		if payload != nil {
+			conversationID = payload.ConversationID
+		}
+		extras.EngramProject, extras.EngramStatus = statusLineEngramStatus(homeDir, cwd, conversationID)
 	}
 	if config.Visibility.Tasklist {
 		extras.Tasklist = statusLineTasklist(cwd)
