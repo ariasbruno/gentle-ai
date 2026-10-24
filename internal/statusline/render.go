@@ -21,6 +21,9 @@ const (
 	ansiMagenta       = "\x1b[35m"
 	ansiBrightMagenta = "\x1b[95m"
 	ansiCyan          = "\x1b[36m"
+	ansiOrange        = "\x1b[38;5;214m"
+	ansiRose          = "\x1b[38;2;255;118;195m"
+	ansiEffort        = "\x1b[38;2;137;220;235m"
 )
 
 const (
@@ -32,15 +35,89 @@ const (
 	defaultWidth       = 80
 )
 
-// The petal is static (L23): the wall-clock frame animation advanced only
-// when agy re-rendered, which looked broken in practice, so the flower is
-// now a fixed glyph — plain while idle, magenta while the agent works, so
-// the state stays visible without motion.
+// petalGlyph returns the static rose glyph in Gentle Shell rose pink always:
+// consistent color, no animation, identical in all agent states.
 func petalGlyph(p *Payload) string {
-	if p.AgentState == "" || p.AgentState == "idle" {
-		return ansiBold + "✿" + ansiReset
+	return ansiRose + ansiBold + "✿" + ansiReset
+}
+
+// colorMode colors the cycle/execution mode:
+// auto = Gentle Shell rose pink, accept-edits = yellow, plan = orange.
+func colorMode(mode string) string {
+	switch strings.ToLower(mode) {
+	case "auto":
+		return ansiRose + mode + ansiReset
+	case "accept-edits":
+		return ansiWarning + mode + ansiReset
+	case "plan", "planning":
+		return ansiOrange + mode + ansiReset
+	default:
+		return mode
 	}
-	return ansiMagenta + ansiBold + "✿" + ansiReset
+}
+
+// formatModelDisplay formats the model name and effort matching native Antigravity CLI:
+// "Gemini 3.8 Flash · high"
+func formatModelDisplay(m Model, fallbackEffort ...string) string {
+	name := m.DisplayName
+	if name == "" {
+		name = m.ID
+	}
+	effort := m.Effort
+	if effort == "" && len(fallbackEffort) > 0 {
+		effort = fallbackEffort[0]
+	}
+	if effort != "" {
+		effortPattern := regexp.MustCompile(`(?i)\s*(?:\(` + regexp.QuoteMeta(effort) + `\)|[·-]\s*` + regexp.QuoteMeta(effort) + `)$`)
+		stripped := effortPattern.ReplaceAllString(name, "")
+		dot := " " + ansiDim + "·" + ansiReset + " "
+		effortStyled := ansiEffort + strings.ToLower(effort) + ansiReset
+		if stripped != "" {
+			return stripped + dot + effortStyled
+		}
+		return name + dot + effortStyled
+	}
+	return name
+}
+
+// colorRDD styles the RDD status indicator: on (accent green), off (dim),
+// review in progress / fixing (warning yellow), approved (accent green).
+func colorRDD(mode string) string {
+	switch mode {
+	case "on":
+		return ansiAccent + "on" + ansiReset
+	case "off":
+		return ansiDim + "off" + ansiReset
+	case "Review unavailable":
+		return ansiDim + "Review unavailable" + ansiReset
+	default:
+		lower := strings.ToLower(mode)
+		if strings.Contains(lower, "approved") {
+			return ansiAccent + mode + ansiReset
+		}
+		if strings.Contains(lower, "review") || strings.Contains(lower, "fixing") {
+			return ansiWarning + mode + ansiReset
+		}
+		return mode
+	}
+}
+
+var changesPattern = regexp.MustCompile(`^(±\S+)(?:\s+\+(\d+)/(?:−|-)(\d+))?$`)
+
+// colorChanges styles git changes: ±N (warning yellow), +A (accent green), −D (error red).
+func colorChanges(s string) string {
+	m := changesPattern.FindStringSubmatch(s)
+	if m == nil {
+		return s
+	}
+	countPart := ansiWarning + m[1] + ansiReset
+	if len(m) > 2 && m[2] != "" && m[3] != "" {
+		addedPart := ansiAccent + "+" + m[2] + ansiReset
+		slashPart := ansiDim + "/" + ansiReset
+		deletedPart := ansiError + "−" + m[3] + ansiReset
+		return countPart + " " + addedPart + slashPart + deletedPart
+	}
+	return countPart
 }
 
 // FallbackLine is the petal-only line rendered for absent, empty, or
@@ -142,6 +219,32 @@ func renderGauge(pct, cells int) string {
 	return strings.Repeat("▰", filled) + strings.Repeat("▱", cells-filled)
 }
 
+// paintGauge builds the visual gauge with filled cells in the status color
+// and empty cells in ansiDim, providing crisp contrast matching Gentle Shell.
+func paintGauge(pct, cells int) string {
+	filled := pct * cells / 100
+	if filled > cells {
+		filled = cells
+	}
+	if filled < 0 {
+		filled = 0
+	}
+	empty := cells - filled
+
+	var b strings.Builder
+	if filled > 0 {
+		b.WriteString(gaugeColor(pct))
+		b.WriteString(strings.Repeat("▰", filled))
+		b.WriteString(ansiReset)
+	}
+	if empty > 0 {
+		b.WriteString(ansiDim)
+		b.WriteString(strings.Repeat("▱", empty))
+		b.WriteString(ansiReset)
+	}
+	return b.String()
+}
+
 // roundPercent rounds half up, matching the Gentle Shell Math.round.
 func roundPercent(v float64) int {
 	return int(v + 0.5)
@@ -156,19 +259,19 @@ func formatCost(cost float64) string {
 	return fmt.Sprintf("$%.2f", cost)
 }
 
-// quotaCountdown formats the bucket's reset countdown (S16): ≥1 day →
-// "NdMh", ≥1 hour → "NhMm", under an hour → "Nm". Non-positive values
-// return "" and the caller falls back to the key-derived label.
+// quotaCountdown formats the bucket's reset countdown:
+// ≥24h → "Nd" (e.g. 5d), ≥1h → "Nh" (e.g. 1h), <1h → "Nm" (e.g. 40m).
+// Never compound formats like 4d16h or 1h4m.
 func quotaCountdown(seconds float64) string {
 	if seconds <= 0 {
 		return ""
 	}
 	total := int(seconds)
 	if days := total / 86400; days > 0 {
-		return fmt.Sprintf("%dd%dh", days, (total%86400)/3600)
+		return fmt.Sprintf("%dd", days)
 	}
 	if hours := total / 3600; hours > 0 {
-		return fmt.Sprintf("%dh%dm", hours, (total%3600)/60)
+		return fmt.Sprintf("%dh", hours)
 	}
 	return fmt.Sprintf("%dm", total/60)
 }
@@ -283,11 +386,11 @@ func buildSegments(p *Payload, config Config, extras Extras) []segment {
 	}
 	petalText := petalGlyph(p)
 	if config.Visibility.ModelDetails {
-		modelText := p.Model.DisplayName
+		modelText := formatModelDisplay(p.Model, p.Effort)
 		if modelText == "" {
-			modelText = mode
+			modelText = colorMode(mode)
 		} else if mode != "" {
-			modelText = mode + " · " + modelText
+			modelText = colorMode(mode) + " " + ansiDim + "·" + ansiReset + " " + modelText
 		}
 		if modelText != "" {
 			petalText += " " + modelText
@@ -302,14 +405,18 @@ func buildSegments(p *Payload, config Config, extras Extras) []segment {
 			marker = " !"
 		}
 		segmentOf(tagCtx,
-			fmt.Sprintf("ctx %s%s%s %d%%%s", gaugeColor(pct), renderGauge(pct, cells), ansiReset, pct, marker),
-			fmt.Sprintf("ctx %s%d%%%s", gaugeColor(pct), pct, ansiReset))
+			fmt.Sprintf("%sctx%s %s %d%%%s", ansiDim, ansiReset, paintGauge(pct, cells), pct, marker),
+			fmt.Sprintf("%sctx%s %s%d%%%s", ansiDim, ansiReset, gaugeColor(pct), pct, ansiReset))
 
 		cost := 0.0
 		if p.Cost != nil {
 			cost = *p.Cost
 		}
-		segmentOf(tagCost, formatCost(cost), "")
+		costStr := formatCost(cost)
+		if cost == 0 {
+			costStr = ansiDim + costStr + ansiReset
+		}
+		segmentOf(tagCost, costStr, "")
 
 		quota := activeQuota(p)
 		family := modelFamily(p.Model.ID, p.Model.DisplayName)
@@ -332,8 +439,8 @@ func buildSegments(p *Payload, config Config, extras Extras) []segment {
 				label = quotaLabelFromKey(key, family)
 			}
 			segmentOf(tagQuota,
-				fmt.Sprintf("%s %s%s%s %d%%", label, gaugeColor(used), renderGauge(used, cells), ansiReset, used),
-				fmt.Sprintf("%s %d%%", label, used))
+				fmt.Sprintf("%s%s%s %s %d%%", ansiDim, label, ansiReset, paintGauge(used, cells), used),
+				fmt.Sprintf("%s%s%s %s%d%%%s", ansiDim, label, ansiReset, gaugeColor(used), used, ansiReset))
 		}
 	}
 
@@ -343,27 +450,31 @@ func buildSegments(p *Payload, config Config, extras Extras) []segment {
 			if p.TaskCount == 1 {
 				jobsWord = "job"
 			}
-			segmentOf(tagJobs, fmt.Sprintf("⧗ %d %s", p.TaskCount, jobsWord), fmt.Sprintf("⧗ %d", p.TaskCount))
+			segmentOf(tagJobs,
+				fmt.Sprintf("%s⧗%s %d %s", ansiEffort, ansiReset, p.TaskCount, jobsWord),
+				fmt.Sprintf("%s⧗%s %d", ansiEffort, ansiReset, p.TaskCount))
 		}
 		if count := p.SubagentCount(); count > 0 {
 			agentsWord := "subagents"
 			if count == 1 {
 				agentsWord = "subagent"
 			}
-			segmentOf(tagSubagents, fmt.Sprintf("✦ %d %s", count, agentsWord), fmt.Sprintf("✦ %d", count))
+			segmentOf(tagSubagents,
+				fmt.Sprintf("%s✦%s %d %s", ansiEffort, ansiReset, count, agentsWord),
+				fmt.Sprintf("%s✦%s %d", ansiEffort, ansiReset, count))
 		}
 	}
 
 	if config.Visibility.Engram && extras.Observations > 0 {
 		full := fmt.Sprintf("🧠 %d", extras.Observations)
 		if extras.EngramProject != "" {
-			full = fmt.Sprintf("🧠 %s · %d", extras.EngramProject, extras.Observations)
+			full = fmt.Sprintf("🧠 %s %s·%s %d", extras.EngramProject, ansiDim, ansiReset, extras.Observations)
 		}
 		segmentOf(tagMem, full, fmt.Sprintf("🧠 %d", extras.Observations))
 	}
 
 	if config.Visibility.RDD && extras.RDDMode != "" {
-		segmentOf(tagRDD, "🌹 "+extras.RDDMode, "")
+		segmentOf(tagRDD, "🌹 "+colorRDD(extras.RDDMode), "")
 	}
 
 	if config.Visibility.Tasklist && extras.Tasklist.Total > 0 {
@@ -386,8 +497,8 @@ func buildSegments(p *Payload, config Config, extras Extras) []segment {
 		segmentOf(tagTasklist, full, compact)
 	}
 
-	if config.Visibility.Changes {
-		segmentOf(tagChanges, extras.Changes, "")
+	if config.Visibility.Changes && extras.Changes != "" {
+		segmentOf(tagChanges, colorChanges(extras.Changes), "")
 	}
 
 	return segs

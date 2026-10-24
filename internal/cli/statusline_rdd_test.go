@@ -63,7 +63,7 @@ func TestRunStatusLineRDDOffAndUnavailable(t *testing.T) {
 	}
 	payload := `{"cwd":"` + repo + `","terminal_width":200}`
 	line := runStatusLineTest(t, nil, payload, home)
-	if !strings.Contains(line, "🌹 off") {
+	if !strings.Contains(stripStatusLineANSI(line), "🌹 off") {
 		t.Fatal(line)
 	}
 	// A malformed persisted mode must be visible as unavailable, not on/off.
@@ -71,7 +71,7 @@ func TestRunStatusLineRDDOffAndUnavailable(t *testing.T) {
 		t.Fatal(err)
 	}
 	line = runStatusLineTest(t, nil, payload, home)
-	if !strings.Contains(line, "🌹 Review unavailable") {
+	if !strings.Contains(stripStatusLineANSI(line), "🌹 Review unavailable") {
 		t.Fatal(line)
 	}
 	after, err := os.ReadFile(state.Path(home))

@@ -43,7 +43,7 @@ func TestRenderFullLine(t *testing.T) {
 	plain := stripANSI(line)
 	for _, want := range []string{
 		"planning · Gemini 3.5 Pro (High)", "ctx ", "43%", "$0.312",
-		"1d0h", "30%", "⧗ 2 jobs", "✦ 2 subagents", "🌹 on",
+		"1d", "30%", "⧗ 2 jobs", "✦ 2 subagents", "🌹 on",
 	} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("missing segment %q in: %s", want, line)
@@ -71,7 +71,7 @@ func TestRenderQuotaWindows(t *testing.T) {
 		"context_window": {"used_percentage": 10}
 	}`)
 	line := Render(payload, DefaultConfig(), defaultExtras())
-	for _, want := range []string{"7d0h", "1d0h", "1h0m", "30%", "70%", "50%"} {
+	for _, want := range []string{"7d", "1d", "1h", "30%", "70%", "50%"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("missing quota marker %q in: %s", want, line)
 		}
@@ -92,7 +92,7 @@ func TestRenderQuotaFiltersInactiveFamily(t *testing.T) {
 		"context_window": {"used_percentage": 10}
 	}`)
 	line := Render(payload, DefaultConfig(), defaultExtras())
-	if !strings.Contains(line, "7d0h") {
+	if !strings.Contains(line, "7d") {
 		t.Errorf("active family bucket missing: %s", line)
 	}
 	if strings.Contains(line, "claude") || strings.Contains(line, "5h") {
@@ -145,7 +145,7 @@ func TestRenderCascade(t *testing.T) {
 
 	full := Render(payload, DefaultConfig(), extras)
 	plainFull := stripANSI(full)
-	for _, want := range []string{"7d0h", "$0.312", "ctx ", "⧗ 2 jobs", "✦ 2 subagents", "🧠 gentle-ai · 918", "🌹 on"} {
+	for _, want := range []string{"7d", "$0.312", "ctx ", "⧗ 2 jobs", "✦ 2 subagents", "🧠 gentle-ai · 918", "🌹 on"} {
 		if !strings.Contains(plainFull, want) {
 			t.Fatalf("wide line missing %q: %s", want, full)
 		}
@@ -157,7 +157,7 @@ func TestRenderCascade(t *testing.T) {
 	narrow.TerminalWidth = 60
 	line := Render(&narrow, DefaultConfig(), extras)
 	plain := stripANSI(line)
-	if strings.Contains(plain, "7d0h") || strings.Contains(plain, "▰") {
+	if strings.Contains(plain, "7d") || strings.Contains(plain, "▰") {
 		t.Errorf("quota survived the cascade at 60 cols: %s", line)
 	}
 	if strings.Contains(plain, "$0.312") || strings.Contains(plain, "ctx ") {
@@ -277,7 +277,7 @@ func TestRenderPetalState(t *testing.T) {
 	if !strings.Contains(plain, "✿") {
 		t.Errorf("active state missing the static petal: %s", line)
 	}
-	if !strings.Contains(line, ansiMagenta) {
+	if !strings.Contains(line, ansiRose) {
 		t.Errorf("active petal not in the static work tone: %s", line)
 	}
 
@@ -316,8 +316,18 @@ func TestRenderChangesSegment(t *testing.T) {
 	config := DefaultConfig()
 	config.Visibility.Changes = true
 	line := Render(payload, config, Extras{Changes: "±3 +10/−2"})
-	if !strings.Contains(line, "±3 +10/−2") {
+	plain := stripANSI(line)
+	if !strings.Contains(plain, "±3 +10/−2") {
 		t.Errorf("changes segment missing: %s", line)
+	}
+	if !strings.Contains(line, ansiWarning+"±3"+ansiReset) {
+		t.Errorf("changes count not in warning color: %s", line)
+	}
+	if !strings.Contains(line, ansiAccent+"+10"+ansiReset) {
+		t.Errorf("changes added not in accent color: %s", line)
+	}
+	if !strings.Contains(line, ansiError+"−2"+ansiReset) {
+		t.Errorf("changes deleted not in error color: %s", line)
 	}
 
 	config.Visibility.Changes = false
@@ -403,13 +413,13 @@ func TestRenderMemSegment(t *testing.T) {
 	extras.Observations = 918
 	extras.EngramProject = "gentle-ai"
 	line := Render(payload, DefaultConfig(), extras)
-	if !strings.Contains(line, "🧠 gentle-ai · 918") {
+	if !strings.Contains(stripANSI(line), "🧠 gentle-ai · 918") {
 		t.Errorf("engram segment missing: %s", line)
 	}
 
 	extras.EngramProject = ""
 	line = Render(payload, DefaultConfig(), extras)
-	if !strings.Contains(line, "🧠 918") {
+	if !strings.Contains(stripANSI(line), "🧠 918") {
 		t.Errorf("count-only engram segment missing: %s", line)
 	}
 
@@ -544,5 +554,156 @@ func TestRenderCycleMode(t *testing.T) {
 	plain := stripANSI(line)
 	if strings.Contains(plain, "default") || strings.Contains(plain, "auto") {
 		t.Errorf("absent mode invented a label: %s", line)
+	}
+}
+
+func TestRenderModeColorsAndEffortFormatting(t *testing.T) {
+	cases := []struct {
+		name      string
+		raw       string
+		wantANSI  string
+		wantPlain string
+	}{
+		{
+			name:      "auto mode in rose with effort",
+			raw:       `{"cycle_mode": "auto", "model": {"display_name": "Gemini 3.8 Flash (High)", "effort": "high"}, "terminal_width": 200}`,
+			wantANSI:  ansiRose + "auto" + ansiReset + " " + ansiDim + "·" + ansiReset + " Gemini 3.8 Flash " + ansiDim + "·" + ansiReset + " " + ansiEffort + "high" + ansiReset,
+			wantPlain: "auto · Gemini 3.8 Flash · high",
+		},
+		{
+			name:      "display name with dot effort formatted in effort color",
+			raw:       `{"cycle_mode": "auto", "model": {"display_name": "Gemini 3.8 Flash · high", "effort": "high"}, "terminal_width": 200}`,
+			wantANSI:  ansiRose + "auto" + ansiReset + " " + ansiDim + "·" + ansiReset + " Gemini 3.8 Flash " + ansiDim + "·" + ansiReset + " " + ansiEffort + "high" + ansiReset,
+			wantPlain: "auto · Gemini 3.8 Flash · high",
+		},
+		{
+			name:      "accept-edits in yellow with effort",
+			raw:       `{"cycle_mode": "accept-edits", "model": {"display_name": "Gemini 3.8 Flash (High)", "effort": "high"}, "terminal_width": 200}`,
+			wantANSI:  ansiWarning + "accept-edits" + ansiReset + " " + ansiDim + "·" + ansiReset + " Gemini 3.8 Flash " + ansiDim + "·" + ansiReset + " " + ansiEffort + "high" + ansiReset,
+			wantPlain: "accept-edits · Gemini 3.8 Flash · high",
+		},
+		{
+			name:      "plan in orange with effort",
+			raw:       `{"cycle_mode": "plan", "model": {"display_name": "Gemini 3.8 Flash (High)", "effort": "high"}, "terminal_width": 200}`,
+			wantANSI:  ansiOrange + "plan" + ansiReset + " " + ansiDim + "·" + ansiReset + " Gemini 3.8 Flash " + ansiDim + "·" + ansiReset + " " + ansiEffort + "high" + ansiReset,
+			wantPlain: "plan · Gemini 3.8 Flash · high",
+		},
+		{
+			name:      "plan in orange with payload root effort",
+			raw:       `{"cycle_mode": "plan", "effort": "high", "model": {"display_name": "Gemini 3.8 Flash (High)"}, "terminal_width": 200}`,
+			wantANSI:  ansiOrange + "plan" + ansiReset + " " + ansiDim + "·" + ansiReset + " Gemini 3.8 Flash " + ansiDim + "·" + ansiReset + " " + ansiEffort + "high" + ansiReset,
+			wantPlain: "plan · Gemini 3.8 Flash · high",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			payload := mustPayload(t, tc.raw)
+			line := Render(payload, DefaultConfig(), defaultExtras())
+			if !strings.Contains(line, tc.wantANSI) {
+				t.Errorf("line does not contain expected ANSI %q: %s", tc.wantANSI, line)
+			}
+			plain := stripANSI(line)
+			if !strings.Contains(plain, tc.wantPlain) {
+				t.Errorf("line does not contain expected plain %q: %s", tc.wantPlain, plain)
+			}
+		})
+	}
+}
+
+func TestRenderVisualHierarchy(t *testing.T) {
+	payload := mustPayload(t, `{
+		"model": {"display_name": "Gemini 3.8 Flash (High)", "effort": "high"},
+		"context_window": {"used_percentage": 25.0},
+		"cost": 0.0,
+		"quota": {"gemini-daily": {"remaining_fraction": 0.5, "reset_in_seconds": 3600}},
+		"task_count": 1,
+		"subagents": [{"name": "sub1"}],
+		"terminal_width": 240
+	}`)
+	config := DefaultConfig()
+	config.Visibility.Changes = true
+	extras := Extras{
+		RDDMode:       "on",
+		EngramProject: "gentle-ai",
+		Observations:  100,
+		Changes:       "±5 +12/−3",
+	}
+	line := Render(payload, config, extras)
+
+	// 1. Model effort in vivid sky blue and dot in dim
+	wantModel := "Gemini 3.8 Flash " + ansiDim + "·" + ansiReset + " " + ansiEffort + "high" + ansiReset
+	if !strings.Contains(line, wantModel) {
+		t.Errorf("model effort styling missing: %s", line)
+	}
+
+	// 2. Gauge has filled cells in color and empty cells in dim
+	wantGauge := ansiAccent + "▰▰" + ansiReset + ansiDim + "▱▱▱▱▱▱" + ansiReset
+	if !strings.Contains(line, wantGauge) {
+		t.Errorf("gauge contrast missing: %s", line)
+	}
+
+	// 3. Labels in dim
+	if !strings.Contains(line, ansiDim+"ctx"+ansiReset) {
+		t.Errorf("ctx label not in dim: %s", line)
+	}
+	if !strings.Contains(line, ansiDim+"1h"+ansiReset) {
+		t.Errorf("quota label not in dim: %s", line)
+	}
+
+	// 4. Zero cost in dim
+	if !strings.Contains(line, ansiDim+"$0.000"+ansiReset) {
+		t.Errorf("zero cost not in dim: %s", line)
+	}
+
+	// 5. RDD on in accent
+	if !strings.Contains(line, "🌹 "+ansiAccent+"on"+ansiReset) {
+		t.Errorf("RDD on not in accent: %s", line)
+	}
+
+	// 6. RDD off in dim
+	extrasOff := extras
+	extrasOff.RDDMode = "off"
+	lineOff := Render(payload, config, extrasOff)
+	if !strings.Contains(lineOff, "🌹 "+ansiDim+"off"+ansiReset) {
+		t.Errorf("RDD off not in dim: %s", lineOff)
+	}
+
+	// 7. Git changes colored
+	if !strings.Contains(line, ansiWarning+"±5"+ansiReset) ||
+		!strings.Contains(line, ansiAccent+"+12"+ansiReset) ||
+		!strings.Contains(line, ansiError+"−3"+ansiReset) {
+		t.Errorf("git changes colors missing: %s", line)
+	}
+
+	// 8. Glyph styling for jobs and subagents
+	if !strings.Contains(line, ansiEffort+"⧗"+ansiReset+" 1 job") {
+		t.Errorf("jobs glyph not in effort color: %s", line)
+	}
+	if !strings.Contains(line, ansiEffort+"✦"+ansiReset+" 1 subagent") {
+		t.Errorf("subagents glyph not in effort color: %s", line)
+	}
+}
+
+func TestQuotaCountdownFormatting(t *testing.T) {
+	cases := []struct {
+		name    string
+		seconds float64
+		want    string
+	}{
+		{"under 1 hour (40m)", 2400, "40m"},
+		{"under 1 hour (1m)", 60, "1m"},
+		{"under 1 minute (45s)", 45, "0m"},
+		{"over 1 hour (1h4m -> 1h)", 3840, "1h"},
+		{"over 1 hour (2h30m -> 2h)", 9000, "2h"},
+		{"over 24 hours (4d16h -> 4d)", 403200, "4d"},
+		{"over 24 hours (5d -> 5d)", 432000, "5d"},
+		{"zero or negative", 0, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := quotaCountdown(tc.seconds); got != tc.want {
+				t.Errorf("quotaCountdown(%v) = %q, want %q", tc.seconds, got, tc.want)
+			}
+		})
 	}
 }

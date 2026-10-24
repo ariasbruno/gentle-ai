@@ -12,6 +12,7 @@ import "encoding/json"
 type Model struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"display_name"`
+	Effort      string `json:"effort,omitempty"`
 }
 
 // Workspace carries the session directories.
@@ -81,6 +82,7 @@ type Payload struct {
 	// upstream): "plan"/"accept-edits" when set, absent in the default
 	// (auto) mode — verified by payload captures in L23.
 	CycleMode string `json:"cycle_mode"`
+	Effort    string `json:"effort,omitempty"`
 	Vim       Vim    `json:"vim"`
 }
 

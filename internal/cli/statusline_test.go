@@ -148,7 +148,7 @@ func TestRunStatusLineChangesSegment(t *testing.T) {
 	if !strings.Contains(line, "±") {
 		t.Errorf("changes segment missing for a dirty repo: %s", line)
 	}
-	if !strings.Contains(line, "+1/") {
+	if !strings.Contains(stripStatusLineANSI(line), "+1/") {
 		t.Errorf("unstaged line addition not counted: %s", line)
 	}
 

@@ -141,7 +141,7 @@ func TestRunStatusLineRendersEngramSegment(t *testing.T) {
 		"terminal_width": 200
 	}`
 	line := runStatusLineTest(t, nil, payload, home)
-	if !strings.Contains(line, "🧠 gentle-ai · 314") {
+	if !strings.Contains(stripStatusLineANSI(line), "🧠 gentle-ai · 314") {
 		t.Errorf("engram segment missing: %s", line)
 	}
 }

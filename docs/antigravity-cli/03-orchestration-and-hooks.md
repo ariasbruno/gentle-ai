@@ -105,8 +105,11 @@ El comando registrado llama directamente `gentle-ai hook run --agent=antigravity
 - Cada entrada requiere strings no vacíos `TypeName`, `Role`, `Prompt`.
 - `Workspace`, si aparece, debe ser `inherit`, `branch` o `share`.
 - Una herramienta distinta no recibe esa validación especial.
-- Las tools de archivo y búsqueda (`view_file`, `write_to_file`, `replace_file_content`, `multi_replace_file_content`, `grep_search`) reciben el guard de rutas sensibles: los patrones que el `settings.json` no puede expresar (el esquema del proveedor no tiene globs de archivo) se evalúan sobre la ruta concreta a cualquier profundidad y devuelven `deny`.
-- Los comandos (`run_command`) reciben una capa análoga con decisión `ask`: la línea se tokeniza por espacios y cada token se evalúa contra el mismo conjunto ampliado (`.aws` como directorio completo); un match pide tu aprobación en vez de denegar — un substring sensible en un string de shell puede ser un falso positivo, y `ask` respeta tus elecciones de Always Allow.
+- Las tools de archivo y búsqueda (`view_file`, `read_file`, `write_file`, `edit_file`, `replace_file_content`, `multi_replace_file_content`, `grep_search`) reciben el guard de rutas sensibles: los patrones que el `settings.json` no puede expresar (el esquema del proveedor no tiene globs de archivo) se evalúan sobre la ruta concreta a cualquier profundidad y devuelven `deny`.
+- Los comandos de terminal (`run_command`) que referencian rutas sensibles (secretos como `.env*`, `.ssh`, `.aws`, claves `.pem`/`.key`) son bloqueados directamente con `deny`, impidiendo filtraciones o bypasses vía shell (ej. `cat .env`).
+- Los comandos de terminal destructivos (`rm -rf`, `git reset --hard`, `git push --force`, `git clean -fd`, `chmod -R 777`, etc.) devuelven `force_ask`: obligan al CLI a solicitar confirmación interactiva al usuario en pantalla, **ignorando cualquier regla previa en `settings.json` o caché de sesión**.
+- Los comandos de terminal estándar devuelven `ask`: delegan la decisión en el motor de permisos de Antigravity CLI, respetando la lista `permissions.allow` del usuario si ya fue autorizada, o solicitando confirmación si se trata de un comando nuevo.
+- Las operaciones estándar de archivo dentro del workspace devuelven `allow` (comportamiento habitual del sandbox).
 
 [`RunAntigravityCLIHook`](../../internal/cli/antigravity_hook.go#L88-L108), [`validateAntigravityCLIInvokeSubagentArgs`](../../internal/cli/antigravity_hook.go#L344-L383), [`antigravityCLIValidWorkspace`](../../internal/cli/antigravity_hook.go#L394-L401).
 
@@ -186,13 +189,71 @@ Los hooks de Gentle AI operan con un enfoque de seguridad estricto (*fail-closed
 | Carga malformada o inválida en `PreToolUse` | `deny` | Bloquea la llamada a la herramienta para evitar fallos inesperados |
 | Delegación a subagente sin campos requeridos | `deny` | Exige `TypeName`, `Role` y `Prompt` obligatorios |
 | Ruta sensible en tools de archivo/búsqueda | `deny` | Guard sobre la ruta concreta: `.env` y variantes, `.ssh`, `.credentials`, `.aws/credentials`, `.pem`/`.key`, `hosts.yml`, Keychains, `secrets/` a cualquier profundidad |
-| Comando con ruta sensible | `ask` | La línea de `run_command` se tokeniza y cada token se evalúa contra el conjunto ampliado (`.aws` completo); pide aprobación y respeta Always Allow |
+| Comando de terminal con ruta sensible | `deny` | La línea de `run_command` se tokeniza y si referencia secretos se bloquea directamente para evitar bypasses de lectura |
+| Comando de terminal destructivo | `force_ask` | Detecta `rm -rf`, `git reset --hard`, `push --force`, etc.; exige confirmación interactiva obligatoria ignorando cachés o reglas de `allow` |
+| Comando de terminal estándar | `ask` | Delega la decisión en Antigravity CLI: ejecuta si está en `permissions.allow` del usuario, o pide confirmación si no lo está |
 | 3 llamadas consecutivas idénticas (Circuit Breaker) | `deny` | Interrumpe bucles infinitos repetitivos del modelo |
-| Ejecución normal de herramientas | `{}` o `allow` | Permite la ejecución de la herramienta por parte de `agy` |
+| Operaciones estándar de archivo | `allow` | Permite la ejecución de la herramienta de archivo dentro del sandbox |
 | Eventos posteriores (`PostToolUse`, `PostInvocation`) | `{}` | No bloqueantes, no interfieren con la respuesta del agente |
 | Cierre con un candidato `review_due` | `continue` | Bloquea el cierre: el loop continúa con el reason inyectado como mensaje de sistema. El recordatorio no de-silencia por sí mismo: el mismo candidato sigue bloqueando hasta que el estado avance (consumed-check) |
 | Cierre con un candidato pasivo o medio | `{}` | No es `review_due`: la sesión cierra sin recordatorio |
 | Cierre estándar sin pendientes | `{}` | Permite el cierre normal de la interacción |
+
+### Jerarquía de permisos y resolución de conflictos (Hook vs settings.json)
+
+La evaluación de seguridad en Antigravity CLI opera mediante una separación estricta de responsabilidades entre el Hook de ciclo de vida (`PreToolUse`) y el motor nativo de permisos del CLI (`settings.json` y memoria de sesión):
+
+| Si el Hook de Gentle AI dice | Si en `settings.json` está como `ask` | Resultado Final (CLI) | Explicación técnica |
+|---|---|---|---|
+| **`deny`** *(Secretos / Breaker)* | `ask` o no configurado | **`deny` (Bloqueo total)** | Precedencia de corte absoluto. Se aborta sin consultar al usuario. |
+| **`force_ask`** *(Comandos destructivos)* | `allow` o `ask` | **`force_ask` (Confirmación obligatoria)** | Anula cualquier caché o `allow` previo. El usuario debe confirmar en pantalla. |
+| **`ask`** *(Comando estándar)* | `"command(cmd)"` en `allow` | **`allow` (Ejecución directa)** | Antigravity consulta `settings.json` y ejecuta sin interrumpir al usuario. |
+| **`ask`** *(Comando estándar)* | No en `allow` (postura `ask`) | **`ask` (Prompt interactivo)** | Antigravity solicita autorización interactiva (*Allow Once / Always Allow / Deny*). |
+| **`allow`** *(Archivos estándar sandbox)* | `ask` o no configurado | **`allow` (Ejecución directa)** | El `"allow"` del hook actúa como autorización del plugin para herramientas legítimas de archivo. |
+
+### Diagrama de Flujo de Evaluación de Permisos
+
+```mermaid
+flowchart TD
+    Start["Modelo emite invocación de Tool"] --> HookPreTool["Hook PreToolUse (Gentle AI)"]
+
+    HookPreTool --> CheckCircuitBreaker{"¿Bucle idéntico repetido?<br/>(Circuit Breaker)"}
+    CheckCircuitBreaker -- "Sí (>=3 veces)" --> HookDenyBreaker["Retorna: deny<br/>(Loop Circuit Breaker)"]
+    CheckCircuitBreaker -- "No" --> CheckSecretPath{"¿Ruta o argumento toca secretos?<br/>(.env, .ssh, .aws, pem)"}
+
+    CheckSecretPath -- "Sí" --> HookDenySecret["Retorna: deny<br/>(Permissions Guard)"]
+    CheckSecretPath -- "No" --> CheckDestructive{"¿Comando shell destructivo?<br/>(rm -rf, reset --hard, push --force)"}
+
+    CheckDestructive -- "Sí" --> HookForceAsk["Retorna: force_ask<br/>(Confirmación obligatoria)"]
+    CheckDestructive -- "No" --> CheckToolType{"¿Es comando de terminal?<br/>(run_command)"}
+
+    CheckToolType -- "Sí" --> HookAsk["Retorna: ask<br/>(Delegación a Antigravity)"]
+    CheckToolType -- "No (archivos normales)" --> HookAllow["Retorna: allow<br/>(Sandbox legítimo)"]
+
+    HookDenyBreaker --> CLIAbort["CLI: Aborta Tool Call de inmediato"]
+    HookDenySecret --> CLIAbort
+
+    HookForceAsk --> CLIPromptAlways["CLI: Muestra Prompt Interactivo en pantalla<br/>(IGNORA caché y settings.json)"]
+
+    HookAllow --> CLIExecuteDirect["CLI: Ejecuta en Sandbox"]
+
+    HookAsk --> EngineUserDeny{"¿Coincide con permissions.deny<br/>en settings.json?"}
+    EngineUserDeny -- "Sí" --> CLIAbortUser["CLI: Aborta (Matches user deny rule)"]
+    EngineUserDeny -- "No" --> EngineCheckPersistent{"¿Está en permissions.allow<br/>de settings.json?"}
+
+    EngineCheckPersistent -- "Sí" --> CLIExecuteDirect
+    EngineCheckPersistent -- "No" --> EngineCheckSession{"¿Fue autorizado previamente<br/>en esta sesión (Allow Once)?"}
+
+    EngineCheckSession -- "Sí" --> CLIExecuteDirect
+    EngineCheckSession -- "No" --> CLIPromptInteractive["CLI: Muestra Prompt Interactivo en pantalla"]
+
+    CLIPromptInteractive --> UserChoice{"Decisión del Usuario"}
+    CLIPromptAlways --> UserChoice
+
+    UserChoice -- "Deny / Cancel" --> CLIAbortUser
+    UserChoice -- "Allow Once" --> AddSessionCache["Agrega a memoria de sesión"] --> CLIExecuteDirect
+    UserChoice -- "Always Allow" --> PersistSettings["Guarda en settings.json (allow)"] --> CLIExecuteDirect
+```
 
 **Campos opcionales del envelope de respuesta:** el tipo `AntigravityCLIHookOutput` declara además `injectSteps` (array) y `terminationBehavior` (string), con sus nombres JSON fijados por un test de serialización: [`antigravity_hook_test.go`](../../internal/cli/antigravity_hook_test.go#L546-L563). **Ningún handler los emite hoy**: la integración responde únicamente `{}`, `decision` o `reason`. Que el tipo los declare y que el test fije su serialización no prueba que `agy` los interprete ni que exista un comportamiento de terminación asociado.
 
