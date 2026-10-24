@@ -35,6 +35,7 @@ func TestRetainedAntigravityCLIPluginOperationsCoverOrchestratorRuleAndLegacyRoo
 	wanted := []string{
 		filepath.Join(pluginDir, "rules", "gentle-ai-orchestrator.md"),
 		filepath.Join(pluginDir, "orchestrator.md"),
+		filepath.Join(pluginDir, "review-models.json"),
 	}
 	for _, want := range wanted {
 		found := false

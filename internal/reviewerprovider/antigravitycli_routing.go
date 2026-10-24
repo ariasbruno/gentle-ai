@@ -72,13 +72,49 @@ func ReviewRoutingKeyForLens(lens string) (string, error) {
 // closed with the typed InvalidReviewRoutingError. Unlike Pi, there is no
 // repository-root fallback: the repository must not prescribe canonical
 // models per role.
-// AntigravityReviewModelsPath returns the canonical path to review-models.json.
+// AntigravityReviewModelsPath returns the canonical path to review-models.json inside the plugin.
 func AntigravityReviewModelsPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("locate antigravity-cli routing home: %w", err)
 	}
+	return filepath.Join(home, ".gemini", "config", "plugins", "gentle-ai", "review-models.json"), nil
+}
+
+// AntigravityLegacyReviewModelsPath returns the legacy fallback path to review-models.json.
+func AntigravityLegacyReviewModelsPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("locate antigravity-cli routing home: %w", err)
+	}
 	return filepath.Join(home, ".gemini", "antigravity-cli", "gentle-ai", "review-models.json"), nil
+}
+
+func resolveAntigravityReviewModelsFile() (path string, data []byte, err error) {
+	canonicalPath, err := AntigravityReviewModelsPath()
+	if err != nil {
+		return "", nil, err
+	}
+	data, err = os.ReadFile(canonicalPath)
+	if err == nil {
+		return canonicalPath, data, nil
+	}
+	if !os.IsNotExist(err) {
+		return canonicalPath, nil, fmt.Errorf("read antigravity-cli routing %s: %w", canonicalPath, err)
+	}
+
+	legacyPath, err := AntigravityLegacyReviewModelsPath()
+	if err != nil {
+		return canonicalPath, nil, nil
+	}
+	data, err = os.ReadFile(legacyPath)
+	if err == nil {
+		return legacyPath, data, nil
+	}
+	if !os.IsNotExist(err) {
+		return legacyPath, nil, fmt.Errorf("read antigravity-cli routing %s: %w", legacyPath, err)
+	}
+	return canonicalPath, nil, nil
 }
 
 // DefaultAntigravityReviewModels contains the known model slugs available in Antigravity CLI.
@@ -302,16 +338,12 @@ func IsKnownAntigravityModel(model string, catalog []string) bool {
 
 // LoadAllAntigravityCLIReviewRouting reads all configured reviewer routes from review-models.json.
 func LoadAllAntigravityCLIReviewRouting() (map[string]AntigravityCLIReviewRouting, error) {
-	path, err := AntigravityReviewModelsPath()
+	path, data, err := resolveAntigravityReviewModelsFile()
 	if err != nil {
 		return nil, err
 	}
-	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
+	if data == nil {
 		return make(map[string]AntigravityCLIReviewRouting), nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("read antigravity-cli routing %s: %w", path, err)
 	}
 	var config map[string]json.RawMessage
 	if json.Unmarshal(data, &config) != nil || config == nil {
@@ -391,16 +423,12 @@ func SaveAntigravityCLIReviewRouting(assignments map[string]AntigravityCLIReview
 // Unlike Pi, there is no repository-root fallback: the repository must not
 // prescribe canonical models per role.
 func ResolveAntigravityCLIReviewRouting(key string) (route AntigravityCLIReviewRouting, assignmentKeyMissing bool, err error) {
-	path, err := AntigravityReviewModelsPath()
+	path, data, err := resolveAntigravityReviewModelsFile()
 	if err != nil {
 		return route, false, err
 	}
-	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
+	if data == nil {
 		return route, false, nil
-	}
-	if err != nil {
-		return route, false, fmt.Errorf("read antigravity-cli routing %s: %w", path, err)
 	}
 	invalid := func() (AntigravityCLIReviewRouting, bool, error) {
 		return AntigravityCLIReviewRouting{}, false, &InvalidReviewRoutingError{Role: key, Path: path}

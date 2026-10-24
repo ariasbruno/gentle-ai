@@ -1418,3 +1418,66 @@ func TestAntigravityPreToolUseForcesAskForDestructiveCommandLines(t *testing.T) 
 		})
 	}
 }
+
+func initReviewCLIRepoAt(t *testing.T, repo string) string {
+	t.Helper()
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runReviewCLIGit(t, repo, "init", "-q")
+	runReviewCLIGit(t, repo, "config", "user.email", "test@example.com")
+	runReviewCLIGit(t, repo, "config", "user.name", "Test")
+	runReviewCLIGit(t, repo, "config", "core.autocrlf", "false")
+	if err := os.WriteFile(filepath.Join(repo, "tracked.txt"), []byte("base\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runReviewCLIGit(t, repo, "add", "tracked.txt")
+	runReviewCLIGit(t, repo, "commit", "-qm", "base")
+	return repo
+}
+
+func TestAntigravityStopBlocksOnNestedRepositoryChanges(t *testing.T) {
+	home := reviewModeHome(t)
+	container := canonicalReviewCLITempDir(t)
+	childRepo := initReviewCLIRepoAt(t, filepath.Join(container, "child-repo"))
+	enableReviewStopHookRDD(t, childRepo)
+
+	convID := "conv-stop-nested"
+
+	// 1. PreInvocation on container workspace
+	var stdout bytes.Buffer
+	prePayload := fmtAntigravityHookPayload(convID, []string{container}, 0, "")
+	if err := RunAntigravityCLIHook("PreInvocation", "antigravity-cli", strings.NewReader(prePayload), &stdout, container); err != nil {
+		t.Fatalf("PreInvocation error: %v", err)
+	}
+
+	// 2. Before changes in child-repo, Stop should stay neutral
+	stopPayload := fmtAntigravityStopPayload(convID, []string{container}, 1, "model_stop", true)
+	stdout.Reset()
+	if err := RunAntigravityCLIHook("Stop", "antigravity-cli", strings.NewReader(stopPayload), &stdout, container); err != nil {
+		t.Fatalf("Stop error: %v", err)
+	}
+	if strings.TrimSpace(stdout.String()) != "{}" {
+		t.Fatalf("Stop output before changes = %q, want neutral {}", stdout.String())
+	}
+
+	// 3. Stage changes in child-repo and record mutation in ledger
+	stageReviewStopHookCandidate(t, childRepo)
+	recordAntigravityCLIMutation(home, convID, "write_file", filepath.Join(childRepo, "tracked.txt"))
+
+	// 4. Stop on container workspace should block with decision: "continue" and name childRepo
+	stdout.Reset()
+	if err := RunAntigravityCLIHook("Stop", "antigravity-cli", strings.NewReader(stopPayload), &stdout, container); err != nil {
+		t.Fatalf("Stop error after child-repo change: %v", err)
+	}
+	var out AntigravityCLIHookOutput
+	if err := json.Unmarshal(stdout.Bytes(), &out); err != nil {
+		t.Fatalf("decode Stop output %q: %v", stdout.String(), err)
+	}
+	if out.Decision != "continue" {
+		t.Fatalf("Stop decision = %q, want continue", out.Decision)
+	}
+	if !strings.Contains(out.Reason, childRepo) {
+		t.Fatalf("Stop reason %q does not contain child-repo path %q", out.Reason, childRepo)
+	}
+}

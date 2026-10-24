@@ -98,6 +98,10 @@ func (adapter *AntigravityCLIAdapter) Review(ctx context.Context, invocation Inv
 		return nil, fmt.Errorf("antigravity-cli reviewer transport failed: %w: %s", err, reviewerTransportFailureDetail(stderr.String(), stdout.String()))
 	}
 	if len(bytes.TrimSpace(stdout.Bytes())) == 0 {
+		detail := reviewerTransportFailureDetail(stderr.String(), stdout.String())
+		if detail != "" {
+			return nil, fmt.Errorf("antigravity-cli reviewer transport produced no final message: %s", detail)
+		}
 		return nil, errors.New("antigravity-cli reviewer transport produced no final message")
 	}
 	return stdout.Bytes(), nil

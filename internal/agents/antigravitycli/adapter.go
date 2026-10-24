@@ -761,6 +761,13 @@ func (a *Adapter) DeployPluginTreeToDir(pluginDir string) error {
 		}
 	}
 
+	// 7. Ensure default review-models.json exists inside plugin
+	reviewModelsPath := filepath.Join(pluginDir, "review-models.json")
+	if _, err := os.Stat(reviewModelsPath); os.IsNotExist(err) {
+		const defaultReviewModelsJSON = "{\n  \"review-readability\": \"gemini-3.8-flash-low\",\n  \"review-refuter\": \"gemini-3.8-flash-high\",\n  \"review-reliability\": \"gemini-3.8-flash-medium\",\n  \"review-resilience\": \"gemini-3.8-flash-low\",\n  \"review-risk\": \"gemini-3.8-flash-high\",\n  \"review-validator\": \"gemini-3.8-flash-medium\"\n}\n"
+		_, _ = filemerge.WriteFileAtomic(reviewModelsPath, []byte(defaultReviewModelsJSON), 0o644)
+	}
+
 	// Record only successful native module deployment, not workflow/review state.
 	encodedOwnership, err := json.MarshalIndent(ownership, "", "  ")
 	if err != nil {

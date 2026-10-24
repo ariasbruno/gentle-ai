@@ -249,6 +249,80 @@ func antigravityCLIMutationLedgerState(home, conversationID, root string, consum
 	return records, underRoot, pending
 }
 
+// antigravityCLIMutationLedgerPaths returns all unique file paths recorded in the
+// conversation's mutation ledger.
+func antigravityCLIMutationLedgerPaths(home, conversationID string) []string {
+	if conversationID == "" {
+		return nil
+	}
+	data, err := os.ReadFile(antigravityCLIMutationLedgerPath(home, conversationID))
+	if err != nil {
+		return nil
+	}
+	var paths []string
+	seen := make(map[string]bool)
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var record antigravityCLIMutationRecord
+		if json.Unmarshal([]byte(line), &record) != nil {
+			continue
+		}
+		if record.Path != "" && !seen[record.Path] {
+			seen[record.Path] = true
+			paths = append(paths, record.Path)
+		}
+	}
+	return paths
+}
+
+// antigravityCandidateRoots resolves all candidate Git repository roots for the
+// hook invocation: any repositories containing files in the conversation's mutation ledger
+// (highest priority), followed by the primary workspace.
+func antigravityCandidateRoots(ctx context.Context, workspace, home, conversationID string) []string {
+	seen := make(map[string]bool)
+	var roots []string
+
+	addRoot := func(repoPath string) {
+		if repoPath == "" {
+			return
+		}
+		root, err := (reviewtransaction.SnapshotBuilder{Repo: repoPath}).ResolveRepositoryRoot(ctx)
+		if err == nil && root != "" && !seen[root] {
+			seen[root] = true
+			roots = append(roots, root)
+		}
+	}
+
+	// 1. Repositories containing files mutated during the conversation (highest priority)
+	if home != "" && conversationID != "" {
+		for _, path := range antigravityCLIMutationLedgerPaths(home, conversationID) {
+			addRoot(filepath.Dir(path))
+		}
+	}
+
+	// 2. Immediate child subdirectories containing .git
+	if workspace != "" {
+		if entries, err := os.ReadDir(workspace); err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() {
+					childPath := filepath.Join(workspace, entry.Name())
+					if _, err := os.Stat(filepath.Join(childPath, ".git")); err == nil {
+						addRoot(childPath)
+					}
+				}
+			}
+		}
+	}
+
+	// 3. Primary workspace
+	addRoot(workspace)
+
+	return roots
+}
+
 // antigravityCLIMutationUnderRoot reports whether a recorded mutation path
 // belongs to the reviewed repository. A relative path cannot be attributed
 // and counts as outside every root, so the gate keeps its strict behavior
@@ -466,9 +540,12 @@ func handleAntigravityPreInvocation(payload AntigravityCLIHookPayload, workspace
 		// RDD baseline recording
 		if payload.ConversationID != "" && workspace != "" {
 			ctx := context.Background()
-			_, targetIdentity, _, ok, _ := antigravityResolveTargetIdentity(ctx, workspace)
-			if ok {
-				_ = recordReviewStopHookBaseline(payload.ConversationID, targetIdentity)
+			roots := antigravityCandidateRoots(ctx, workspace, home, payload.ConversationID)
+			for _, r := range roots {
+				_, targetIdentity, _, ok, _ := antigravityResolveTargetIdentity(ctx, r)
+				if ok && targetIdentity != "" {
+					_ = recordReviewStopHookBaselineForRoot(payload.ConversationID, r, targetIdentity)
+				}
 			}
 		}
 	}
@@ -519,24 +596,60 @@ func handleAntigravityStop(payload AntigravityCLIHookPayload, workspace, agent s
 		return nil
 	}
 
+	home, _ := os.UserHomeDir()
 	ctx := context.Background()
-	root, targetIdentity, status, ok, err := antigravityResolveTargetIdentity(ctx, workspace)
-	// The pipeline failure stays visible: the model sees why the preflight
-	// could not resolve and can surface the problem instead of closing
-	// silently over potentially unreviewed changes. The !ok && err == nil
-	// cases (no workspace, no repository, RDD off) remain silent by design.
-	if err != nil {
+	candidateRoots := antigravityCandidateRoots(ctx, workspace, home, payload.ConversationID)
+	if len(candidateRoots) == 0 && workspace != "" {
+		candidateRoots = []string{workspace}
+	}
+
+	var firstPreflightError string
+	evaluatedRoots := 0
+	for _, candRoot := range candidateRoots {
+		out, handled := evaluateAntigravityStopForRoot(ctx, candRoot, payload, agent, home)
+		if handled {
+			if strings.Contains(out.Reason, "the review preflight could not resolve the review state") {
+				if firstPreflightError == "" {
+					firstPreflightError = out.Reason
+				}
+				continue
+			}
+			enc, _ := json.Marshal(out)
+			_, _ = fmt.Fprintln(stdout, string(enc))
+			return nil
+		}
+		evaluatedRoots++
+	}
+
+	// If no candidate required a reminder, but every candidate root failed preflight, surface the error
+	if evaluatedRoots == 0 && firstPreflightError != "" {
 		out := AntigravityCLIHookOutput{
 			Decision: "continue",
-			Reason:   "Receipt-Driven Development: the review preflight could not resolve the review state. Run gentle-ai review status to see the problem before completing.",
+			Reason:   firstPreflightError,
 		}
 		enc, _ := json.Marshal(out)
 		_, _ = fmt.Fprintln(stdout, string(enc))
 		return nil
 	}
+
+	_, _ = fmt.Fprintln(stdout, "{}")
+	return nil
+}
+
+func evaluateAntigravityStopForRoot(ctx context.Context, candRoot string, payload AntigravityCLIHookPayload, agent, home string) (AntigravityCLIHookOutput, bool) {
+	root, targetIdentity, status, ok, err := antigravityResolveTargetIdentity(ctx, candRoot)
+	// The pipeline failure stays visible: the model sees why the preflight
+	// could not resolve and can surface the problem instead of closing
+	// silently over potentially unreviewed changes. The !ok && err == nil
+	// cases (no workspace, no repository, RDD off) remain silent by design.
+	if err != nil {
+		return AntigravityCLIHookOutput{
+			Decision: "continue",
+			Reason:   "Receipt-Driven Development: the review preflight could not resolve the review state. Run gentle-ai review status to see the problem before completing.",
+		}, true
+	}
 	if !ok {
-		_, _ = fmt.Fprintln(stdout, "{}")
-		return nil
+		return AntigravityCLIHookOutput{}, false
 	}
 
 	// A candidate is guardable when STATUS reports Action=start, meaning there
@@ -547,8 +660,7 @@ func handleAntigravityStop(payload AntigravityCLIHookPayload, workspace, agent s
 	// valid candidate — the Action field reflects the candidate state
 	// independently of untracked-file resolution.
 	if targetIdentity == "" || status.Action != reviewtransaction.TargetStatusActionStart {
-		_, _ = fmt.Fprintln(stdout, "{}")
-		return nil
+		return AntigravityCLIHookOutput{}, false
 	}
 
 	// The reminder record de-silences only when the candidate predates the
@@ -559,26 +671,21 @@ func handleAntigravityStop(payload AntigravityCLIHookPayload, workspace, agent s
 	// moves past start. This is the consumed-check: the model cannot close
 	// over an unreviewed candidate by ignoring the first reminder.
 	if payload.ConversationID != "" && reviewStopHookSessionIDPattern.MatchString(payload.ConversationID) {
-		home, herr := os.UserHomeDir()
-		if herr != nil {
-			_, _ = fmt.Fprintln(stdout, "{}")
-			return nil
-		}
 		record, hadRecord, rerr := readReviewStopHookRecord(reviewStopHookRecordPath(home, payload.ConversationID))
 		if rerr != nil {
-			_, _ = fmt.Fprintln(stdout, "{}")
-			return nil
+			return AntigravityCLIHookOutput{}, false
 		}
-		if hadRecord && record.BaselineTargetIdentity != "" && record.BaselineTargetIdentity == targetIdentity {
-			_, _ = fmt.Fprintln(stdout, "{}")
-			return nil
+		if hadRecord {
+			if (record.BaselineTargetIdentity != "" && record.BaselineTargetIdentity == targetIdentity) ||
+				(record.BaselineTargetIdentities != nil && record.BaselineTargetIdentities[root] == targetIdentity) {
+				return AntigravityCLIHookOutput{}, false
+			}
 		}
 		if marker, mok, merr := readReviewConsentStaleMarker(root); merr == nil && mok &&
 			time.Since(marker.LastRefusedAt) < reviewConsentStaleMarkerWindow {
 			if record.LastSeenTargetIdentity != targetIdentity {
 				_ = recordReviewStopHookLastSeen(payload.ConversationID, targetIdentity)
-				_, _ = fmt.Fprintln(stdout, "{}")
-				return nil
+				return AntigravityCLIHookOutput{}, false
 			}
 		}
 	}
@@ -601,25 +708,17 @@ func handleAntigravityStop(payload AntigravityCLIHookPayload, workspace, agent s
 	ledgerTracked := false
 	contentTree := status.Projection.CurrentCandidateTree
 	if payload.ConversationID != "" && reviewStopHookSessionIDPattern.MatchString(payload.ConversationID) {
-		home, herr := os.UserHomeDir()
-		if herr != nil {
-			_, _ = fmt.Fprintln(stdout, "{}")
-			return nil
-		}
 		record, _, rerr := readReviewStopHookRecord(reviewStopHookRecordPath(home, payload.ConversationID))
-		if rerr != nil {
-			_, _ = fmt.Fprintln(stdout, "{}")
-			return nil
-		}
-		ledgerTracked = true
-		ledgerRecords, ledgerUnderRoot, ledgerPending = antigravityCLIMutationLedgerState(home, payload.ConversationID, root, record.ConsumedMutationCount)
-		if ledgerUnderRoot > 0 && ledgerPending == 0 &&
-			contentTree != "" && record.ConsumedContentTree == contentTree {
-			// Every write this session recorded under this repository was
-			// already reminded, and the candidate's content has not moved
-			// since: this generation is settled.
-			_, _ = fmt.Fprintln(stdout, "{}")
-			return nil
+		if rerr == nil {
+			ledgerTracked = true
+			ledgerRecords, ledgerUnderRoot, ledgerPending = antigravityCLIMutationLedgerState(home, payload.ConversationID, root, record.ConsumedMutationCount)
+			if ledgerUnderRoot > 0 && ledgerPending == 0 &&
+				contentTree != "" && record.ConsumedContentTree == contentTree {
+				// Every write this session recorded under this repository was
+				// already reminded, and the candidate's content has not moved
+				// since: this generation is settled.
+				return AntigravityCLIHookOutput{}, false
+			}
 		}
 	}
 
@@ -629,8 +728,7 @@ func handleAntigravityStop(payload AntigravityCLIHookPayload, workspace, agent s
 	// candidate. An assessment that cannot answer fails closed to due, so the
 	// reminder is never lost to an assessment error.
 	if !reviewStopHookReviewDue(root, agent) {
-		_, _ = fmt.Fprintln(stdout, "{}")
-		return nil
+		return AntigravityCLIHookOutput{}, false
 	}
 
 	out := AntigravityCLIHookOutput{
@@ -660,8 +758,6 @@ func handleAntigravityStop(payload AntigravityCLIHookPayload, workspace, agent s
 		reason += ". This Stop keeps blocking until the review is consumed."
 	}
 	out.Reason = reason
-	enc, _ := json.Marshal(out)
-	_, _ = fmt.Fprintln(stdout, string(enc))
 
 	if payload.ConversationID != "" {
 		_, _ = recordReviewStopHookReminder(payload.ConversationID, targetIdentity)
@@ -675,7 +771,7 @@ func handleAntigravityStop(payload AntigravityCLIHookPayload, workspace, agent s
 		_ = recordReviewStopHookConsumption(payload.ConversationID, ledgerRecords, contentTree)
 	}
 
-	return nil
+	return out, true
 }
 
 const (

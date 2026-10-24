@@ -125,7 +125,11 @@ func TestAntigravityCLIAdapterFailsClosedOnProcessFailureAndEmptyOutput(t *testi
 	if runtime.GOOS == "windows" {
 		t.Skip("the helper process uses POSIX argument handling")
 	}
-	for name, want := range map[string]string{"fail": "antigravity-cli reviewer transport failed", "empty": "produced no final message"} {
+	for name, want := range map[string]string{
+		"fail":         "antigravity-cli reviewer transport failed",
+		"empty":        "produced no final message",
+		"empty-stderr": "produced no final message: jetski: permission auto-denied",
+	} {
 		adapter := &AntigravityCLIAdapter{
 			Model:    "explicit-model",
 			LookPath: func(string) (string, error) { return "agy", nil },
@@ -170,6 +174,9 @@ func TestAntigravityCLIAdapterHelperProcess(t *testing.T) {
 	case "fail":
 		os.Exit(3)
 	case "empty":
+		os.Exit(0)
+	case "empty-stderr":
+		_, _ = os.Stderr.WriteString("jetski: permission auto-denied\n")
 		os.Exit(0)
 	case "stdout-failure":
 		_, _ = os.Stdout.WriteString("Not logged in\nsecond line\n")

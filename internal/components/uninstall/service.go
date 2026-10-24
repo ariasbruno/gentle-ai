@@ -1762,6 +1762,7 @@ func retainedAntigravityCLIPluginOperations(adapter agents.Adapter, homeDir stri
 			ownedJSONBlock{key: "statusLine", ownedCommands: []string{antigravitycli.ManagedStatusLineCommand, statusLineScript}},
 			ownedJSONBlock{key: "title", ownedCommands: []string{antigravitycli.ManagedTitleCommand, statusLineScript + " --title"}},
 		),
+		removeFile(filepath.Join(pluginDir, "review-models.json")),
 	)
 	ops = append(ops, removeDirIfEmpty(pluginDir))
 	for i := range ops {

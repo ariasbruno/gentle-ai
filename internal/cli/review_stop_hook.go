@@ -63,9 +63,10 @@ type reviewStopHookOutput struct {
 // Stop for the same candidate stays silent. The two fields are independent
 // and each written without disturbing the other.
 type reviewStopHookReminderRecord struct {
-	Schema                 string `json:"schema"`
-	TargetIdentity         string `json:"target_identity,omitempty"`
-	BaselineTargetIdentity string `json:"baseline_target_identity,omitempty"`
+	Schema                   string            `json:"schema"`
+	TargetIdentity           string            `json:"target_identity,omitempty"`
+	BaselineTargetIdentity   string            `json:"baseline_target_identity,omitempty"`
+	BaselineTargetIdentities map[string]string `json:"baseline_target_identities,omitempty"`
 	// LastSeenTargetIdentity is the last candidate observed during a Stop that
 	// stayed quiet under a fresh consent-stale marker (#4494). The quiet window
 	// ends as soon as the candidate is stable across two Stop events -- the
@@ -362,6 +363,10 @@ func readReviewStopHookRecord(path string) (record reviewStopHookReminderRecord,
 // session id is a silent no-op: there is no safe file name to record it
 // under.
 func recordReviewStopHookBaseline(sessionID, targetIdentity string) error {
+	return recordReviewStopHookBaselineForRoot(sessionID, "", targetIdentity)
+}
+
+func recordReviewStopHookBaselineForRoot(sessionID, root, targetIdentity string) error {
 	if !reviewStopHookSessionIDPattern.MatchString(sessionID) {
 		return nil
 	}
@@ -376,7 +381,15 @@ func recordReviewStopHookBaseline(sessionID, targetIdentity string) error {
 		return err
 	}
 	record.Schema = reviewStopHookReminderSchema
-	record.BaselineTargetIdentity = targetIdentity
+	if record.BaselineTargetIdentity == "" {
+		record.BaselineTargetIdentity = targetIdentity
+	}
+	if root != "" {
+		if record.BaselineTargetIdentities == nil {
+			record.BaselineTargetIdentities = make(map[string]string)
+		}
+		record.BaselineTargetIdentities[root] = targetIdentity
+	}
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err

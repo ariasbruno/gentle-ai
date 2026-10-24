@@ -207,7 +207,30 @@ func TestReviewRoutingKeyForLens(t *testing.T) {
 }
 
 func antigravityCLIReviewModelsPath(home string) string {
-	return filepath.Join(home, ".gemini", "antigravity-cli", "gentle-ai", "review-models.json")
+	return filepath.Join(home, ".gemini", "config", "plugins", "gentle-ai", "review-models.json")
+}
+
+func TestResolveAntigravityCLIReviewRoutingFallbackToLegacy(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	legacyPath := filepath.Join(home, ".gemini", "antigravity-cli", "gentle-ai", "review-models.json")
+	if err := os.MkdirAll(filepath.Dir(legacyPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacyPath, []byte(`{"review-risk":"gemini-3.8-flash-low"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, assignmentKeyMissing, err := ResolveAntigravityCLIReviewRouting(ReviewRoutingKeyRisk)
+	if err != nil {
+		t.Fatalf("ResolveAntigravityCLIReviewRouting error: %v", err)
+	}
+	if assignmentKeyMissing {
+		t.Fatal("assignmentKeyMissing = true, want false")
+	}
+	if got.Model != "gemini-3.8-flash-low" {
+		t.Fatalf("got model = %q, want gemini-3.8-flash-low", got.Model)
+	}
 }
 
 func TestSaveAndLoadAllAntigravityCLIReviewRouting(t *testing.T) {

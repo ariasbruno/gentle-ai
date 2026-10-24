@@ -1122,6 +1122,11 @@ func TestDeployPluginTree(t *testing.T) {
 		t.Errorf("legacy root orchestrator.md was not pruned")
 	}
 
+	reviewModelsFile := filepath.Join(pluginDir, "review-models.json")
+	if _, err := os.Stat(reviewModelsFile); err != nil {
+		t.Errorf("missing deployed review-models.json: %v", err)
+	}
+
 	// Verify 10 ODD subagents
 	expectedSubagents := []string{
 		"gentle-ai-explore",
