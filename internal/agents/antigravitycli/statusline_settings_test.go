@@ -331,3 +331,27 @@ func TestEnsureStatusLineSettings_ReownsLegacyScriptPath(t *testing.T) {
 		t.Errorf("legacy title not re-owned to the subcommand: %s", raw)
 	}
 }
+
+func TestEnsureStatusLineSettingsChanged_ReportsModificationAndIdempotency(t *testing.T) {
+	homeDir := t.TempDir()
+	adapter := NewAdapter()
+
+	// Initial registration should report changed = true
+	changed, err := adapter.EnsureStatusLineSettingsChanged(homeDir)
+	if err != nil {
+		t.Fatalf("EnsureStatusLineSettingsChanged() error = %v", err)
+	}
+	if !changed {
+		t.Errorf("EnsureStatusLineSettingsChanged() on missing file: changed = false, want true")
+	}
+
+	// Second run without modification should report changed = false
+	changedAgain, err := adapter.EnsureStatusLineSettingsChanged(homeDir)
+	if err != nil {
+		t.Fatalf("second EnsureStatusLineSettingsChanged() error = %v", err)
+	}
+	if changedAgain {
+		t.Errorf("second EnsureStatusLineSettingsChanged(): changed = true, want false (idempotent)")
+	}
+}
+

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents"
+	antigravitycliagent "github.com/gentleman-programming/gentle-ai/v4/internal/agents/antigravitycli"
 	opencodeagent "github.com/gentleman-programming/gentle-ai/v4/internal/agents/opencode"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/backup"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/agentguidance"
@@ -1659,6 +1660,17 @@ func (s componentSyncStep) Run() error {
 			var err error
 			if adapter.Agent() == model.AgentOpenCode {
 				res, err = theme.InjectAtPath(syncOpenCodeSettingsPath(s.homeDir, s.workspaceDir, s.scope, adapter))
+			} else if adapter.Agent() == model.AgentAntigravityCLI {
+				if s.scope == ScopeWorkspace {
+					return fmt.Errorf("sync theme for %q requires --scope global (Antigravity CLI settings are global only)", adapter.Agent())
+				}
+				if agy, ok := adapter.(*antigravitycliagent.Adapter); ok {
+					changed, syncErr := agy.EnsureStatusLineSettingsChanged(s.homeDir)
+					if syncErr != nil {
+						return fmt.Errorf("sync Antigravity CLI statusline: %w", syncErr)
+					}
+					res = theme.InjectionResult{Changed: changed, Files: []string{agy.SettingsPath(s.homeDir)}}
+				}
 			} else {
 				res, err = theme.Inject(s.homeDir, adapter)
 			}

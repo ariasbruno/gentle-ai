@@ -3466,6 +3466,13 @@ func (s componentApplyStep) Run() error {
 			var err error
 			if adapter.Agent() == model.AgentOpenCode {
 				_, err = theme.InjectAtPath(openCodeLoadedSettingsPath(s.homeDir, s.workspaceDir, adapter))
+			} else if adapter.Agent() == model.AgentAntigravityCLI {
+				if s.scope == ScopeWorkspace {
+					return fmt.Errorf("theme component for %q requires --scope global (Antigravity CLI settings are global only)", adapter.Agent())
+				}
+				if agy, ok := adapter.(*antigravitycliagent.Adapter); ok {
+					err = agy.EnsureStatusLineSettings(s.homeDir)
+				}
 			} else {
 				_, err = theme.Inject(s.homeDir, adapter)
 			}

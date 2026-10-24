@@ -16,10 +16,10 @@ import (
 // future change to the permission rewrite has to keep every one of them true.
 func TestUninstallPermissionEdgeCases(t *testing.T) {
 	t.Run("missing settings file is a no-op", func(t *testing.T) {
-		home, svc, adapter := permissionTestEnv(t, model.AgentAntigravityCLI)
+		home, svc, adapter := permissionTestEnv(t, model.AgentClaudeCode)
 		path := adapter.SettingsPath(home)
 
-		result, err := svc.PartialUninstall([]model.AgentID{model.AgentAntigravityCLI}, []model.ComponentID{model.ComponentPermission})
+		result, err := svc.PartialUninstall([]model.AgentID{model.AgentClaudeCode}, []model.ComponentID{model.ComponentPermission})
 		if err != nil {
 			t.Fatalf("PartialUninstall() error = %v", err)
 		}
@@ -32,27 +32,25 @@ func TestUninstallPermissionEdgeCases(t *testing.T) {
 	})
 
 	t.Run("a file holding only our entries is removed", func(t *testing.T) {
-		for _, agent := range []model.AgentID{model.AgentClaudeCode, model.AgentAntigravityCLI} {
-			home, svc, adapter := permissionTestEnv(t, agent)
-			path := adapter.SettingsPath(home)
-			writeUserSettings(t, path, `{}`)
-			if _, err := permissions.Inject(home, adapter); err != nil {
-				t.Fatalf("permissions.Inject() error = %v", err)
-			}
+		home, svc, adapter := permissionTestEnv(t, model.AgentClaudeCode)
+		path := adapter.SettingsPath(home)
+		writeUserSettings(t, path, `{}`)
+		if _, err := permissions.Inject(home, adapter); err != nil {
+			t.Fatalf("permissions.Inject() error = %v", err)
+		}
 
-			if _, err := svc.PartialUninstall([]model.AgentID{agent}, []model.ComponentID{model.ComponentPermission}); err != nil {
-				t.Fatalf("PartialUninstall(%q) error = %v", agent, err)
-			}
-			if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
-				t.Fatalf("%q: settings file survived an uninstall that left nothing: stat err = %v", agent, statErr)
-			}
+		if _, err := svc.PartialUninstall([]model.AgentID{model.AgentClaudeCode}, []model.ComponentID{model.ComponentPermission}); err != nil {
+			t.Fatalf("PartialUninstall(%q) error = %v", model.AgentClaudeCode, err)
+		}
+		if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+			t.Fatalf("%q: settings file survived an uninstall that left nothing: stat err = %v", model.AgentClaudeCode, statErr)
 		}
 	})
 
 	t.Run("unrelated keys and the file mode survive", func(t *testing.T) {
-		home, svc, adapter := permissionTestEnv(t, model.AgentAntigravityCLI)
+		home, svc, adapter := permissionTestEnv(t, model.AgentClaudeCode)
 		path := adapter.SettingsPath(home)
-		writeUserSettings(t, path, `{"permissions":{"deny":["read_file(notes.md)"]},"unrelated":"keep me"}`)
+		writeUserSettings(t, path, `{"permissions":{"deny":["Bash(my-custom)"]},"unrelated":"keep me"}`)
 		if err := os.Chmod(path, 0o640); err != nil {
 			t.Fatalf("Chmod() error = %v", err)
 		}
@@ -60,7 +58,7 @@ func TestUninstallPermissionEdgeCases(t *testing.T) {
 			t.Fatalf("permissions.Inject() error = %v", err)
 		}
 
-		if _, err := svc.PartialUninstall([]model.AgentID{model.AgentAntigravityCLI}, []model.ComponentID{model.ComponentPermission}); err != nil {
+		if _, err := svc.PartialUninstall([]model.AgentID{model.AgentClaudeCode}, []model.ComponentID{model.ComponentPermission}); err != nil {
 			t.Fatalf("PartialUninstall() error = %v", err)
 		}
 
@@ -69,7 +67,7 @@ func TestUninstallPermissionEdgeCases(t *testing.T) {
 			t.Errorf("unrelated = %#v, want it preserved", document["unrelated"])
 		}
 		deny, _ := valueAtPath(document, []string{"permissions", "deny"})
-		if got, _ := deny.([]any); len(got) != 1 || got[0] != "read_file(notes.md)" {
+		if got, _ := deny.([]any); len(got) != 1 || got[0] != "Bash(my-custom)" {
 			t.Errorf("permissions.deny = %#v, want only the user's own rule", deny)
 		}
 		info, err := os.Stat(path)
@@ -82,16 +80,16 @@ func TestUninstallPermissionEdgeCases(t *testing.T) {
 	})
 
 	t.Run("crlf settings keep crlf and mode", func(t *testing.T) {
-		home, svc, adapter := permissionTestEnv(t, model.AgentAntigravityCLI)
+		home, svc, adapter := permissionTestEnv(t, model.AgentClaudeCode)
 		path := adapter.SettingsPath(home)
 		// Multi-line CRLF document with no trailing newline: one entry is ours,
 		// one belongs to the user.
-		withCRLF := "{\r\n  \"permissions\": {\r\n    \"deny\": [\r\n      \"read_file(notes.md)\",\r\n      \"read_file(.env)\"\r\n    ]\r\n  }\r\n}"
+		withCRLF := "{\r\n  \"permissions\": {\r\n    \"deny\": [\r\n      \"Bash(my-custom)\",\r\n      \"Read(.env)\"\r\n    ]\r\n  }\r\n}"
 		if err := os.WriteFile(path, []byte(withCRLF), 0o640); err != nil {
 			t.Fatalf("WriteFile() error = %v", err)
 		}
 
-		if _, err := svc.PartialUninstall([]model.AgentID{model.AgentAntigravityCLI}, []model.ComponentID{model.ComponentPermission}); err != nil {
+		if _, err := svc.PartialUninstall([]model.AgentID{model.AgentClaudeCode}, []model.ComponentID{model.ComponentPermission}); err != nil {
 			t.Fatalf("PartialUninstall() error = %v", err)
 		}
 
@@ -107,7 +105,7 @@ func TestUninstallPermissionEdgeCases(t *testing.T) {
 		}
 		document := readJSONFileForTest(t, path)
 		deny, _ := valueAtPath(document, []string{"permissions", "deny"})
-		if got, _ := deny.([]any); len(got) != 1 || got[0] != "read_file(notes.md)" {
+		if got, _ := deny.([]any); len(got) != 1 || got[0] != "Bash(my-custom)" {
 			t.Errorf("permissions.deny = %#v, want the user's own rule only", deny)
 		}
 		info, err := os.Stat(path)
@@ -120,12 +118,12 @@ func TestUninstallPermissionEdgeCases(t *testing.T) {
 	})
 
 	t.Run("malformed settings fail closed and stay untouched", func(t *testing.T) {
-		home, svc, adapter := permissionTestEnv(t, model.AgentAntigravityCLI)
+		home, svc, adapter := permissionTestEnv(t, model.AgentClaudeCode)
 		path := adapter.SettingsPath(home)
 		broken := `{"permissions":`
 		writeUserSettings(t, path, broken)
 
-		result, err := svc.PartialUninstall([]model.AgentID{model.AgentAntigravityCLI}, []model.ComponentID{model.ComponentPermission})
+		result, err := svc.PartialUninstall([]model.AgentID{model.AgentClaudeCode}, []model.ComponentID{model.ComponentPermission})
 		if err == nil {
 			t.Fatal("PartialUninstall() accepted a malformed settings file")
 		}
@@ -145,14 +143,14 @@ func TestUninstallPermissionEdgeCases(t *testing.T) {
 	})
 
 	t.Run("declared list is emptied while undeclared data stays", func(t *testing.T) {
-		home, svc, adapter := permissionTestEnv(t, model.AgentAntigravityCLI)
+		home, svc, adapter := permissionTestEnv(t, model.AgentClaudeCode)
 		path := adapter.SettingsPath(home)
-		writeUserSettings(t, path, `{"permissions":{"deny":["read_file(notes.md)"]},"keep":1}`)
+		writeUserSettings(t, path, `{"permissions":{"deny":["Bash(my-custom)"]},"keep":1}`)
 		if _, err := permissions.Inject(home, adapter); err != nil {
 			t.Fatalf("permissions.Inject() error = %v", err)
 		}
 
-		first, err := svc.PartialUninstall([]model.AgentID{model.AgentAntigravityCLI}, []model.ComponentID{model.ComponentPermission})
+		first, err := svc.PartialUninstall([]model.AgentID{model.AgentClaudeCode}, []model.ComponentID{model.ComponentPermission})
 		if err != nil {
 			t.Fatalf("PartialUninstall() error = %v", err)
 		}
@@ -164,15 +162,15 @@ func TestUninstallPermissionEdgeCases(t *testing.T) {
 		if document["keep"] != float64(1) {
 			t.Errorf("keep = %#v, want 1", document["keep"])
 		}
-		if _, present := valueAtPath(document, []string{"permissions", "allow"}); present {
-			t.Error("permissions.allow survived although every entry in it was ours")
+		if _, present := valueAtPath(document, []string{"permissions", "defaultMode"}); present {
+			t.Error("permissions.defaultMode survived although it was ours")
 		}
 
 		before, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatalf("ReadFile() error = %v", err)
 		}
-		second, err := svc.PartialUninstall([]model.AgentID{model.AgentAntigravityCLI}, []model.ComponentID{model.ComponentPermission})
+		second, err := svc.PartialUninstall([]model.AgentID{model.AgentClaudeCode}, []model.ComponentID{model.ComponentPermission})
 		if err != nil {
 			t.Fatalf("second PartialUninstall() error = %v", err)
 		}

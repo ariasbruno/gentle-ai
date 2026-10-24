@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 
@@ -58,6 +59,9 @@ func NormalizeInstallFlags(flags InstallFlags, detection system.DetectionResult)
 	if len(flags.Components) == 0 && strings.TrimSpace(flags.Preset) == "" && isPiOnlyAgents(selection.Agents) {
 		components = piOnlyComponents()
 	}
+	if flags.IncludeTheme && !slices.Contains(components, model.ComponentTheme) {
+		components = append(components, model.ComponentTheme)
+	}
 
 	selection.Components = components
 
@@ -76,6 +80,9 @@ func NormalizeInstallFlags(flags InstallFlags, detection system.DetectionResult)
 	scope, err := ResolveInstallScope(flags.Scope)
 	if err != nil {
 		return InstallInput{}, err
+	}
+	if scope == ScopeWorkspace && containsAgent(selection.Agents, model.AgentAntigravityCLI) && slices.Contains(selection.Components, model.ComponentTheme) {
+		return InstallInput{}, fmt.Errorf("theme component for antigravity-cli requires --scope global (Antigravity CLI settings are global only); rerun gentle-ai install --agent antigravity-cli --scope global --include-theme")
 	}
 	// Rejected here, before the runtime is created or anything is written.
 	if flags.ClaudeOrchestratorModules {

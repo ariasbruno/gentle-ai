@@ -37,33 +37,47 @@ func (a *Adapter) StatusLineScriptPath(homeDir string) string {
 	return filepath.Join(a.GlobalPluginDir(homeDir), "statusline.sh")
 }
 
-// EnsureStatusLineSettings registers the managed `statusLine` and `title`
+// EnsureStatusLineSettingsChanged registers the managed `statusLine` and `title`
 // blocks in the user-level Antigravity CLI settings.json under the S8
-// ownership rules. A missing settings.json is created; a malformed one fails
-// closed and is left byte-identical; an already-managed configuration is not
-// rewritten; a legacy script-path registration is upgraded in place.
-func (a *Adapter) EnsureStatusLineSettings(homeDir string) error {
+// ownership rules and reports whether the file was created or modified.
+func (a *Adapter) EnsureStatusLineSettingsChanged(homeDir string) (bool, error) {
 	settingsPath := a.SettingsPath(homeDir)
 	legacyStatusLineCmd := a.StatusLineScriptPath(homeDir)
 
 	raw, err := os.ReadFile(settingsPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			return fmt.Errorf("read Antigravity CLI settings %q: %w", settingsPath, err)
+			return false, fmt.Errorf("read Antigravity CLI settings %q: %w", settingsPath, err)
 		}
 		root := map[string]any{}
 		applyManagedStatusLineBlocks(root, legacyStatusLineCmd)
-		return writeStatusLineSettings(settingsPath, root)
+		if err := writeStatusLineSettings(settingsPath, root); err != nil {
+			return false, err
+		}
+		return true, nil
 	}
 
 	root, err := filemerge.UnmarshalJSONObject(raw)
 	if err != nil {
-		return fmt.Errorf("parse Antigravity CLI settings %q: %w", settingsPath, err)
+		return false, fmt.Errorf("parse Antigravity CLI settings %q: %w", settingsPath, err)
 	}
 	if !applyManagedStatusLineBlocks(root, legacyStatusLineCmd) {
-		return nil
+		return false, nil
 	}
-	return writeStatusLineSettings(settingsPath, root)
+	if err := writeStatusLineSettings(settingsPath, root); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// EnsureStatusLineSettings registers the managed `statusLine` and `title`
+// blocks in the user-level Antigravity CLI settings.json under the S8
+// ownership rules. A missing settings.json is created; a malformed one fails
+// closed and is left byte-identical; an already-managed configuration is not
+// rewritten; a legacy script-path registration is upgraded in place.
+func (a *Adapter) EnsureStatusLineSettings(homeDir string) error {
+	_, err := a.EnsureStatusLineSettingsChanged(homeDir)
+	return err
 }
 
 // applyManagedStatusLineBlocks registers both managed blocks on the decoded

@@ -1023,8 +1023,7 @@ func (s *Service) componentOperations(adapter agents.Adapter, componentID model.
 			case model.AgentClaudeCode, model.AgentAntigravityCLI:
 				// Subtract only the entries gentle-ai wrote. Deleting the whole
 				// permissions object would take the user's own rules and default
-				// mode with it, and Antigravity CLI had no case at all, so its
-				// injected overlay survived an uninstall.
+				// mode with it.
 				if overlay := permissions.ManagedOverlay(adapter.Agent(), homeDir); len(overlay) > 0 {
 					ops = append(ops, subtractPermissionOverlay(path, overlay))
 				}
@@ -1039,7 +1038,17 @@ func (s *Service) componentOperations(adapter agents.Adapter, componentID model.
 	case model.ComponentTheme:
 		for _, path := range settingsTargets(homeDir, adapter) {
 			targets = append(targets, path)
-			ops = append(ops, rewriteJSONFile(path, jsonPath{"theme"}))
+			if agy, ok := adapter.(*antigravitycli.Adapter); ok {
+				statusLineScript := agy.StatusLineScriptPath(homeDir)
+				ops = append(ops,
+					removeOwnedJSONBlocks(path,
+						ownedJSONBlock{key: "statusLine", ownedCommands: []string{antigravitycli.ManagedStatusLineCommand, statusLineScript}},
+						ownedJSONBlock{key: "title", ownedCommands: []string{antigravitycli.ManagedTitleCommand, statusLineScript + " --title"}},
+					),
+				)
+			} else {
+				ops = append(ops, rewriteJSONFile(path, jsonPath{"theme"}))
+			}
 		}
 	case model.ComponentClaudeTheme:
 		for _, path := range theme.VisualThemePaths(homeDir, adapter) {

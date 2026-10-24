@@ -2,6 +2,7 @@ package cli
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -460,3 +461,37 @@ func TestDefaultAgentsFromDetection_AllAgentsMappedCorrectly(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizeInstallFlagsIncludeTheme(t *testing.T) {
+	input, err := NormalizeInstallFlags(InstallFlags{
+		Agents:       []string{"antigravity-cli"},
+		IncludeTheme: true,
+	}, system.DetectionResult{})
+	if err != nil {
+		t.Fatalf("NormalizeInstallFlags() error = %v", err)
+	}
+	if !slices.Contains(input.Selection.Components, model.ComponentTheme) {
+		t.Errorf("NormalizeInstallFlags() selection components %v does not contain ComponentTheme", input.Selection.Components)
+	}
+
+	inputWithoutTheme, err := NormalizeInstallFlags(InstallFlags{
+		Agents: []string{"antigravity-cli"},
+	}, system.DetectionResult{})
+	if err != nil {
+		t.Fatalf("NormalizeInstallFlags() error = %v", err)
+	}
+	if slices.Contains(inputWithoutTheme.Selection.Components, model.ComponentTheme) {
+		t.Errorf("NormalizeInstallFlags() default should not include ComponentTheme, got %v", inputWithoutTheme.Selection.Components)
+	}
+}
+
+func TestParseInstallFlagsIncludeTheme(t *testing.T) {
+	flags, err := ParseInstallFlags([]string{"--include-theme"})
+	if err != nil {
+		t.Fatalf("ParseInstallFlags() error = %v", err)
+	}
+	if !flags.IncludeTheme {
+		t.Errorf("ParseInstallFlags() IncludeTheme = false, want true")
+	}
+}
+

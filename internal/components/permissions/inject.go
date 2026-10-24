@@ -34,6 +34,9 @@ func TargetPath(homeDir string, adapter agents.Adapter) string {
 // it can subtract exactly those entries instead of deleting a whole key the
 // user also writes to.
 func ManagedOverlay(id model.AgentID, homeDir string) []byte {
+	if id == model.AgentAntigravityCLI {
+		return antigravityCLIOverlayForHome(homeDir)
+	}
 	return agentOverlay(id, homeDir)
 }
 

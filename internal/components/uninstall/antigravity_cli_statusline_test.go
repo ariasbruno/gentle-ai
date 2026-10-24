@@ -8,6 +8,7 @@ import (
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents"
 	antigravitycli "github.com/gentleman-programming/gentle-ai/v4/internal/agents/antigravitycli"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/model"
 )
 
 // statusLineAGYAdapter builds the Antigravity CLI adapter for an injected
@@ -289,3 +290,45 @@ func TestRetainedAntigravityCLIUninstallRemovesLegacyScriptRegistration(t *testi
 		t.Errorf("empty settings.json was not removed after retiring the legacy block")
 	}
 }
+
+// TestPartialUninstallAntigravityCLIThemeRemovesStatusLine verifies that
+// uninstalling ComponentTheme for Antigravity CLI cleans up statusLine and
+// title blocks while preserving user settings.
+func TestPartialUninstallAntigravityCLIThemeRemovesStatusLine(t *testing.T) {
+	homeDir := t.TempDir()
+	agy := statusLineAGYAdapter(t)
+	writeStatusLineSettings(t, agy, homeDir, `{
+  "customKey": "keepMe",
+  "statusLine": {
+    "type": "command",
+    "command": "gentle-ai statusline",
+    "enabled": true
+  },
+  "title": {
+    "type": "command",
+    "command": "gentle-ai statusline --title"
+  }
+}`)
+
+	svc, err := NewService(homeDir, t.TempDir(), "dev")
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	result, err := svc.PartialUninstall([]model.AgentID{model.AgentAntigravityCLI}, []model.ComponentID{model.ComponentTheme})
+	if err != nil {
+		t.Fatalf("PartialUninstall error = %v", err)
+	}
+	if len(result.RemovedFiles) == 0 && len(result.ChangedFiles) == 0 {
+		t.Errorf("PartialUninstall had no effect")
+	}
+
+	got := readStatusLineSettings(t, agy, homeDir)
+	if strings.Contains(got, "statusLine") || strings.Contains(got, "title") {
+		t.Errorf("managed statusLine or title survived partial theme uninstall:\n%s", got)
+	}
+	if !strings.Contains(got, "customKey") || !strings.Contains(got, "keepMe") {
+		t.Errorf("user customKey was lost during partial theme uninstall:\n%s", got)
+	}
+}
+
