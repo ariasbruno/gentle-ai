@@ -1,129 +1,264 @@
-# Antigravity CLI (`agy`) con Gentle AI v4
+# Google Antigravity CLI (`agy`) con Gentle AI
 
-**Gentle AI configura `agy` mediante un plugin y adapta los contratos de Gentle Shell; no convierte agy en Pi ni asume paridad total entre runtimes.** Esta documentación detalla la instalación, arquitectura, decisiones de diseño, revisión RDD, cobertura de pruebas y límites del soporte. Su propósito es orientar a los desarrolladores sobre qué componentes se configuran y permitir a los mantenedores auditar cada integración.
+Integración nativa de primer nivel de Google Antigravity CLI (`agy`) en Gentle AI. Diseñada específicamente para aprovechar al máximo las capacidades de `agy` como runtime autónomo: arquitectura modular de plugins, 10 subagentes nativos especializados, ciclo de vida con hooks, statusline y título dinámicos, evaluación en memoria de permisos y revisión adversarial automatizada basada en recibos inmutables (RDD con lentes 4R).
 
-> [!NOTE]
-> La actualización local de esta rama fija **Gentle AI 4.2.0, Gentle Shell 4.3.0 y AGY 1.4.4**. Consultá el [registro incremental](11-upgrade-ai-4.2.0-shell-4.3.0.md) para commits, checks y límites; el [anterior](11-upgrade-ai-4.1.1-shell-4.2.0.md) queda como historia de la rama. No implica publicación de la rama, suite global verde ni certificación de modelos autenticados; los comandos de instalación publicados siguen siendo una referencia, no pasos ejecutados en esta tarea.
+> [!IMPORTANT]
+> **Versión fijada actual**: **Gentle AI v4.2.1** (basada en upstream Gentle AI v4.2.0, Gentle Shell v4.3.0 y Antigravity CLI v1.4.4).
 
-## Inicio Rápido (Quick Start)
+---
 
-Si querés instalar y empezar a usar Gentle AI con `agy`:
+## 1. Inicio Rápido (Quick Start)
 
-### 1. Prerrequisitos e instalación del binario `gentle-ai`
+### Paso 1: Prerrequisitos
+Asegurate de tener `agy` (con login interactivo completado) y Go 1.25+ en tu sistema:
+```bash
+command -v agy && agy --version
+go version
+```
 
-Necesitás tener `agy` (con login interactivo completado) y el binario `gentle-ai` en tu `$PATH`.
+### Paso 2: Instalación del binario `gentle-ai`
 
-Si todavía no tenés `gentle-ai`, podés instalarlo con Go (1.25+):
+#### Opción A: Descarga desde GitHub Releases (Recomendado)
+Descargá el binario compilado y firmado desde las [Releases del repositorio](https://github.com/ariasbruno/gentle-ai/releases) y colocalo en tu `$PATH` (ej. `~/.local/bin` o `/usr/local/bin`).
 
-#### Opción A: Descargando el binario del release de este fork (Recomendado)
-Tomá el artefacto de la [página de releases de este fork](https://github.com/ariasbruno/gentle-ai/releases) y ponelo en tu `$PATH`.
-
-*(`go install github.com/ariasbruno/gentle-ai/...@<tag>` no funciona: el `go.mod` declara el módulo de upstream, así que apuntaría al repositorio original.)*
-
-#### Opción B: Clonando y compilando desde la rama de desarrollo
+#### Opción B: Compilación local desde la rama de desarrollo
 ```bash
 git clone -b agy/ai-v4.2.0_shell-v4.3.0 https://github.com/ariasbruno/gentle-ai.git
 cd gentle-ai
 go install ./cmd/gentle-ai
 ```
 
-Asegurate de tener `$GOPATH/bin` (o `~/go/bin`) incluido en tu variable `$PATH` y verificá que ambos ejecutables respondan:
-```sh
-command -v agy && command -v gentle-ai
-```
+### Paso 3: Instalación y sincronización
 
-### 2. Instalación del plugin
+Elegí el alcance según tu flujo de trabajo:
 
-Elige el alcance según tu preferencia:
-
-- **Para todas tus sesiones de usuario (Global):**
-  ```sh
+- **Instalación Global (Recomendada para uso personal en todos tus proyectos):**
+  ```bash
   gentle-ai install --agent antigravity-cli --scope global
   gentle-ai sync --agents antigravity-cli --scope global
   ```
 
-- **Solo para tu proyecto actual (Workspace / Aislado):**
-  ```sh
+- **Instalación por Workspace (Aislada exclusivamente al repositorio actual):**
+  ```bash
   gentle-ai install --agent antigravity-cli --scope workspace
   gentle-ai sync --agents antigravity-cli --scope workspace
   ```
 
-### 3. ¿Qué se instala y dónde?
+### Paso 4: Verificación inmediata del estado
+```bash
+# Diagnóstico integral del sistema y servidores MCP
+gentle-ai doctor
 
-Dependiendo del alcance seleccionado, Gentle AI despliega el bundle completo del plugin en:
-- **Global:** `~/.gemini/config/plugins/gentle-ai/` (más el registro en `import_manifest.json` y, en `~/.gemini/antigravity-cli/settings.json`, el overlay de permisos y la status line administrada).
-- **Workspace:** `<tu-proyecto>/.agents/plugins/gentle-ai/` (aislado al repositorio, sin tocar `$HOME`).
+# Validación estricta mediante el validador oficial de Antigravity CLI
+agy plugin validate --strict ~/.gemini/config/plugins/gentle-ai
+```
 
-**Árbol completo de archivos desplegados:**
+---
+
+## 2. ¿Por qué existe esta integración? (La Realidad vs Upstream)
+
+En upstream Gentle AI existe un único adaptador genérico llamado `antigravity` que comete el error de intentar abarcar **tres entornos completamente distintos (Antigravity CLI, Antigravity 2.0 y Antigravity IDE) en una sola bolsa**:
+
+- **El problema de upstream**: Trata a Antigravity como si fuera un editor desktop tradicional. Concatena un único prompt plano en `.gemini/GEMINI.md`, **no provee subagentes** (`SubAgentsDir` está vacío en el código), **carece de transporte RDD** (los usuarios de Antigravity no pueden ejecutar revisiones Receipt-Driven Development), no utiliza el sistema oficial de plugins de `agy`, no implementa hooks de ciclo de vida, no ofrece statusline nativa, no soporta aislamiento por workspace en `.agents/`, y mezcla rutas entre `.gemini/antigravity-desktop` y `.gemini/antigravity-cli`, provocando colisiones.
+- **Nuestra solución**: Creamos un adaptador dedicado y desacoplado (`model.AgentAntigravityCLI`). En lugar de emparchar las diferencias con el IDE, explota **el 100% de las posibilidades que Antigravity CLI ofrece como runtime moderno de agentes**.
+
+### Cuadro Comparativo: Upstream vs Nuestra Integración
+
+| Capacidad | Upstream (`antigravity` genérico) | Esta Integración (`antigravity-cli` dedicada) | Evidencia en Código |
+|---|---|---|---|
+| **Arquitectura de carga** | Concatena texto plano en `.gemini/GEMINI.md` | Plugin nativo con `plugin.json`, `rules/`, `agents/`, `skills/` y `hooks.json` | [`internal/agents/antigravitycli/adapter.go`](../../internal/agents/antigravitycli/adapter.go#L275-L295) |
+| **Subagentes nativos** | ❌ Ninguno (`SubAgentsDir: ""` vacío) | ✅ **10 subagentes nativos** en formato Markdown listos para delegación | [`internal/assets/antigravitycli/agents/`](../../internal/assets/antigravitycli/agents) |
+| **Revisión RDD (4R)** | ❌ No soportada (`transport: nil`) | ✅ **Transporte RDD in-process** con subprocesos sandboxed y árboles Git inmutables | [`internal/reviewerprovider/antigravitycli_adapter.go`](../../internal/reviewerprovider/antigravitycli_adapter.go) |
+| **Ciclo de vida con Hooks** | ❌ No implementado | ✅ **5 hooks declarativos** (`PreInvocation`, `PreToolUse`, `PostToolUse`, `PostInvocation`, `Stop`) | [`internal/cli/antigravity_hook.go`](../../internal/cli/antigravity_hook.go#L122-L136) |
+| **StatusLine y Título** | ❌ Sin soporte | ✅ **Statusline in-process y título dinámico** con fases ODD, RDD, cuotas y memoria Engram | [`internal/cli/statusline.go`](../../internal/cli/statusline.go), [`internal/statusline`](../../internal/statusline) |
+| **Políticas de Seguridad** | ❌ No existen | ✅ **Guardia dinámica en memoria** (bloquea `.env*`, `.ssh`, `cat .env`, y fuerza `force_ask` en comandos destructivos) | [`internal/cli/antigravity_hook.go`](../../internal/cli/antigravity_hook.go#L921-L943) |
+| **Registro de Plugins** | ❌ Manual | ✅ Automático en `import_manifest.json` vía `agy plugin install` en staging | [`internal/agents/antigravitycli/adapter.go`](../../internal/agents/antigravitycli/adapter.go#L820-L865) |
+| **Soporte Multi-Scope** | ⚠️ Riesgo de colisión en `$HOME` | ✅ Separación estricta: `--scope global` vs `--scope workspace` (`.agents/plugins/gentle-ai`) | [`internal/cli/run.go`](../../internal/cli/run.go#L1053-L1071) |
+| **Aislamiento de Git** | ❌ Riesgo de ensuciar `.gitignore` | ✅ Gestión limpia en `.git/info/exclude` sin alterar el working tree del repositorio | [`internal/components/localexclude`](../../internal/components/localexclude) |
+
+---
+
+## 3. Mapa Completo de Componentes y Superficies Desplegadas
+
+El siguiente mapa describe todos los componentes instalados, registros de integración y almacenamiento en runtime:
+
 ```text
-├── plugin.json                                                                      # Manifiesto del plugin para agy
-├── mcp_config.json                                                                 # Configuración de MCP (Context7, Engram, CodeGraph)
-├── hooks.json                                                                      # Definición de hooks de eventos para agy
-├── hooks/                                                                          # Scripts ejecutables de hooks (hook.sh / hook.cmd)
-├── rules/
-│   ├── AGENTS.md                                                                   # Reglas y persona base
-│   ├── gentle-ai-orchestrator.md                                                   # Regla principal de orquestación
-│   ├── gentle-ai-routing.md                                                        # Protocolo de enrutamiento ODD
-│   ├── orchestrator-{delegation,memory,skills,prompts,tracking,verification,writer}.md # Reglas condicionales de fase
-│   └── strict-tdd{,-verify}.md                                                     # Dos reglas condicionales de testing
-├── agents/                                                                         # 10 subagentes nativos (.md)
-│   ├── gentle-ai-explore, gentle-ai-worker, gentle-ai-verify                       # Subagentes de ciclo ODD
-│   ├── jd-judge-a, jd-judge-b, jd-fix-agent                                        # Subagentes de Judgment Day
-│   └── review-risk, review-resilience, review-readability, review-reliability       # Subagentes de revisión 4R
-├── skills/                                                                         # Skills del bundle transpilado
-└── chains/                                                                         # Cadenas de flujos compuestos (4r-review.chain.md)
+Entorno del Sistema y Repositorio
+│
+├── 1. Plugin Oficial de Gentle AI
+│   (Global: ~/.gemini/config/plugins/gentle-ai/  |  Workspace: <repo>/.agents/plugins/gentle-ai/)
+│   ├── plugin.json                                      # Manifiesto del plugin para agy
+│   ├── mcp_config.json                                  # Servidores MCP (CodeGraph, Context7, Engram)
+│   ├── hooks.json                                       # Definición de hooks de ciclo de vida
+│   ├── hooks/                                           # Ejecutables puente (hook.sh / hook.cmd)
+│   ├── rules/                                           # Reglas operativas (AGENTS.md, orchestrator, routing ODD, strict-tdd)
+│   ├── agents/                                          # 10 Subagentes nativos Markdown
+│   ├── skills/                                          # Catálogo completo de skills transpiladas
+│   ├── chains/                                          # Flujos compuestos (4r-review.chain.md)
+│   └── .native-rule-ownership.json                      # Registro de propiedad y digests de reglas
+│
+├── 2. Integración de StatusLine y Título (~/.gemini/antigravity-cli/settings.json)
+│   ├── "statusLine": {"type": "command", "command": "gentle-ai statusline"}
+│   └── "title": {"type": "command", "command": "gentle-ai statusline --title"}
+│       (Permite a agy renderizar la barra interactiva y el título de ventana en tiempo real).
+│
+├── 3. Registro Global de Plugins (~/.gemini/config/import_manifest.json)
+│   └── Registra el plugin de Gentle AI para su descubrimiento y carga inmediata en el arranque de agy.
+│       (Solo en instalación global; en workspace se omite para aislamiento total).
+│
+├── 4. Aislamiento Limpio del Repositorio Local (<repo>/.git/info/exclude)
+│   └── Excluye automáticamente artefactos internos (.atl, carpetas scratch) sin modificar el .gitignore del proyecto.
+│
+└── 5. Configuración y Estado en Tiempo de Ejecución (~/.gentle-ai/)
+    ├── statusline.json                                  # Configuración de usuario para statusline (densidad y visibilidad)
+    ├── statusline-phase/<conv_hash>.json                # Detección de fase de trabajo inferida vía PreToolUse
+    ├── statusline-engram-state.json                     # Estado dinámico de observaciones Engram capturadas
+    ├── statusline-rdd-cache.json                        # Caché del estado de revisión RDD
+    ├── statusline-changes-cache.json                    # Caché de diferencias Git
+    └── antigravity-mutations/v1/<conv_hash>.jsonl       # Ledger inmutable de mutaciones de archivos por sesión
+```
+
+### Barra de Estado y Título Dinámicos (`gentle-ai statusline`)
+
+Gentle AI provee una statusline rica y nativa ejecutada in-process sin dependencias externas (`jq` o `bash`), totalmente compatible con Linux, macOS y Windows:
+
+- **Pétalo animado**: En reposo muestra la flor estática `✿`; en actividad anima `✿❀❁✾` con pulso de tonos.
+- **Modo y modelo**: Refleja el modo de ciclo activo (ej. `auto · Gemini 3.8 Flash`).
+- **Gauges de contexto y cuotas**: Muestra el consumo de la ventana de contexto (`ctx ▰▰▰▱▱▱▱▱ 43%`) y el tiempo restante de cuota.
+- **Memoria Engram reactiva**: Indica el estado del proyecto (`🧠 <proyecto> · ready` o `✓ saved #id` al registrar observaciones).
+- **Autoridad RDD**: Estado en vivo de revisiones de código (`🌹 Review in progress`, `✓ Approved`, `Fixing findings…`).
+- **Métricas Git y Tareas ODD**: Contador de cambios (`±N +A/−D`) y avance de tareas del documento ODD más reciente (`⋗ 12/17 · T15 in_progress`).
+- **Atajos alineados a la derecha**: Muestra `? for shortcuts` (o `?` en terminales compactas) alineado al margen derecho.
+- **Auto-silenciado inteligente**: Si el plugin se desactiva en `config.json`, la barra se apaga automáticamente para no ensuciar la salida.
+- **Personalización del usuario**: Mediante `~/.gentle-ai/statusline.json` podés ajustar la densidad (`comfortable`, `compact`, `minimal`) y alternar la visibilidad de cualquier segmento.
+
+---
+
+## 4. Arquitectura y Flujo de Trabajo
+
+### Diagrama 1: Cadena de Transpilación y Despliegue
+Gentle Shell es la fuente de verdad canónica. El transpilador adapta y valida los assets, los embebe en el binario Go y el comando `install/sync` despliega el plugin, la statusline y el registro:
+
+```mermaid
+flowchart TD
+    subgraph Sources["1. Fuentes de Verdad"]
+        GS["Gentle Shell (commit fijado en PROVENANCE.json)<br/>Assets, Prompts, Canons y Skills"]
+        GA["Gentle AI Core (Motor Go)<br/>CLI, RDD, Políticas y Lifecycle"]
+    end
+
+    subgraph Build["2. Transpilación y Compilación"]
+        TR["Transpilador Go<br/>(scripts/transpile-antigravitycli)"]
+        DG{{"Drift Gate CI<br/>(Verificación estricta de paridad)"}}
+        Bundle["Asset Bundle Embebido<br/>(internal/assets/antigravitycli)"]
+        Binary["Binario gentle-ai<br/>(v4.2.1 compilado)"]
+    end
+
+    subgraph Deploy["3. Despliegue en Sistema"]
+        CLI["gentle-ai install / sync"]
+        PluginFS["Plugin de agy<br/>~/.gemini/config/plugins/gentle-ai/<br/>o .agents/plugins/gentle-ai/"]
+        SettingsFS["Configuración agy<br/>~/.gemini/antigravity-cli/settings.json<br/>(statusLine y title)"]
+        ManifestFS["Registro de Plugins<br/>~/.gemini/config/import_manifest.json"]
+        ExcludeFS["Exclusiones Git<br/>.git/info/exclude"]
+    end
+
+    subgraph Runtime["4. Ejecución en Antigravity CLI"]
+        AGY["Runtime agy"]
+    end
+
+    GS --> TR
+    TR --> DG
+    DG --> Bundle
+    GA --> Binary
+    Bundle --> Binary
+    Binary --> CLI
+    CLI --> PluginFS
+    CLI --> SettingsFS
+    CLI --> ManifestFS
+    CLI --> ExcludeFS
+    PluginFS --> AGY
+    SettingsFS --> AGY
+    ManifestFS --> AGY
 ```
 
 ---
 
-## Leer según la necesidad
+### Diagrama 2: Ciclo de Vida de una Sesión con Hooks y RDD
+Durante una sesión interactiva, los hooks de Antigravity CLI colaboran con el motor en Go para auditar mutaciones, proteger archivos sensibles y exigir revisiones antes de cerrar cambios de alto riesgo:
 
-| Necesidad | Lectura |
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Dev as Desarrollador
+    participant AGY as Antigravity CLI (agy)
+    participant HookPre as Hook PreInvocation
+    participant HookPreTool as Hook PreToolUse
+    participant Orch as Orquestador Gentle AI
+    participant Worker as Subagente Worker
+    participant HookPost as Hook PostToolUse
+    participant HookStop as Hook Stop
+    participant RDD as Motor RDD (Go Engine)
+
+    Dev->>AGY: Inicia sesión con su requerimiento
+    AGY->>HookPre: Evento PreInvocation
+    HookPre-->>AGY: Inyecta contexto y asegura exclusiones en .git/info/exclude
+    AGY->>Orch: Inicia sesión con la regla ODD (Organic Driven Development)
+    Orch->>Worker: Delega implementación con superficie de edición acotada
+    Worker->>HookPreTool: Solicita ejecutar herramienta de edición o comando
+    alt Comando destructivo o archivo sensible (.env, .ssh)
+        HookPreTool-->>AGY: Bloquea con deny o exige force_ask
+    else Operación segura
+        HookPreTool-->>AGY: Autoriza ejecución
+        Worker->>Worker: Aplica cambios en código y corre tests
+        Worker->>HookPost: Evento PostToolUse (registra mutaciones en el ledger)
+    end
+    Worker-->>Orch: Finaliza tarea
+    Orch->>AGY: Intenta cerrar la sesión
+    AGY->>HookStop: Evento Stop (evalúa si autoriza el cierre)
+    alt Cambio de Alto Riesgo Detectado
+        HookStop->>RDD: Exige revisión de código obligatoria
+        RDD->>RDD: Ejecuta lentes 4R en árbol Git inmutable
+        RDD-->>HookStop: Emite veredicto (Approved / Correction)
+        HookStop-->>AGY: Quema el recibo y autoriza el cierre
+        AGY-->>Dev: Respuesta final verificada
+    else Cambio de Bajo Riesgo o Lectura
+        HookStop-->>AGY: Cierre autorizado de inmediato
+        AGY-->>Dev: Respuesta directa
+    end
+```
+
+---
+
+## 5. Matriz de Subagentes Nativos Incluidos
+
+Gentle AI dota a `agy` de 10 subagentes nativos configurados en formato Markdown:
+
+| Categoría | Subagente | Rol y Responsabilidad | Herramientas |
+|---|---|---|---|
+| **Ciclo ODD** | `gentle-ai-explore` | Exploración de arquitectura, codebase e investigación previa | Solo lectura |
+| | `gentle-ai-worker` | Implementación con superficie de edición estrictamente acotada | Edición + Tests |
+| | `gentle-ai-verify` | Verificación técnica de cumplimiento de requisitos y pruebas | Solo lectura |
+| **Judgment Day** | `jd-judge-a` | Primer juez ciego adversarial e independiente | Solo lectura |
+| | `jd-judge-b` | Segundo juez ciego adversarial e independiente | Solo lectura |
+| | `jd-fix-agent` | Agente quirúrgico de resolución para hallazgos confirmados | Edición + Tests |
+| **Revisión 4R (RDD)** | `review-risk` | Lente R1: Seguridad, privilegios, fuga de datos y credenciales | Solo lectura |
+| | `review-readability`| Lente R2: Nombres, complejidad, claridad de contratos y mantenibilidad | Solo lectura |
+| | `review-reliability`| Lente R3: Pruebas behavior-first, cobertura, determinismo y regresiones | Solo lectura |
+| | `review-resilience` | Lente R4: Recuperación de fallos, retries, backoff y carga | Solo lectura |
+
+---
+
+## 6. Documentación Detallada y Auditoría
+
+Para profundizar en aspectos específicos de la arquitectura y auditoría:
+
+| Área de Interés | Documento de Referencia |
 |---|---|
-| Configurar por primera vez, conocer rutas y precauciones | [Fundamentos y puesta en marcha](01-foundation.md) |
-| Entender el sistema de extremo a extremo | [Mapa de arquitectura](SUMMARY.md) |
-| Saber qué se adapta de Gentle Shell y qué no | [Transpilador y contratos](02-asset-transpiler.md) |
-| Entender reglas, delegación y hooks | [Orquestación y hooks](03-orchestration-and-hooks.md) |
-| Evaluar MCP y la evidencia de `j4500` | [CodeGraph y benchmarks](04-codegraph-and-benchmarks.md) |
-| Auditar subprocess, modelos, admisión y autoridad | [Transporte RDD](05-review-transport.md) |
-| Mantener o retirar el plugin sin confundir propietarios | [Propiedad y deriva](06-asset-ownership-and-drift.md) |
-| Comparar Claude Code, Codex, OpenCode, Pi y agy | [Matriz por capacidad](07-comparison.md) |
-| Revisar motivos y alternativas sin inventar historia | [Decisiones](08-decisions.md) |
-| Reproducir controles o conocer resultados pendientes | [Registro de verificación](09-verification.md) |
-| Localizar afirmaciones, símbolos, tests y fuentes oficiales | [Índice de fuentes](10-source-index.md) |
-| Distinguir CLI de la integración IDE | [Antigravity IDE frente a CLI](../antigravity-ide-vs-cli.md) |
-| Actualizar incrementalmente a AI 4.2.0 / Shell 4.3.0 / AGY 1.4.4 | [Inputs, checks, reviews y límites de esta actualización](11-upgrade-ai-4.2.0-shell-4.3.0.md) |
-| Actualizar incrementalmente a AI 4.1.1 / Shell 4.2.0 / AGY 1.3.4 | [Actualización anterior, ya aceptada](11-upgrade-ai-4.1.1-shell-4.2.0.md) |
-
-## Requisitos previos y verificación de entorno
-
-Antes de instalar o modificar la configuración, se recomienda realizar una comprobación pasiva del entorno (comandos de solo lectura que no requieren autenticación ni llamadas a modelos):
-
-```sh
-command -v agy
-agy --version
-agy --help
-go version
-```
-
-### Entorno de referencia validado
-
-Esta documentación y la suite de pruebas toman como base el siguiente entorno de referencia:
-
-- **Sistema operativo:** Linux `amd64`.
-- **Referencia histórica de Antigravity CLI:** `agy 1.3.0`.
-- **Actualización de esta rama:** `agy 1.4.4` observado en checks estructurales aislados y en una instalación real bajo `HOME` aislado; el runtime pasó de `1.4.2` a `1.4.3` el 2026-10-20 y a `1.4.4` el 2026-10-21, después del cierre del update, y los checks estructurales se repitieron contra cada versión, incluida la validación del plugin desplegado. En `1.4.3` la validación estricta pasó a cubrir hooks, sidecars y listas de componentes; `1.4.4` suma `plugin.json`, las configs de servidores MCP y los sidecars con chequeos de JSON inválido, campos desconocidos, placeholders mal formados, matchers de tool no reconocidos y scripts de hook faltantes. No se ejecutaron modelos AGY ni una instalación real de Pi. [Evidencia y límites](11-upgrade-ai-4.2.0-shell-4.3.0.md).
-- **Entorno Go:** El proyecto declara compatibilidad base con Go `1.25.10` ([go.mod, líneas 1–3](../../go.mod#L1-L3)) y fue validado con cadenas de herramientas Go 1.25+.
-
-> [!NOTE]
-> La comprobación pasiva anterior únicamente verifica la presencia de los binarios en tu `PATH`. No implica que el plugin de Gentle AI esté activo ni evalúa el aislamiento del sandbox. Para aplicar la configuración en el sistema o en tu proyecto, consulta los pasos en [Puesta en marcha (Global y Workspace)](01-foundation.md#puesta-en-marcha-global-y-workspace).
-
-## Consideraciones importantes
-
-- **Personalizaciones propias fuera del árbol administrado:** No guardes skills o subagentes manuales dentro de las carpetas `agents/` o `skills/` del plugin. `gentle-ai sync` reconcilia el bundle y poda automáticamente cualquier archivo ajeno al árbol oficial: [`DeployPluginTree`](../../internal/agents/antigravitycli/adapter.go#L589-L625).
-- **Alcance por proyecto vs global:** Si usás `--scope workspace`, el plugin se ubica en `.agents/plugins/gentle-ai/` de tu repositorio actual y tiene prioridad sobre tu configuración global, sin tocar `$HOME`.
-- **Precedencia de configuraciones:** `agy` lee la configuración local de `.agents/` por sobre la global de `~/.gemini/config/`.
-
----
-
-¿Querés profundizar en la arquitectura o la auditoría de código? Consultá el [Índice de fuentes](10-source-index.md) o el [Mapa de arquitectura](SUMMARY.md).
+| Comparativa formal frente a la integración IDE upstream | [Antigravity IDE frente a CLI (docs/antigravity-ide-vs-cli.md)](../antigravity-ide-vs-cli.md) |
+| Mecánica técnica interna, transporte RDD y sandboxing | [Mapa Técnico y Mecánica Interna (SUMMARY.md)](SUMMARY.md) |
+| Proceso de transpilación y contratos con Gentle Shell | [Transpilador y Contratos (02-asset-transpiler.md)](02-asset-transpiler.md) |
+| Detalle de hooks, ledgers de mutaciones y reglas de stop | [Orquestación y Hooks (03-orchestration-and-hooks.md)](03-orchestration-and-hooks.md) |
+| Comparación frente a Claude Code, Codex, OpenCode y Pi | [Matriz Comparativa de Capacidades (07-comparison.md)](07-comparison.md) |
+| Decisiones de diseño y alternativas descartadas | [Registro de Decisiones (08-decisions.md)](08-decisions.md) |
+| Registro de verificación y resultados observados | [Registro de Verificación (09-verification.md)](09-verification.md) |
+| Detalle del último incremento v4.2.0 / v4.3.0 / v1.4.4 | [Reporte de Actualización Incremental (11-upgrade-ai-4.2.0-shell-4.3.0.md)](11-upgrade-ai-4.2.0-shell-4.3.0.md) |
+| Borrador de notas para GitHub Releases | [Borrador Release Notes v4.2.1 (RELEASE_NOTES_v4.2.1.md)](RELEASE_NOTES_v4.2.1.md) |

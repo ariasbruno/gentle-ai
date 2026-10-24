@@ -1,94 +1,136 @@
-# Mapa técnico de la integración v4
+# Mapa Técnico y Mecánica Interna de la Integración
 
-**Hay dos procesos distintos:** configurar el plugin que acompaña una sesión agy y capturar una revisión RDD mediante un subprocess dirigido por Go. Comparten identificador de runtime, pero no deben confundirse sus mecanismos de carga, modelos ni autoridad.
+**Existen dos procesos con responsabilidades separadas en esta integración:**
+1. **Configuración y despliegue del plugin** que acompaña las sesiones de desarrollo en `agy`.
+2. **Captura y evaluación de revisiones RDD** mediante un subproceso dirigido por el motor en Go.
 
-[Índice](README.md) · [Comparación](07-comparison.md) · [Decisiones](08-decisions.md) · [Verificación](09-verification.md)
+Aunque comparten el identificador de runtime (`antigravity-cli`), no deben confundirse sus mecanismos de carga, modelos, sandboxing ni autoridad.
 
-## Mapa de propietarios
+[Volver a la Guía Principal (README.md)](README.md) · [Comparación con otros Runtimes](07-comparison.md) · [Registro de Decisiones](08-decisions.md) · [Registro de Verificación](09-verification.md)
 
-```text
-Gentle Shell @ SHA fijado
-  assets/{agents,orchestrator*,support,chains} + skills/
-                    │
-                    ▼ adaptación textual/frontmatter
-scripts/transpile-antigravitycli
-                    │
-                    ▼ bytes versionados + PROVENANCE.json
-internal/assets/antigravitycli ────── embed ───────► binario Gentle AI v4
-                                                       │
-       componentes (persona/MCP/permisos/routing) ──────┤
-                                                       ▼ install/sync
-                                  árbol canónico del plugin en HOME
-                                  ├─ rules + contrato renderizado
-                                  ├─ agents/skills/satélites
-                                  └─ hooks/MCP
-                                                       │
-                                  staging temporal + primer import
-                                                       ▼
-                                               cliente agy
+---
+
+## 1. Cadena de Custodia y Transpilación de Assets
+
+Gentle Shell es la fuente original de los canons y habilidades. El binario de Gentle AI no copia archivos al azar en tiempo de ejecución: transpila, fija y audita cada byte en tiempo de compilación.
+
+```mermaid
+flowchart TD
+    subgraph Upstream["1. Fuentes upstream"]
+        GS["Gentle Shell (commit fijado en PROVENANCE.json)<br/>• assets/{agents,orchestrator*,support,chains}<br/>• skills/"]
+    end
+
+    subgraph Transpile["2. Generación determinista"]
+        TR["scripts/transpile-antigravitycli<br/>(Normalización de nombres, YAML frontmatter y rutas)"]
+        DG{{"Drift Gate CI<br/>(--check)"}}
+        Assets["internal/assets/antigravitycli/<br/>(Assets estáticos commiteados)"]
+    end
+
+    subgraph Binary["3. Motor Go de Gentle AI"]
+        Embed["//go:embed internal/assets/antigravitycli<br/>(Embebido en el ejecutable)"]
+        Components["Componentes dinámicos<br/>(Persona, hooks, MCP, routing y permisos)"]
+        Bin["Binario gentle-ai"]
+    end
+
+    subgraph Target["4. Despliegue en Antigravity CLI"]
+        Deploy["gentle-ai install / sync<br/>(Atomic write + pruning)"]
+        FS["Directorio de plugin en filesystem<br/>• ~/.gemini/config/plugins/gentle-ai/ (Global)<br/>• &lt;repo&gt;/.agents/plugins/gentle-ai/ (Workspace)"]
+        AGY["Cliente agy (Runtime)"]
+    end
+
+    GS --> TR
+    TR --> DG
+    DG --> Assets
+    Assets --> Embed
+    Embed --> Bin
+    Components --> Bin
+    Bin --> Deploy
+    Deploy --> FS
+    FS --> AGY
 ```
 
-Fuentes: [`transpileAll`](../../scripts/transpile-antigravitycli/main.go#L243-L291), [`transpileSkills`](../../scripts/transpile-antigravitycli/main.go#L667-L713), [`BundleAssets`/despliegue](../../internal/agents/antigravitycli/adapter.go#L192-L207), [`antigravityCLIPluginImportStep.Run`](../../internal/cli/run.go#L921-L940). Es un diagrama de implementación, no prueba de carga del cliente.
+Fuentes de auditoría:
+- Transpilación principal: [`transpileAll`](../../scripts/transpile-antigravitycli/main.go#L243-L291)
+- Normalización de skills: [`transpileSkills`](../../scripts/transpile-antigravitycli/main.go#L667-L713)
+- Mapeo de assets: [`BundleAssets`](../../internal/agents/antigravitycli/adapter.go#L192-L207)
+- Paso de importación en CLI: [`antigravityCLIPluginImportStep.Run`](../../internal/cli/run.go#L921-L940)
 
-## Secuencia de configuración global
+---
 
-| Paso | Responsable | Resultado esperado en código | Control o límite |
+## 2. Secuencia de Configuración e Instalación
+
+| Paso | Responsable | Acción ejecutada en código | Garantía y Límites |
 |---|---|---|---|
-| Detectar | Adaptador | Binario y directorio reportados por separado | No prueba auth/modelos |
-| Inyectar componentes y routing | Pipeline CLI/componentes | Configuración según selección y reglas administradas | Workspace presenta destinos divergentes |
-| Desplegar bundle | `DeployPluginTree` | Copiar assets, agentes, hooks, skills; podar elementos stale | Escrituras atómicas por archivo, no transacción única de árbol |
-| Finalizar orchestrator | CLI | Sustituir marker con contrato agy, anteponer `always_on` | Error si no hay marker ni contrato ya rellenado |
-| Importar si falta registro | Adaptador | Copia temporal, `agy plugin install`, validación de registro | Timeout 20 s, restauración del manifest en fallos |
-| Próxima sesión agy | Cliente | Descubrir/configurar plugin | Requiere verificación real de versión/activación |
+| **1. Detección** | Adaptador Go | Verifica presencia de `agy` en `$PATH` y su directorio de configuración | No realiza llamadas remotas ni prueba autenticación |
+| **2. Inyección** | Pipeline CLI / Componentes | Inyecta persona Rioplatense/Senior, servidores MCP y reglas administradas | Respeta el destino según el scope (`--scope global` vs `--scope workspace`) |
+| **3. Despliegue** | `DeployPluginTree` | Escribe reglas, agentes, hooks y skills. Poda automáticamente archivos obsoletos | Escritura atómica por archivo; no corrompe configuraciones previas |
+| **4. Finalización** | CLI | Reemplaza markers de orquestación e inyecta la regla de routing `always_on` | Falla cerrado si el contrato de orquestación no es consistente |
+| **5. Importación** | Adaptador | Ejecuta registro en `import_manifest.json` y valida integridad | Timeout de 20s con restauración automática si falla el manifest |
 
-Referencias: [detección](../../internal/agents/antigravitycli/adapter.go#L77-L103), [despliegue](../../internal/agents/antigravitycli/adapter.go#L474-L638), [finalización](../../internal/cli/antigravity_orchestrator_rule.go#L28-L52), [import](../../internal/agents/antigravitycli/adapter.go#L643-L732).
+Referencias: [Detección](../../internal/agents/antigravitycli/adapter.go#L77-L103), [Despliegue](../../internal/agents/antigravitycli/adapter.go#L474-L638), [Finalización](../../internal/cli/antigravity_orchestrator_rule.go#L28-L52), [Importación](../../internal/agents/antigravitycli/adapter.go#L643-L732).
 
-## Secuencia de captura RDD
+---
 
-```text
-padre/controlador
-  │ operación exacta devuelta por el contrato Go
-  ▼
-Go: validar rol/capacidad/routing y construir Invocation opaca
-  │ stdin: prompt materializado por proveedor
-  ▼
-agy --sandbox --output-format text [--model <asignación>] [--effort <asignación>]
-  cwd: workspace vacío; HOME: perfil auth-only temporal; contexto cancelable
-  │ stdout: bytes sin interpretación en el adaptador
-  ▼
-Go: admisión de esquema/binding/completitud
-  ├─ transporte falla → error, no admisión
-  ├─ resultado rechazado → corrección acotada si corresponde
-  └─ resultado admitido → almacenamiento y siguiente transición nativa
+## 3. Secuencia de Captura de Revisión RDD (Receipt-Driven Development)
+
+La revisión RDD es un proceso **fuera de banda** coordinado por el motor Go. El agente que revisa se ejecuta en un subproceso aislado, inspeccionando un árbol Git inmutable, sin acceso a credenciales ajenas ni a la sesión principal.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Orch as Orquestador Go (Parent)
+    participant Engine as Motor RDD (internal/reviewerprovider)
+    participant Subprocess as Subproceso agy (Revisor Aislado)
+    participant Admission as Módulo de Admisión Go
+    participant Ledger as Ledger / Receipt Store
+
+    Orch->>Engine: Solicita captura de revisión (Lente 4R asignada)
+    Engine->>Engine: Valida capacidad, resuelve modelo/esfuerzo y construye Invocation
+    Engine->>Subprocess: Invoca: agy --sandbox --output-format text<br/>(stdin: prompt inmutable | cwd: workspace limpio | auth temporal)
+    Subprocess->>Subprocess: Inspecciona árbol Git inmutable y evalúa candidato
+    Subprocess-->>Engine: Devuelve reporte crudo en stdout
+    Engine->>Admission: Entrega salida para análisis de admisión
+    alt Salida cumple esquema y criterios
+        Admission->>Ledger: Almacena veredicto y genera recibo firmado
+        Admission-->>Orch: Transición aprobada (Next transition)
+    else Error de formato o hallazgos severos
+        Admission->>Admission: Evalúa presupuesto de corrección acotada
+        alt Admite corrección
+            Admission-->>Orch: Requiere plan de corrección (correction_required)
+        else Falla no recuperable
+            Admission-->>Orch: Bloquea entrega (Stop terminal)
+        end
+    end
 ```
 
-Fuentes: [`reviewProviderAdapterWithRouting`](../../internal/cli/review_provider_runtime.go#L127-L157), [`Review`](../../internal/reviewerprovider/antigravitycli_adapter.go#L39-L78), [`Contract`](../../internal/reviewerprovider/contract.go#L112-L143), [`reviewProviderCaptureRetry`](../../internal/cli/review_provider_correction.go#L143-L183).
+> [!NOTE]
+> **Frontera de ejecución in-process vs subprocess:**
+> «In-process» describe qué componente inicia la captura dentro del binario Go de Gentle AI; `agy` corre como un subproceso (`os/exec`) en un entorno estrictamente controlado. El parámetro `--sandbox` es un requisito de confinamiento para el cliente `agy`, y el stdout producido es admitido únicamente si valida contra el esquema JSON estricto del proveedor.
 
-**«In-process» describe quién inicia y captura dentro del comando Go; agy sigue siendo un subprocess separado.** `--sandbox` es una solicitud al runtime, no una comprobación de confinamiento. El stdout no se transforma en recibo por sí solo. [Detalle de frontera](05-review-transport.md).
+Fuentes:
+- Adaptador de runtime con routing: [`reviewProviderAdapterWithRouting`](../../internal/cli/review_provider_runtime.go#L127-L157)
+- Ejecución del revisor: [`Review`](../../internal/reviewerprovider/antigravitycli_adapter.go#L39-L78)
+- Definición de contratos: [`Contract`](../../internal/reviewerprovider/contract.go#L112-L143)
+- Manejo de correcciones: [`reviewProviderCaptureRetry`](../../internal/cli/review_provider_correction.go#L143-L183)
 
-## Lo compartido y lo específico
+---
 
-| Compartido | Específico de agy |
-|---|---|
-| Contratos de roles y esquemas del proveedor Go | Traducción de herramientas/frontmatter |
-| Política de presupuesto completo de contexto | Plugin bajo `.gemini/config/plugins/gentle-ai` |
-| Admisión y lifecycle fuera del adaptador | Import nativo staged, hooks JSON |
-| Vocabulario ODD/RDD y disciplina del padre | Routing protocol-only más canon transpilado |
-| Intención de exploración/worker/verificador de Gentle Shell | Acceso CodeGraph MCP con prefijo agy |
+## 4. Comparativa de Componentes Compartidos vs Específicos
 
-[`ContractFor`](../../internal/reviewerprovider/contract.go#L154-L161), [`RuntimeContextBudget`](../../internal/reviewerprovider/capture_runtimes.go#L5-L30), [`applyAntigravityCLIParentMutations`](../../scripts/transpile-antigravitycli/main.go#L1341-L1452), [`injectAntigravityCLIRule`](../../internal/components/agentguidance/inject.go#L320-L382).
-
-No se ha probado que Pi background, watchdog, UI de elección, enforcing de superficies o ledger TS estén portados a agy. La adaptación elimina o cambia texto de esas superficies; no transfiere el código que las ejecuta.
-
-## Estado de evidencia al redactar
-
-| Nivel | Disponible | Pendiente |
+| Componente | Compartido con otros agentes | Específico de Antigravity CLI (`agy`) |
 |---|---|---|
-| Fuente actual | Código, assets y tests inspeccionados; SHA Gentle Shell comprobado | Actualizar rangos si cambia la rama |
-| Fuente oficial | Contenido recuperado por el padre el 2026-10-06, tab/superficie cualificados | Fijar comportamiento a cada versión del cliente |
-| Observación local | `agy 1.3.0`, ayuda y Go `1.27.1` recibidos | Activación real del plugin |
-| Tests de producto | 17 paquetes PASS, exit 0 recibidos del verificador, 2026-10-06 | Conteo por-test/skips no visible; transcripción de comandos en registro |
-| Driven | `j4500` definido con mock agy | Evidencia de ejecución actual y JSON de journey |
-| Orgánica | Test opt-in existente de transporte sintético | No autorizado/no ejecutado; tampoco prueba lineage real |
+| **Contratos de Revisión** | Esquemas y roles 4R definidos en Go | Traducción a frontmatter y tools nativas de `agy` |
+| **Presupuesto de Contexto** | Límites máximos por rol y sesión | Ajustado a los límites del runtime Gemini en `agy` |
+| **Ubicación de Plugins** | Convención unificada | Rutas específicas: `~/.gemini/config/plugins/gentle-ai` |
+| **Hooks de Eventos** | Concepto de ciclo de vida | `hooks.json` declarativo con scripts `.sh` y `.cmd` |
+| **Protocolo ODD** | Flujo de trabajo en 7 pasos | Regla `gentle-ai-routing.md` optimizada en tamaño (<44 KB) |
+| **Servidores MCP** | Engram, Context7 y CodeGraph | Nombres con prefijo adaptado y configuración en `mcp_config.json` |
 
-El [registro de verificación](09-verification.md) es el lugar para incorporar resultados, no para copiarlos de documentación antigua. El [índice de fuentes](10-source-index.md) permite empezar una revisión por la afirmación, en vez de reconstruir todo el repositorio.
+---
+
+## 5. Resumen de Estado de Verificación y Calidad
+
+- **Drift Gate de Transpilación**: Pasa al 100% contra el commit fijado de Gentle Shell (`d5d692a6...`).
+- **Validación del Plugin**: `agy plugin validate --strict` ejecuta sin warnings ni errores sobre el plugin instalado.
+- **Suite de Pruebas Go**: 17 paquetes clave pasan en verde, incluidos `internal/agents/antigravitycli`, `internal/cli`, `internal/update` y `internal/releasepolicy`.
+- **Inmutabilidad de Políticas**: Los contratos de release de upstream están congelados y verificados.

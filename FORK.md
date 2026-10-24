@@ -40,6 +40,7 @@ cutting the upstream pull request.
 | `FORK.md` | This document. |
 | `.github/workflows/fork-ci.yml` | CI for the development branch. Keeps the branch name out of upstream's `ci.yml`. |
 | `scripts/release-preflight.sh` | Accepts this fork's repository and pins the branch a fork release may be tagged from. |
+| `scripts/require-ci-success.sh` | Resolves `fork-ci.yml` instead of `ci.yml` for this fork's development branch. |
 | `scripts/verify-release-assets.sh` | Fork release assets are named differently from upstream's. |
 | `internal/releaseprovenancecmd/` | Provenance check adapted to the fork's release flow. |
 | `internal/releasepolicy/policy.go`, `.goreleaser.yaml` | `skip_upload: true`: this fork does not publish the Homebrew formula. |
