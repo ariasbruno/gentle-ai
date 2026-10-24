@@ -18,7 +18,7 @@ La elegibilidad compilada no verifica credenciales, existencia del binario, disp
 
 ## Qué hace exactamente `AntigravityCLIAdapter.Review`
 
-[`antigravitycli_adapter.go`, líneas 33–78](../../internal/reviewerprovider/antigravitycli_adapter.go#L33-L78):
+[`antigravitycli_adapter.go`, líneas 42–104](../../internal/reviewerprovider/antigravitycli_adapter.go#L42-L104):
 
 ```text
 Review(ctx, Invocation)
@@ -41,13 +41,13 @@ Argumentos del transporte, **no comando de revisión completo para copiar**:
 agy --sandbox --output-format text [--model <modelo>] [--effort <effort>]
 ```
 
-El prompt viaja por stdin y no en argv. El comentario del código explica la omisión deliberada de `-p/--print`: evitar que headless consuma flags posteriores como texto del prompt cuando detecta input pipeado, con input-format text por defecto. Es **intención de diseño documentada**, no prueba autónoma de cómo v1.3.0 parsea todas las variantes: [líneas 34–38](../../internal/reviewerprovider/antigravitycli_adapter.go#L34-L38).
+El prompt viaja por stdin y no en argv. El comentario del código explica la omisión deliberada de `-p/--print`: evitar que headless consuma flags posteriores como texto del prompt cuando detecta input pipeado, con input-format text por defecto. Es **intención de diseño documentada**, no prueba autónoma de cómo v1.3.0 parsea todas las variantes: [líneas 36–41](../../internal/reviewerprovider/antigravitycli_adapter.go#L36-L41).
 
 No añadir `--dangerously-skip-permissions`, `--agent` ni `--json-schema` a esta descripción: el help local los declara, pero el adaptador no los utiliza. `--model` se emite solo con una asignación válida distinta de `inherit`; `--effort` solo con un tier válido (low, medium, high, xhigh, max) distinto de `inherit`. `--output-format text` transporta texto; el proveedor exige dentro de ese texto un objeto JSON de resultado, no el wrapper JSON de salida del cliente.
 
 ### Cancelación y espera
 
-`exec.CommandContext` usa el contexto recibido. `WaitDelay = 5s` limita la espera de pipes después de cancelación/terminación relevante; **no es un timeout total de revisión de cinco segundos**. El adaptador no crea un deadline global propio. Si el contexto está cancelado devuelve su error tipado en lugar de solo `signal: killed`: [líneas 61–74](../../internal/reviewerprovider/antigravitycli_adapter.go#L61-L74).
+`exec.CommandContext` usa el contexto recibido. `WaitDelay = 5s` limita la espera de pipes después de cancelación/terminación relevante; **no es un timeout total de revisión de cinco segundos**. El adaptador no crea un deadline global propio. Si el contexto está cancelado devuelve su error tipado en lugar de solo `signal: killed`: [líneas 85–98](../../internal/reviewerprovider/antigravitycli_adapter.go#L85-L98).
 
 Los 20 segundos del import del plugin son otro timeout y otro proceso: [adapter de instalación](../../internal/agents/antigravitycli/adapter.go#L38-L43).
 

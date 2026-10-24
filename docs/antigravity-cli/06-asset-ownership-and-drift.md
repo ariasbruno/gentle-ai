@@ -15,11 +15,11 @@
 | Routing | Componente agentguidance | Archivo único protocol-only | Marker propio para stale-part cleanup |
 | AGENTS.md | Componentes/secciones administradas | Estrategia append/merge | Distinto de asset orchestrator literal |
 | MCP | Componentes Engram/Context7/CodeGraph | Merge/reconcile de entradas | Base malformed puede ser reemplazada |
-| settings.json | Usuario más overlay de permisos | Merge de JSON | Conservación semántica de base válida, no todos los bytes |
+| settings.json | Usuario (Gentle AI no inyecta overlay estático) | No modificado por sync; guardias dinámicas en PreToolUse | Preservación total de configuración del usuario |
 | review-models.json | Usuario | Resolver read-only; picker/save aparte | Sin repo fallback; invalid fail-closed |
 | import_manifest.json | Cliente agy más preservación del producto | Snapshot, comando externo, merge/restore | Conservar root/imports ajenos del snapshot |
 
-Fuentes: [`DeployPluginTree`](../../internal/agents/antigravitycli/adapter.go#L474-L638), [`injectAntigravityCLIRule`](../../internal/components/agentguidance/inject.go#L320-L382), [`ensureAntigravityOrchestratorRule`](../../internal/cli/antigravity_orchestrator_rule.go#L28-L52), [`ResolveAntigravityCLIReviewRouting`](../../internal/reviewerprovider/antigravitycli_routing.go#L364-L425), [merge de import](../../internal/agents/antigravitycli/adapter.go#L352-L375).
+Fuentes: [`DeployPluginTreeToDir`](../../internal/agents/antigravitycli/adapter.go#L574-L755), [`injectAntigravityCLIRule`](../../internal/components/agentguidance/inject.go#L320-L382), [`ensureAntigravityOrchestratorRule`](../../internal/cli/antigravity_orchestrator_rule.go#L28-L52), [`ResolveAntigravityCLIReviewRouting`](../../internal/reviewerprovider/antigravitycli_routing.go#L364-L425), [merge de import](../../internal/agents/antigravitycli/adapter.go#L440-L465).
 
 El componente del catálogo de skills **omite agy**. No existe en esta entrega una política agy de «añadir `--skills` para completar skills ausentes del bundle»: [`DeliversFor`](../../internal/components/skills/inject.go#L28-L46). Las exclusiones de presets del catálogo de otros agentes no describen qué llega a este plugin.
 
@@ -36,7 +36,7 @@ El componente del catálogo de skills **omite agy**. No existe en esta entrega u
 | `rules/gentle-ai-routing-notes.md` sin marker | Writer de routing lo conserva | No confundir conservación de este archivo con protección de todo el árbol |
 | Asset administrado de mismo nombre | Se reemplaza | Cambiar canon/transpilador, no installed bytes |
 
-Tests existentes: [`TestDeployPluginTree`](../../internal/agents/antigravitycli/adapter_test.go#L612-L725), [`TestDeployPluginTreePrunesStaleSkills`](../../internal/agents/antigravitycli/adapter_test.go#L727-L805), [`StalePartCleanup`](../../internal/components/agentguidance/inject_test.go#L1086-L1140).
+Tests existentes: [`TestDeployPluginTree`](../../internal/agents/antigravitycli/adapter_test.go#L1065-L1187), [`TestDeployPluginTreePrunesStaleSkills`](../../internal/agents/antigravitycli/adapter_test.go#L1189-L1267), [`StalePartCleanup`](../../internal/components/agentguidance/inject_test.go#L1086-L1140).
 
 Algunas eliminaciones legacy son best-effort e ignoran errores. No describir el retorno nil del deploy como prueba de que todo archivo obsoleto fue eliminado en cualquier filesystem. Tampoco es un directory swap: la atomicidad es por archivo.
 
@@ -57,7 +57,7 @@ snapshot import_manifest.json
        → restaurar snapshot en fallo, reportando fallo de restauración si ocurre
 ```
 
-[`readPluginImportManifest`](../../internal/agents/antigravitycli/adapter.go#L296-L350), [`EnsurePluginImported`](../../internal/agents/antigravitycli/adapter.go#L643-L732), [`copyPluginTree`](../../internal/agents/antigravitycli/adapter.go#L749-L793).
+[`readPluginImportManifest`](../../internal/agents/antigravitycli/adapter.go#L390-L440), [`EnsurePluginImportedToDir`](../../internal/agents/antigravitycli/adapter.go#L785-L871), [`copyPluginTree`](../../internal/agents/antigravitycli/adapter.go#L887-L932).
 
 ### Preservación frente a rewrite del cliente
 
@@ -74,9 +74,9 @@ No afirmar «registra siempre aunque el comando salga 0»: falta de registro o m
 - Entorno del import parte de `os.Environ`, sustituye HOME y USERPROFILE. **No es la allowlist mínima del reviewer.**
 - La ayuda de error dice instalar agy 1.2.9 o posterior; no ejecuta un gate semver previo al import.
 
-Fuentes: [constantes](../../internal/agents/antigravitycli/adapter.go#L38-L43), [env/comando](../../internal/agents/antigravitycli/adapter.go#L670-L698), [`runPluginInstall`](../../internal/agents/antigravitycli/adapter.go#L734-L739).
+Fuentes: [constantes](../../internal/agents/antigravitycli/adapter.go#L38-L44), [env/comando](../../internal/agents/antigravitycli/adapter.go#L820-L850), [`runPluginInstall`](../../internal/agents/antigravitycli/adapter.go#L873-L878).
 
-`TestEnsurePluginImportedFailures` cubre binario, árbol, comando fallido, ausencia de registro y timeout con runner falso: [líneas 382–427](../../internal/agents/antigravitycli/adapter_test.go#L382-L427). Esto no mide los tiempos del agy local.
+`TestEnsurePluginImportedFailures` cubre binario, árbol, comando fallido, ausencia de registro y timeout con runner falso: [líneas 555–600](../../internal/agents/antigravitycli/adapter_test.go#L555-L600). Esto no mide los tiempos del agy local.
 
 ## Qué no debe prometernos el import
 

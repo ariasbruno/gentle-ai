@@ -11,30 +11,30 @@ Para asegurar compilaciones deterministas y trazables, los assets transpilados e
 ```json
 {
   "source_repo": "https://github.com/Gentleman-Programming/gentle-shell",
-  "source_commit": "0da07ce949952268b290bf751f22ad1202a40fc3"
+  "source_commit": "d5d692a6888da9e9844e7e443ee30991fa4b9d14"
 }
 ```
 
 Fuentes canónicas de referencia en dicho commit:
-- [Orchestrator canónico](https://github.com/Gentleman-Programming/gentle-shell/blob/0da07ce949952268b290bf751f22ad1202a40fc3/assets/orchestrator.md#L1-L121)
-- [Explorer canónico](https://github.com/Gentleman-Programming/gentle-shell/blob/0da07ce949952268b290bf751f22ad1202a40fc3/assets/agents/gentle-ai-explore.md#L1-L25)
-- [Writer canónico](https://github.com/Gentleman-Programming/gentle-shell/blob/0da07ce949952268b290bf751f22ad1202a40fc3/assets/orchestrator-writer.md#L1-L55)
-- [Skill del harness](https://github.com/Gentleman-Programming/gentle-shell/blob/0da07ce949952268b290bf751f22ad1202a40fc3/skills/gentle-ai/SKILL.md#L1-L61)
+- [Orchestrator canónico](https://github.com/Gentleman-Programming/gentle-shell/blob/d5d692a6888da9e9844e7e443ee30991fa4b9d14/assets/orchestrator.md#L1-L121)
+- [Explorer canónico](https://github.com/Gentleman-Programming/gentle-shell/blob/d5d692a6888da9e9844e7e443ee30991fa4b9d14/assets/agents/gentle-ai-explore.md#L1-L25)
+- [Writer canónico](https://github.com/Gentleman-Programming/gentle-shell/blob/d5d692a6888da9e9844e7e443ee30991fa4b9d14/assets/orchestrator-writer.md#L1-L55)
+- [Skill del harness](https://github.com/Gentleman-Programming/gentle-shell/blob/d5d692a6888da9e9844e7e443ee30991fa4b9d14/skills/gentle-ai/SKILL.md#L1-L61)
 
 ## Entradas y salidas
 
-| Clase | Entrada Gentle Shell | Salida embedded | Tratamiento |
+| Clase | Entrada Gentle Shell | Salida embedded / desplegada | Tratamiento |
 |---|---|---|---|
 | Subagentes | `assets/agents/*.md` | `agents/<nombre>/agent.md` | Planning, descripción/tools, frontmatter nativo, mutaciones |
-| Orchestrator | `assets/orchestrator.md` | `orchestrator.md` | Encabezado agy, rutas instaladas, marker de contrato |
-| Satélites | Siete `assets/orchestrator-*.md` | Raíz del bundle | Strip de inyecciones y mutaciones del padre |
-| Soporte | `assets/support/strict-tdd*.md` | `support/` | Misma familia de transformaciones |
+| Orchestrator | `assets/orchestrator.md` | `rules/gentle-ai-orchestrator.md` | Encabezado agy, rutas instaladas, marker de contrato |
+| Satélites | Ocho `assets/orchestrator-*.md` | `rules/orchestrator-*.md` | Strip de inyecciones del padre; frontmatter `trigger: model_decision` |
+| Soporte | `assets/support/strict-tdd*.md` | `rules/strict-tdd*.md` | Misma familia de transformaciones; frontmatter `trigger: model_decision` |
 | Cadena | `assets/chains/4r-review.chain.md` | `chains/4r-review.chain.md` | Elimina preflight Pi; mantiene vía manual |
 | Skills | Todos los directorios de `skills/` | `skills/<directorio>/...` | Markdown transformado; otros archivos copiados |
 | `_shared` | Fragmentos comunes | `skills/_shared/` | Excluye `review-ledger-contract.md` específico Pi |
 | Manifiesto/procedencia | Generados por herramienta | `plugin.json`, `PROVENANCE.json` | Datos deterministas |
 
-Implementación: [`transpileSubagents`](../../scripts/transpile-antigravitycli/main.go#L469-L508), [`transpileTopLevelOrchestrator`](../../scripts/transpile-antigravitycli/main.go#L613-L643), [`transpileSkills`](../../scripts/transpile-antigravitycli/main.go#L667-L713), [`transpileSatellites`, soporte/cadenas](../../scripts/transpile-antigravitycli/main.go#L941-L1046).
+Implementación: [`transpileSubagents`](../../scripts/transpile-antigravitycli/main.go#L469-L508), [`transpileTopLevelOrchestrator`](../../scripts/transpile-antigravitycli/main.go#L613-L643), [`transpileSkills`](../../scripts/transpile-antigravitycli/main.go#L667-L713), [`transpileSatellites`, soporte/cadenas](../../scripts/transpile-antigravitycli/main.go#L955-L1056).
 
 No se aplica a agy la antigua regla «SKILL.md fork-owned del catálogo interno» como mecanismo de entrega. El componente de skills omite agy: [`DeliversFor`, `InjectWithCapability`](../../internal/components/skills/inject.go#L28-L46). Esto conserva el catálogo para otros adaptadores y establece un único owner del `skills/` del plugin.
 

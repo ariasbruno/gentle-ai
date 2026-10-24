@@ -41,6 +41,7 @@ Esta release introduce soporte nativo completo para **Google Antigravity CLI (`a
    - Agentes de cuadrantes 4R (`review-risk`, `review-readability`, `review-reliability`, `review-resilience`).
 
 5. **Hooks de Ciclo de Vida**:
+   - `PreToolUse`: Evaluación dinámica in-process de rutas sensibles (.env*, .ssh, claves), circuit breaker contra loops y confirmación forzada (force_ask) para comandos destructivos.
    - `PreInvocation`: Preparación de entorno y gestión de exclusiones locales sin ensuciar el árbol Git.
    - `PostToolUse`: Ledger inmutable para rastreo de mutaciones de archivos.
    - `Stop`: Enforzamiento de revisión obligatoria para cambios de alto riesgo antes de permitir el cierre.

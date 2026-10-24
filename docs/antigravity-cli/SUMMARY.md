@@ -52,8 +52,8 @@ flowchart TD
 Fuentes de auditoría:
 - Transpilación principal: [`transpileAll`](../../scripts/transpile-antigravitycli/main.go#L243-L291)
 - Normalización de skills: [`transpileSkills`](../../scripts/transpile-antigravitycli/main.go#L667-L713)
-- Mapeo de assets: [`BundleAssets`](../../internal/agents/antigravitycli/adapter.go#L192-L207)
-- Paso de importación en CLI: [`antigravityCLIPluginImportStep.Run`](../../internal/cli/run.go#L921-L940)
+- Mapeo de assets: [`BundleAssets`](../../internal/agents/antigravitycli/adapter.go#L275-L297)
+- Paso de importación en CLI: [`antigravityCLIPluginImportStep.Run`](../../internal/cli/run.go#L1042-L1073)
 
 ---
 
@@ -63,11 +63,11 @@ Fuentes de auditoría:
 |---|---|---|---|
 | **1. Detección** | Adaptador Go | Verifica presencia de `agy` en `$PATH` y su directorio de configuración | No realiza llamadas remotas ni prueba autenticación |
 | **2. Inyección** | Pipeline CLI / Componentes | Inyecta persona Rioplatense/Senior, servidores MCP y reglas administradas | Respeta el destino según el scope (`--scope global` vs `--scope workspace`) |
-| **3. Despliegue** | `DeployPluginTree` | Escribe reglas, agentes, hooks y skills. Poda automáticamente archivos obsoletos | Escritura atómica por archivo; no corrompe configuraciones previas |
+| **3. Despliegue** | `DeployPluginTreeToDir` | Escribe reglas, agentes, hooks y skills. Poda automáticamente archivos obsoletos | Escritura atómica por archivo; no corrompe configuraciones previas |
 | **4. Finalización** | CLI | Reemplaza markers de orquestación e inyecta la regla de routing `always_on` | Falla cerrado si el contrato de orquestación no es consistente |
 | **5. Importación** | Adaptador | Ejecuta registro en `import_manifest.json` y valida integridad | Timeout de 20s con restauración automática si falla el manifest |
 
-Referencias: [Detección](../../internal/agents/antigravitycli/adapter.go#L77-L103), [Despliegue](../../internal/agents/antigravitycli/adapter.go#L474-L638), [Finalización](../../internal/cli/antigravity_orchestrator_rule.go#L28-L52), [Importación](../../internal/agents/antigravitycli/adapter.go#L643-L732).
+Referencias: [Detección](../../internal/agents/antigravitycli/adapter.go#L82-L104), [Despliegue](../../internal/agents/antigravitycli/adapter.go#L574-L755), [Finalización](../../internal/cli/antigravity_orchestrator_rule.go#L28-L52), [Importación](../../internal/agents/antigravitycli/adapter.go#L785-L871).
 
 ---
 
@@ -109,8 +109,8 @@ sequenceDiagram
 
 Fuentes:
 - Adaptador de runtime con routing: [`reviewProviderAdapterWithRouting`](../../internal/cli/review_provider_runtime.go#L127-L157)
-- Ejecución del revisor: [`Review`](../../internal/reviewerprovider/antigravitycli_adapter.go#L39-L78)
-- Definición de contratos: [`Contract`](../../internal/reviewerprovider/contract.go#L112-L143)
+- Ejecución del revisor: [`Review`](../../internal/reviewerprovider/antigravitycli_adapter.go#L42-L104)
+- Definición de contratos: [`Contract`](../../internal/reviewerprovider/contract.go#L160-L204)
 - Manejo de correcciones: [`reviewProviderCaptureRetry`](../../internal/cli/review_provider_correction.go#L143-L183)
 
 ---

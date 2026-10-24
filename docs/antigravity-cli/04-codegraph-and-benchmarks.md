@@ -7,7 +7,7 @@
 ## Servidores MCP integrados
 
 Gentle AI define la configuración de herramientas MCP en el archivo `mcp_config.json` dentro del árbol del plugin:
-- **Ruta canónica:** `~/.gemini/config/plugins/gentle-ai/mcp_config.json` (declarada en [`MCPConfigPath`](../../internal/agents/antigravitycli/adapter.go#L157-L158)).
+- **Ruta canónica:** `~/.gemini/config/plugins/gentle-ai/mcp_config.json` (declarada en [`MCPConfigPath`](../../internal/agents/antigravitycli/adapter.go#L239-L241)).
 
 | Servidor | Comando / Ejecutable | Propósito |
 |---|---|---|
@@ -28,7 +28,7 @@ Estructura canónica de la configuración:
 }
 ```
 
-Fuentes: [`engramOverlayJSON`](../../internal/components/engram/inject.go#L129-L142), [`defaultContext7OverlayJSON`](../../internal/components/mcp/context7.go#L9-L11), [`injectMCPConfigFile`](../../internal/components/mcp/inject.go#L380-L404).
+Fuentes: [`engramOverlayJSON`](../../internal/components/engram/inject.go#L102-L115), [`defaultContext7OverlayJSON`](../../internal/components/mcp/context7.go#L11-L20), [`injectMCPConfigFile`](../../internal/components/mcp/inject.go#L388-L412).
 
 ## Reconciliación y persistencia atómica de CodeGraph
 
@@ -70,7 +70,7 @@ El subagente de exploración (`gentle-ai-explore`) está configurado con `enable
 
 Gentle AI cuenta con un módulo de benchmarks dedicado (`bench/`) diseñado para verificar el comportamiento de extremo a extremo sin depender de llamadas a modelos remotos ni credenciales externas.
 
-Dentro de este conjunto se destaca el journey **`j4500-antigravity-cli-lifecycle-parity`** ([`journeys_antigravity_cli.go`](../../bench/journeys_antigravity_cli.go#L427-L439)):
+Dentro de este conjunto se destaca el journey **`j4500-antigravity-cli-lifecycle-parity`** ([`journeys_antigravity_cli.go`](../../bench/journeys_antigravity_cli.go#L454-L466)):
 
 ```text
 Entorno aislado (Fixture)

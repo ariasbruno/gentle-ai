@@ -19,12 +19,12 @@ El adaptador [`antigravitycli`](../../internal/agents/antigravitycli/adapter.go)
 
 ```text
 ~/.gemini/antigravity-cli/
-├── settings.json                    # overlay de permisos
+├── settings.json                    # configuración de usuario (no inyecta overlay estático)
 └── gentle-ai/
     └── review-models.json           # asignaciones de revisión del usuario
 ```
 
-`GlobalConfigDir` y `SettingsPath`: [adapter.go, líneas 112–148](../../internal/agents/antigravitycli/adapter.go#L112-L148). La ruta de modelos se resuelve mediante `os.UserHomeDir`, no el repositorio: [`AntigravityReviewModelsPath`](../../internal/reviewerprovider/antigravitycli_routing.go#L75-L81).
+`GlobalConfigDir` y `SettingsPath`: [adapter.go, líneas 206–225](../../internal/agents/antigravitycli/adapter.go#L206-L225). La ruta de modelos se resuelve mediante `os.UserHomeDir`, no el repositorio: [`AntigravityReviewModelsPath`](../../internal/reviewerprovider/antigravitycli_routing.go#L75-L81).
 
 ### 2. Árbol canónico escrito por Gentle AI
 
@@ -39,15 +39,24 @@ El adaptador [`antigravitycli`](../../internal/agents/antigravitycli/adapter.go)
     ├── rules/
     │   ├── AGENTS.md
     │   ├── gentle-ai-routing.md
-    │   └── gentle-ai-orchestrator.md
+    │   ├── gentle-ai-orchestrator.md
+    │   ├── orchestrator-delegation.md
+    │   ├── orchestrator-delegation-reference.md
+    │   ├── orchestrator-memory.md
+    │   ├── orchestrator-skills.md
+    │   ├── orchestrator-prompts.md
+    │   ├── orchestrator-tracking.md
+    │   ├── orchestrator-verification.md
+    │   ├── orchestrator-writer.md
+    │   ├── strict-tdd.md
+    │   └── strict-tdd-verify.md
     ├── agents/<nombre>/agent.md
     ├── skills/<directorio>/...
-    ├── orchestrator-{delegation,memory,skills,prompts,tracking,verification,writer}.md
-    ├── support/{strict-tdd.md,strict-tdd-verify.md}
-    └── chains/4r-review.chain.md
+    ├── chains/4r-review.chain.md
+    └── .native-rule-ownership.json
 ```
 
-Las rutas y mappings pertenecen a [`PluginDir`, `BundleAssets`, `SubAgentsDir`](../../internal/agents/antigravitycli/adapter.go#L116-L216). `AGENTS.md`, routing y MCP reciben contenido por componentes separados; no todo el árbol es una copia literal del asset: [finalización de reglas](03-orchestration-and-hooks.md#reglas-y-carga-de-contexto).
+Las rutas y mappings pertenecen a [`PluginDir`, `BundleAssets`, `SubAgentsDir`](../../internal/agents/antigravitycli/adapter.go#L202-L297). `AGENTS.md`, routing y MCP reciben contenido por componentes separados; no todo el árbol es una copia literal del asset: [finalización de reglas](03-orchestration-and-hooks.md#reglas-y-carga-de-contexto).
 
 ### 3. Rutas de plugins según la especificación de agy
 
@@ -82,13 +91,13 @@ gentle-ai install --agent antigravity-cli --scope workspace
 gentle-ai sync --agents antigravity-cli --scope workspace
 ```
 
-Las opciones `--agent`/`--agents` y `--scope` están registradas por [`ParseInstallFlags`](../../internal/cli/install.go#L53-L70) y [`ParseSyncFlags`](../../internal/cli/sync.go#L171-L193). La resolución de alcances está definida en [`ResolveInstallScope`](../../internal/cli/scope.go#L24-L44). Los comandos configuran el entorno para el agente, pero no instalan el binario `agy`: el adaptador no cuenta con autoinstalación de ejecutables externos.
+Las opciones `--agent`/`--agents` y `--scope` están registradas por [`ParseInstallFlags`](../../internal/cli/install.go#L72-L135) y [`ParseSyncFlags`](../../internal/cli/sync.go#L176-L210). La resolución de alcances está definida en [`ResolveInstallScope`](../../internal/cli/scope.go#L24-L44). Los comandos configuran el entorno para el agente, pero no instalan el binario `agy`: el adaptador no cuenta con autoinstalación de ejecutables externos.
 
-En alcance global, la secuencia del paso final es `DeployPluginTree → ensureAntigravityOrchestratorRule → EnsurePluginImported → EnsureStatusLineSettings`: [`antigravityCLIPluginImportStep.Run`](../../internal/cli/run.go#L921-L940). En alcance workspace, se despliega el árbol en `<workspace>/.agents/plugins/gentle-ai/` y se inicializa la regla de orquestador localmente, prescindiendo del registro en el manifiesto global y del registro de status line.
+En alcance global, la secuencia del paso final es `DeployPluginTreeToDir → ensureAntigravityOrchestratorRuleForScope → EnsurePluginImportedToDir`: [`antigravityCLIPluginImportStep.Run`](../../internal/cli/run.go#L1042-L1073). `EnsureStatusLineSettings` no se ejecuta durante install/sync para preservar el `settings.json` del usuario sin mutaciones automáticas. En alcance workspace, se despliega el árbol en `<workspace>/.agents/plugins/gentle-ai/` y se inicializa la regla de orquestador localmente, prescindiendo del registro en el manifiesto global y del registro de status line.
 
 ### Estructura desplegada en cada alcance
 
-Ambos alcances despliegan el bundle completo de assets:
+Ambos alcances despliegan el bundle completo de assets (13 reglas bajo `rules/`):
 
 ```text
 # En --scope global:
@@ -102,12 +111,21 @@ Ambos alcances despliegan el bundle completo de assets:
     ├── rules/
     │   ├── AGENTS.md
     │   ├── gentle-ai-routing.md
-    │   └── gentle-ai-orchestrator.md
+    │   ├── gentle-ai-orchestrator.md
+    │   ├── orchestrator-delegation.md
+    │   ├── orchestrator-delegation-reference.md
+    │   ├── orchestrator-memory.md
+    │   ├── orchestrator-skills.md
+    │   ├── orchestrator-prompts.md
+    │   ├── orchestrator-tracking.md
+    │   ├── orchestrator-verification.md
+    │   ├── orchestrator-writer.md
+    │   ├── strict-tdd.md
+    │   └── strict-tdd-verify.md
     ├── agents/<nombre>/agent.md
     ├── skills/<directorio>/...
-    ├── orchestrator-{delegation,memory,skills,prompts,tracking,verification,writer}.md
-    ├── support/{strict-tdd.md,strict-tdd-verify.md}
-    └── chains/4r-review.chain.md
+    ├── chains/4r-review.chain.md
+    └── .native-rule-ownership.json
 
 # En --scope workspace:
 <workspace>/.agents/plugins/gentle-ai/
@@ -118,19 +136,28 @@ Ambos alcances despliegan el bundle completo de assets:
 ├── rules/
 │   ├── AGENTS.md
 │   ├── gentle-ai-routing.md
-│   └── gentle-ai-orchestrator.md
+│   ├── gentle-ai-orchestrator.md
+│   ├── orchestrator-delegation.md
+│   ├── orchestrator-delegation-reference.md
+│   ├── orchestrator-memory.md
+│   ├── orchestrator-skills.md
+│   ├── orchestrator-prompts.md
+│   ├── orchestrator-tracking.md
+│   ├── orchestrator-verification.md
+│   ├── orchestrator-writer.md
+│   ├── strict-tdd.md
+│   └── strict-tdd-verify.md
 ├── agents/<nombre>/agent.md
 ├── skills/<directorio>/...
-├── orchestrator-{delegation,memory,skills,prompts,tracking,verification,writer}.md
-├── support/{strict-tdd.md,strict-tdd-verify.md}
-└── chains/4r-review.chain.md
+├── chains/4r-review.chain.md
+└── .native-rule-ownership.json
 ```
 
 ### Particularidades por alcance:
 1. **Descubrimiento automático en workspace:** `agy` descubre nativamente los plugins situados en `.agents/plugins/<nombre>/`, por lo que el instalador no modifica `~/.gemini/config/import_manifest.json`.
 2. **Aislamiento de `HOME`:** En `--scope workspace`, el directorio de usuario (`HOME`) permanece completamente inalterado.
 3. **Precedencia:** Cuando existen ambos, las reglas y configuraciones del workspace tienen prioridad sobre las globales.
-4. **Status line solo en global:** el registro de `statusLine`/`title` vive en el `settings.json` de usuario (`~/.gemini/antigravity-cli/settings.json`), así que `--scope workspace` despliega el script pero no registra los bloques.
+4. **Status line y settings.json:** El subcomando de status line se ejecuta in-process; Gentle AI preserva `settings.json` sin modificarlo en sync o install. La configuración de usuario en `statusLine`/`title` puede gestionarse manualmente o vía comandos dedicados.
 
 ### Verificación automatizada tras la instalación o sincronización
 
@@ -164,74 +191,23 @@ No hace falta inspeccionar carpetas a mano. Podés validar la instalación direc
    ```
    Comprueba que el agente `antigravity-cli` esté registrado, el archivo de estado sea consistente y el servidor MCP de memoria (Engram) responda en su canal stdio.
 
-## Permisos: overlay de seguridad en settings.json
+## Permisos: guardias dinámicas in-process sin mutar settings.json
 
-Para evitar comandos destructivos accidentales o fuga de secretos en sesiones automáticas, Gentle AI inyecta en `settings.json` el overlay construido por [`antigravityCLIOverlayForHome`](../../internal/components/permissions/inject.go#L132-L199). El esquema del proveedor no tiene globs de archivo y los nombres pelados resuelven solo contra el workspace, así que la protección tiene tres capas: prefijos de comando amplios, variantes `.env` enumeradas y **paths absolutos derivados del HOME real** para los almacenes sensibles (ejemplo con `/home/user`):
+A diferencia de otros agentes, Gentle AI **no inyecta overlays estáticos en `settings.json` para Antigravity CLI** ([`internal/components/permissions/inject.go#L172-L176`](../../internal/components/permissions/inject.go#L172-L176) devuelve `nil`). Esto preserva intacta la configuración del usuario y evita dependencias de mutación de archivos de configuración globales.
 
-```json
-{
-  "permissions": {
-    "deny": [
-      "command(rm -rf)",
-      "command(sudo rm -rf)",
-      "command(git reset --hard)",
-      "command(git clean -fd)",
-      "command(git push --force)",
-      "command(chmod -R 777)",
-      "command(chown -R)",
-      "read_file(.env)",
-      "write_file(.env)",
-      "read_file(.env.local)",
-      "write_file(.env.local)",
-      "read_file(.env.development)",
-      "write_file(.env.development)",
-      "read_file(.env.dev)",
-      "write_file(.env.dev)",
-      "read_file(.env.production)",
-      "write_file(.env.production)",
-      "read_file(.env.prod)",
-      "write_file(.env.prod)",
-      "read_file(.env.test)",
-      "write_file(.env.test)",
-      "read_file(.env.staging)",
-      "write_file(.env.staging)",
-      "read_file(.env.qa)",
-      "write_file(.env.qa)",
-      "read_file(.ssh)",
-      "write_file(.ssh)",
-      "read_file(.credentials)",
-      "write_file(.credentials)",
-      "read_file(.aws)",
-      "write_file(.aws)",
-      "read_file(/home/user/.ssh)",
-      "write_file(/home/user/.ssh)",
-      "read_file(/home/user/.credentials)",
-      "write_file(/home/user/.credentials)",
-      "read_file(/home/user/.aws)",
-      "write_file(/home/user/.aws)",
-      "read_file(/home/user/.config/gh/hosts.yml)",
-      "write_file(/home/user/.config/gh/hosts.yml)",
-      "read_file(/home/user/Library/Keychains)",
-      "write_file(/home/user/Library/Keychains)"
-    ],
-    "allow": [
-      "command(gentle-ai codegraph init)",
-      "command(gentle-ai review assess)",
-      "command(gentle-ai review status)"
-    ]
-  }
-}
-```
+En su lugar, toda la seguridad preventiva se evalúa **dinámicamente in-process** en cada llamada a través del hook `PreToolUse` ([`handleAntigravityPreToolUse`](../../internal/cli/antigravity_hook.go#L921-L1017)):
 
-- **Bloqueos preventivos (`deny`):** prefijos amplios de comandos destructivos (`rm -rf` con y sin sudo cubre todas las variantes de palabra), las variantes `.env` de las herramientas comunes y denies absolutos del HOME: `.ssh`, `.credentials`, `.aws`, el token de GitHub (`hosts.yml`) y los Keychains de macOS. Deny de lectura implica deny de escritura según el contrato del proveedor; ambos se escriben explícitos.
-- **Complemento dinámico del hook:** los patrones que el esquema estático no puede expresar (`.env.*` a cualquier profundidad, `*.pem`/`*.key`, directorios `secrets/`) los evalúa el guard de `PreToolUse` sobre la ruta concreta de cada tool de archivo/búsqueda: [hooks](03-orchestration-and-hooks.md#pretooluse-condiciones-fail-closed).
-- **Comandos permitidos (`allow`):** Comandos internos indispensables para la navegación de código y la revisión RDD.
-- **Fusión inteligente:** Gentle AI combina estas listas con tu configuración previa sin pisar preferencias de usuario.
-- **Backup previo:** Antes de cualquier escritura en `settings.json`, se genera un respaldo automático recuperable.
+- **Bloqueos preventivos de rutas sensibles (`deny`):** Las tools de archivo y búsqueda (`view_file`, `read_file`, `write_file`, `edit_file`, `replace_file_content`, `multi_replace_file_content`, `grep_search`) y comandos de terminal (`run_command`) que referencien secretos (`.env*` a cualquier profundidad, `.ssh`, `.credentials`, `.aws`, tokens de GitHub en `hosts.yml`, certificados `.pem`/`.key`, directorios `secrets/` o Keychains) son bloqueados de inmediato con `deny` antes de ejecutarse.
+- **Circuit breaker anti-loops (`deny`):** Tres llamadas consecutivas idénticas de una herramienta con los mismos argumentos en una conversación devuelven `deny`.
+- **Comandos destructivos (`force_ask`):** Comandos shell potencialmente peligrosos (`rm -rf`, `sudo rm -rf`, `git reset --hard`, `git push --force`, `git clean -fd`, `chmod -R 777`, `chown -R`) fuerzan una confirmación interactiva en pantalla del usuario (`force_ask`), ignorando cachés previas.
+- **Comandos estándar de terminal (`ask`):** Delegan la decisión en el motor nativo de permisos de `agy`.
+- **Operaciones de archivo estándar (`allow`):** Operaciones dentro del workspace del proyecto devuelven `allow` (comportamiento estándar del sandbox).
 
-## Status line personalizado: registro administrado en settings.json
+Esta decisión de diseño está respaldada por tests unitarios explícitos: [`TestInjectAntigravityCLISkipsSettingsOverlay`](../../internal/components/permissions/inject_test.go#L753) y [`TestInjectAntigravityCLIPreservesUserSettingsWithoutInjectingOverlay`](../../internal/components/permissions/inject_test.go#L1131), además de [`TestInjectAntigravityCLIDoesNotMutateSettings`](../../internal/components/permissions/antigravity_cli_allow_test.go#L15).
 
-`agy` renderiza una status line propia ejecutando el comando del bloque `statusLine` de `~/.gemini/antigravity-cli/settings.json`, al que le pasa el payload de estado JSON por stdin en cada cambio de estado del agente (ANSI completo, multilínea). Gentle AI registra ambos bloques con [`EnsureStatusLineSettings`](../../internal/agents/antigravitycli/statusline_settings.go) apuntando al subcomando in-process [`gentle-ai statusline`](../../internal/cli/statusline.go) — el mismo binario que los hooks ya requieren, sin script, sin `jq`, sin bash y portable a Windows:
+## Status line personalizado: renderizado in-process en Go
+
+`agy` renderiza una status line propia ejecutando el comando del bloque `statusLine` de `~/.gemini/antigravity-cli/settings.json`, al que le pasa el payload de estado JSON por stdin en cada cambio de estado del agente (ANSI completo, multilínea). El usuario puede registrar estos bloques en su `settings.json` apuntando al subcomando in-process [`gentle-ai statusline`](../../internal/cli/statusline.go) (o mediante el helper [`EnsureStatusLineSettings`](../../internal/agents/antigravitycli/statusline_settings.go)):
 
 ```json
 {
@@ -240,11 +216,11 @@ Para evitar comandos destructivos accidentales o fuga de secretos en sesiones au
 }
 ```
 
-La línea sigue el orden y las prioridades fijadas con el usuario: **pétalo solo** (flor estática `✿` en reposo; frames `✿❀❁✾` con el pulso de tonos de GS en actividad — sin marca, sin label, sin animación) + `modo · modelo` mostrado **verbatim cuando agy lo reporta** (`cycle_mode` en vivo: `plan`, `accept-edits`, `auto` donde la cuenta lo permite — un modo aparte con gating de cuenta; el `execution_mode` de los docs canónicos queda como fallback) y **en silencio en el modo default** — el ausente nunca recibe un label inventado, separador `⟡`, gauge de contexto `▰▱` de 8 celdas (acento <80 / warning ≥80 / error ≥95, marcador `!` ≥90), costo de sesión plano `$X.YZ` (sin sufijo), ventanas de quota **solo de la familia del modelo activo** en formato countdown — `4h32m ▰▰▱▱ 38%`: tiempo hasta el reset, barra y % usado (sin countdown cae al label derivado de la key) —, jobs (`⧗ N jobs`, `⧗ 1 job`), subagentes (`✦ N subagents`), Engram `🧠 proyecto · count`, RDD con **estados de review** (`🌹 Review in progress`/`✓ Approved`/`Fixing findings…`/…; sin autoridad activa muestra `on`/`off` del switch), tasklist ODD (`⋗ 12/17 · T15 in_progress`, `⚠N` con bloqueadas, `⋗ 17/17 ✓` completa; lee `odd/tasks/*.md` del doc más reciente por mtime) y cambios git `±N +A/−D` (visible por defecto, subprocess con cache de 5 s por cwd; oculto en repo limpio o no-git). **Responsive:** en overflow cada segmento compacta (`4h32m 38%`, `ctx 43%`, `⧗ 2`, `✦ 3`, `🧠 918`, `⋗ 12/17`) antes de caer, y los cortes siguen la prioridad del usuario — primero quota, luego costo, ctx, subagentes, jobs, git, engram, RDD, tasklist; el bloque pétalo·modelo nunca cae; truncado `…` final. Density: `compact` = formas cortas con gauges de 6 celdas; `minimal` = solo pétalo·modelo, tasklist, RDD y engram. Un payload ausente o roto degrada a `✿` sola con exit 0. El modo `--title` alimenta el título de la terminal.
+La línea sigue el orden y las prioridades fijadas con el usuario: **pétalo estático** (flor estática `✿` en rosa Gentle Shell `ansiRose + ansiBold + "✿"` en todos los estados del agente — sin animación y tiempo-independiente) + `modo · modelo` mostrado **verbatim cuando agy lo reporta** (`cycle_mode` en vivo: `plan`, `accept-edits`, `auto` donde la cuenta lo permite — un modo aparte con gating de cuenta; el `execution_mode` de los docs canónicos queda como fallback) y **en silencio en el modo default** — el ausente nunca recibe un label inventado, separador `⟡`, gauge de contexto `▰▱` de 8 celdas (acento <80 / warning ≥80 / error ≥95, marcador `!` ≥90), costo de sesión plano `$X.YZ` (sin sufijo), ventanas de quota **solo de la familia del modelo activo** en formato countdown — `4h32m ▰▰▱▱ 38%`: tiempo hasta el reset, barra y % usado (sin countdown cae al label derivado de la key) —, jobs (`⧗ N jobs`, `⧗ 1 job`), subagentes (`✦ N subagents`), Engram `🧠 proyecto · count`, RDD con **estados de review** (`🌹 Review in progress`/`✓ Approved`/`Fixing findings…`/…; sin autoridad activa muestra `on`/`off` del switch), tasklist ODD (`⋗ 12/17 · T15 in_progress`, `⚠N` con bloqueadas, `⋗ 17/17 ✓` completa; lee `odd/tasks/*.md` del doc más reciente por mtime) y cambios git `±N +A/−D` (visible por defecto, subprocess con cache de 5 s por cwd; oculto en repo limpio o no-git). **Responsive:** en overflow cada segmento compacta (`4h32m 38%`, `ctx 43%`, `⧗ 2`, `✦ 3`, `🧠 918`, `⋗ 12/17`) antes de caer, y los cortes siguen la prioridad del usuario — primero quota, luego costo, ctx, subagentes, jobs, git, engram, RDD, tasklist; el bloque pétalo·modelo nunca cae; truncado `…` final. Density: `compact` = formas cortas con gauges de 6 celdas; `minimal` = solo pétalo·modelo, tasklist, RDD y engram. Un payload ausente o roto degrada a `✿` sola con exit 0. El modo `--title` alimenta el título de la terminal.
 
 **Fase ODD (hook PreToolUse):** cada tool call actualiza `~/.gentle-ai/statusline-phase/<hash-conversación>.json` con la fase inferida (reads → `exploring`, edits → `implementing`, corridas de test → `checking`, dispatch de subagentes → `delegating`, resto → `working`), best-effort y sin afectar la decisión del hook; los registros se podan a la hora. El archivo queda como infraestructura (útil para usos futuros): desde la reordenación de la línea el statusline no muestra la fase — el pétalo es solo el pétalo.
 
-**Reglas de propiedad (una por bloque):** Gentle AI administra solo `type`+`command` cuando el `command` está vacío, ya es el subcomando administrado, o es el registro legacy que apuntaba al script viejo (un sync lo re-escribe al subcomando); un comando ajeno deja el bloque intacto. Las llaves `enabled`, `padding` y `stack_with_default` son tuyas y se preservan tal cual (`stack_with_default: true` renderiza la línea debajo de la built-in de agy). Un `settings.json` ausente se crea; uno malformado falla cerrado sin modificarse; una configuración ya administrada no se reescribe. `gentle-ai uninstall` retira los bloques cuando apuntan al subcomando o al registro legacy, y el script viejo que algún sync anterior deployó se poda del árbol del plugin en el próximo sync.
+**Reglas de propiedad:** Gentle AI administra solo `type`+`command` cuando el `command` está vacío, ya es el subcomando administrado, o es el registro legacy que apuntaba al script viejo; un comando ajeno deja el bloque intacto. Las llaves `enabled`, `padding` y `stack_with_default` son tuyas y se preservan tal cual (`stack_with_default: true` renderiza la línea debajo de la built-in de agy). Un `settings.json` ausente se crea; uno malformado falla cerrado sin modificarse; una configuración ya administrada no se reescribe. `gentle-ai uninstall` retira los bloques cuando apuntan al subcomando o al registro legacy.
 
 **Configuración de usuario** en `~/.gentle-ai/statusline.json` (archivo tuyo; sync nunca lo toca ni lo poda):
 
@@ -259,14 +235,16 @@ La línea sigue el orden y las prioridades fijadas con el usuario: **pétalo sol
     "usageCost": true,
     "modelDetails": true,
     "contextWarning": true,
-    "engram": true
+    "engram": true,
+    "tasklist": true,
+    "shortcuts": true
   }
 }
 ```
 
-`density` acepta `comfortable`/`compact`/`minimal` (minimal oculta la marca en reposo). `visibility` oculta segmentos: `modelDetails` (modelo), `usageCost` (contexto+costo+quota), `agents` (jobs+subagentes), `rdd` (interruptor de revisión), `contextWarning` (marcador `!`) y `engram` (observaciones de Engram). `changes: true` habilita el segmento de cambios (`±N +A/−D` vía git con deadline de 500 ms). Valores ausentes o archivo malformado → defaults. El interruptor RDD se lee in-process con el mismo resolver read-only del comando `review mode` (deadline 500 ms); cualquier falla muestra `🌹 ?` y nunca bloquea la línea.
+`density` acepta `comfortable`/`compact`/`minimal` (minimal oculta la marca en reposo). `visibility` oculta segmentos: `modelDetails` (modelo), `usageCost` (contexto+costo+quota), `agents` (jobs+subagentes), `rdd` (interruptor de revisión), `contextWarning` (marcador `!`), `engram` (observaciones de Engram), `tasklist` (avance ODD) y `shortcuts` (atajos de teclado). `changes: true` habilita el segmento de cambios (`±N +A/−D` vía git con deadline de 500 ms). Valores ausentes o archivo malformado → defaults. El interruptor RDD se lee in-process con el mismo resolver read-only del comando `review mode` (deadline 500 ms); cualquier falla muestra `🌹 ?` y nunca bloquea la línea.
 
-**Sin dependencias:** el render es in-process en el binario `gentle-ai` que los hooks ya requieren — no hace falta `jq` ni bash, y funciona igual en Windows. Un payload ausente o ilegible degrada a la línea `✿ gentle ai` sin error.
+**Sin dependencias:** el render es in-process en el binario `gentle-ai` que los hooks ya requieren — no hace falta `jq` ni bash, y funciona igual en Windows. Un payload ausente o ilegible degrada a la línea `✿` sin error.
 
 ## CLI frente a IDE
 

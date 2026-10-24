@@ -100,7 +100,7 @@ Entorno del Sistema y Repositorio
 ├── 2. Integración de StatusLine y Título (~/.gemini/antigravity-cli/settings.json)
 │   ├── "statusLine": {"type": "command", "command": "gentle-ai statusline"}
 │   └── "title": {"type": "command", "command": "gentle-ai statusline --title"}
-│       (Permite a agy renderizar la barra interactiva y el título de ventana en tiempo real).
+│       (Configuración de usuario; gentle-ai preserva settings.json sin mutaciones automáticas en sync).
 │
 ├── 3. Registro Global de Plugins (~/.gemini/config/import_manifest.json)
 │   └── Registra el plugin de Gentle AI para su descubrimiento y carga inmediata en el arranque de agy.
@@ -122,7 +122,7 @@ Entorno del Sistema y Repositorio
 
 Gentle AI provee una statusline rica y nativa ejecutada in-process sin dependencias externas (`jq` o `bash`), totalmente compatible con Linux, macOS y Windows:
 
-- **Pétalo animado**: En reposo muestra la flor estática `✿`; en actividad anima `✿❀❁✾` con pulso de tonos.
+- **Pétalo estático**: Muestra el glifo de rosa estático `✿` en rosa Gentle Shell (`ansiRose + ansiBold + "✿"`), consistente y sin animación en todos los estados del agente.
 - **Modo y modelo**: Refleja el modo de ciclo activo (ej. `auto · Gemini 3.8 Flash`).
 - **Gauges de contexto y cuotas**: Muestra el consumo de la ventana de contexto (`ctx ▰▰▰▱▱▱▱▱ 43%`) y el tiempo restante de cuota.
 - **Memoria Engram reactiva**: Indica el estado del proyecto (`🧠 <proyecto> · ready` o `✓ saved #id` al registrar observaciones).
@@ -137,7 +137,7 @@ Gentle AI provee una statusline rica y nativa ejecutada in-process sin dependenc
 ## 4. Arquitectura y Flujo de Trabajo
 
 ### Diagrama 1: Cadena de Transpilación y Despliegue
-Gentle Shell es la fuente de verdad canónica. El transpilador adapta y valida los assets, los embebe en el binario Go y el comando `install/sync` despliega el plugin, la statusline y el registro:
+Gentle Shell es la fuente de verdad canónica. El transpilador adapta y valida los assets, los embebe en el binario Go y el comando `install/sync` despliega el plugin y el registro:
 
 ```mermaid
 flowchart TD

@@ -116,15 +116,15 @@ Registrar para cada ejecución: fecha, HEAD, command literal, cwd, Go/OS, exit, 
 
 | Frontera | Test/source inspeccionado | Caso negativo real | Nivel de demostración |
 |---|---|---|---|
-| Import gate | [`TestEnsurePluginImportedManifestGate`](../../internal/agents/antigravitycli/adapter_test.go#L345-L380) | JSON inválido, imports no array, nombre ausente; cero comandos/mutaciones | Runner/mock |
-| Import failure | [`TestEnsurePluginImportedFailures`](../../internal/agents/antigravitycli/adapter_test.go#L382-L427) | Falta binario/árbol, command failure, falta registro, timeout | Runner falso |
+| Import gate | [`TestEnsurePluginImportedManifestGate`](../../internal/agents/antigravitycli/adapter_test.go#L518-L553) | JSON inválido, imports no array, nombre ausente; cero comandos/mutaciones | Runner/mock |
+| Import failure | [`TestEnsurePluginImportedFailures`](../../internal/agents/antigravitycli/adapter_test.go#L555-L600) | Falta binario/árbol, command failure, falta registro, timeout | Runner falso |
 | Generación staged | [`TestTranspileSubagentsFailureLeavesDestinationUnchanged`](../../scripts/transpile-antigravitycli/main_test.go#L48-L87) | Último agente fuente inválido no refresca parcialmente ni poda destino | Fuente fixture, filesystem temporal |
-| Drift bytes | [`TestCheckGateContentDriftFails`](../../scripts/transpile-antigravitycli/main_test.go#L685-L722) | Contenido plugin.json corrupto provoca diff | Árbol fuente mínimo fixture |
-| Drift set | [`TestCheckGateMissingFileFails`, `ExtraFileFails`](../../scripts/transpile-antigravitycli/main_test.go#L622-L798) | Falta/extra de archivo detectados | No canon upstream completo |
-| HEAD frente a dirty | [`TestCheckGateComparesAgainstCommittedTree`](../../scripts/transpile-antigravitycli/main_test.go#L622-L684) | Dirty no altera comparación; hand edit committed falla | Git fixture; no gate actual del checkout |
+| Drift bytes | [`TestCheckGateContentDriftFails`](../../scripts/transpile-antigravitycli/main_test.go#L873-L910) | Contenido plugin.json corrupto provoca diff | Árbol fuente mínimo fixture |
+| Drift set | [`TestCheckGateMissingFileFails`, `ExtraFileFails`](../../scripts/transpile-antigravitycli/main_test.go#L911-L985) | Falta/extra de archivo detectados | No canon upstream completo |
+| HEAD frente a dirty | [`TestCheckGateComparesAgainstCommittedTree`](../../scripts/transpile-antigravitycli/main_test.go#L810-L872) | Dirty no altera comparación; hand edit committed falla | Git fixture; no gate actual del checkout |
 | Hook wiring de pipeline | [`TestStagePlansKeepAntigravityCLIPluginImportStep`](../../internal/cli/antigravity_cli_plugin_import_guard_test.go#L19-L72) | Selección no-agy no tiene paso, agy sí en install/sync | Plan, no ejecución real |
-| Pre-tool transport | [`TestAntigravityHookPreToolUseEdgeCases`](../../internal/cli/antigravity_hook_test.go#L337-L369) | Empty/null/array/malformed deny | Handler fixture |
-| Loop | [`TestAntigravityHookPreToolUseCircuitBreaker`](../../internal/cli/antigravity_hook_test.go#L183-L299) | Tercera llamada idéntica deny; args/tool distintos reinician | Persistencia fixture |
+| Pre-tool transport | [`TestAntigravityHookPreToolUseEdgeCases`](../../internal/cli/antigravity_hook_test.go#L473-L505) | Empty/null/array/malformed deny | Handler fixture |
+| Loop | [`TestAntigravityHookPreToolUseCircuitBreaker`](../../internal/cli/antigravity_hook_test.go#L311-L431) | Tercera llamada idéntica deny; args/tool distintos reinician | Persistencia fixture |
 | Stop | [`TestAntigravityHookStopOutcomes`](../../internal/cli/antigravity_hook_test.go#L60-L137) | No idle/no model_stop neutro; recordatorio repetido suprimido | Repo fixture |
 | MCP | [`TestReconcileAntigravityCLICodeGraphReplacesMalformedConfig`](../../internal/components/communitytool/antigravity_cli_codegraph_test.go#L124-L148) | Config inválida sustituida por canonical | No servidor real |
 | Routing personal | [`TestResolveAntigravityCLIReviewRouting`](../../internal/reviewerprovider/antigravitycli_routing_test.go#L15-L68) | Syntax/null/campo desconocido/slug inválido fallan | HOME fixture |
@@ -144,7 +144,7 @@ Receta con binarios de producto y bench ya construidos, únicamente bajo autoriz
 gentle-ai-bench run --binary /path/to/gentle-ai --only j4500-antigravity-cli-lifecycle-parity --out /path/to/report.json
 ```
 
-Sintaxis: [`bench/README.md`, Driven](../../bench/README.md#L59-L80); journey: [`antigravityCLILifecycleJourneys`](../../bench/journeys_antigravity_cli.go#L427-L439).
+Sintaxis: [`bench/README.md`, Driven](../../bench/README.md#L59-L80); journey: [`antigravityCLILifecycleJourneys`](../../bench/journeys_antigravity_cli.go#L453-L466).
 
 `/path/to` son placeholders documentales, no comandos ejecutados ni targets aprobados. Aportar evidencia solo si el JSON tiene la journey exacta con `status: completed`, exit del run y hashes/versiones de los binarios. `unsupported` no es PASS de esa capacidad.
 

@@ -8,7 +8,7 @@ Esta comparación describe código vigente. No atribuye ownership organizativo (
 
 | Dimensión | IDE: `model.AgentAntigravity` | CLI: `model.AgentAntigravityCLI` | Fuente |
 |---|---|---|---|
-| Detección | Evidencia de directorios/marker; no binario agy | `LookPath("agy")` y configDir separado | [IDE Detect](../internal/agents/antigravity/adapter.go#L58-L71), [CLI Detect](../internal/agents/antigravitycli/adapter.go#L82-L95) |
+| Detección | Evidencia de directorios/marker; no binario agy | `LookPath("agy")` y configDir separado | [IDE Detect](../internal/agents/antigravity/adapter.go#L57-L71), [CLI Detect](../internal/agents/antigravitycli/adapter.go#L82-L95) |
 | GlobalConfigDir | `.gemini/config` si migrated; `.gemini/antigravity` si existe; variante si existe; root como default | `.gemini/antigravity-cli` fijo | [IDE](../internal/agents/antigravity/adapter.go#L85-L97), [CLI](../internal/agents/antigravitycli/adapter.go#L112-L114) |
 | Variante para settings/skills/MCP | `.gemini/antigravity-desktop` si existe; si no `.gemini/antigravity-cli` | Settings en app root; skills/MCP en plugin | [IDE variant](../internal/agents/antigravity/adapter.go#L29-L35), [CLI paths](../internal/agents/antigravitycli/adapter.go#L116-L158) |
 | Prompt | `.gemini/GEMINI.md`, append | Plugin `rules/AGENTS.md`, append más reglas independientes | [IDE](../internal/agents/antigravity/adapter.go#L99-L123), [CLI](../internal/agents/antigravitycli/adapter.go#L128-L158) |
@@ -29,8 +29,8 @@ El benchmark CLI crea un canario en `~/.config/antigravity/settings.json` y comp
 | Skills/SystemPrompt/MCP | Declaradas | Declaradas | [featureClaimsByAgent](../internal/agents/capabilitymanifest/manifest.go#L320-L335) |
 | FileSubAgents | No declarado | Sí, diez assets actuales | [manifest](../internal/agents/capabilitymanifest/manifest.go#L320-L335), [census](../internal/assets/antigravitycli_assets_test.go#L38-L96); no prueba runtime discovery |
 | Immutable review transport | No en boundary compilada | `antigravitycli_in_process` | [runtime policy](../internal/cli/review_transport_capability.go#L83-L154) |
-| Captura Go de reviewer | No adapter en este conjunto | Subprocess agy nuevo, stdin/scratch | [CapturesInProcess](../internal/reviewerprovider/capture_runtimes.go#L50-L60), [adapter](../internal/reviewerprovider/antigravitycli_adapter.go#L33-L78) |
-| Permisos inyectados | Overlay nil | Listas allow/deny en settings.json | [agentOverlay](../internal/components/permissions/inject.go#L173-L178); schema/matching del cliente no medido |
+| Captura Go de reviewer | No adapter en este conjunto | Subprocess agy nuevo, stdin/scratch | [CapturesInProcess](../internal/reviewerprovider/capture_runtimes.go#L50-L60), [adapter](../internal/reviewerprovider/antigravitycli_adapter.go#L42-L104) |
+| Permisos inyectados | Overlay nil | Overlay nil (guardias dinámicas in-process vía PreToolUse) | [agentOverlay](../internal/components/permissions/inject.go#L172-L176); guardias evaluadas en tiempo real sin mutar settings.json |
 | Context7 | Overlay HTTP `serverUrl` | Overlay default stdio npx | [dispatch MCP](../internal/components/mcp/inject.go#L380-L404), [overlays](../internal/components/mcp/context7.go#L9-L31) |
 | CodeGraph | Native compatibility | Reconciled plugin wiring | [tabla](../internal/components/communitytool/codegraph_contract.go#L35-L50) |
 | Orchestrator | Routing compartido con renderer, carrier prompt | Canon transpilado, contrato Go filled y regla protocol-only | [branch de render](../internal/components/agentguidance/inject.go#L124-L132), [agy rule](../internal/components/agentguidance/inject.go#L260-L273), [fill](../internal/cli/antigravity_orchestrator_rule.go#L28-L52) |
@@ -39,7 +39,7 @@ El IDE no gana capacidad RDD por ser `TierFull` o por compartir un directorio co
 
 ## Rules, hooks y ejecución
 
-Para el CLI, `DeployPluginTree` entrega assets/hook definitions; el paso final completa el contrato y hace import si falta registro: [run.go, líneas 921–940](../internal/cli/run.go#L921-L940). Hay siete satélites, dos soportes strict-TDD y una cadena manual 4R: [BundleAssets](../internal/agents/antigravitycli/adapter.go#L192-L207).
+Para el CLI, `DeployPluginTreeToDir` entrega assets/hook definitions; el paso final completa el contrato y hace import si falta registro: [run.go, líneas 1042–1073](../internal/cli/run.go#L1042-L1073). Hay ocho satélites, dos soportes strict-TDD y una cadena manual 4R (desplegados bajo `rules/`): [BundleAssets](../internal/agents/antigravitycli/adapter.go#L275-L297).
 
 Los hooks CLI no son uniformemente fail-open: `PreToolUse` malformed/delegación inválida/repetición puede denegar; post hooks son no-op y Stop es recordatorio condicionado a idle/model. [Detalle](antigravity-cli/03-orchestration-and-hooks.md).
 
@@ -56,7 +56,7 @@ Esta página no describe hooks/mecanismos internos del IDE externo que no fueron
 | Uninstall CLI | Operaciones own paths y registro, dirs si vacíos | Borrado universal de plugin_data, MCP cwd, conversaciones o auth |
 | Settings IDE/CLI legacy | Paths elegidos por adapter/operación | Disjunción automática al seleccionar ambos |
 
-Fuentes: [import](../internal/agents/antigravitycli/adapter.go#L645-L732), [uninstall](../internal/components/uninstall/service.go#L1408-L1460). No afirmar una convención de nombres runtime MCP o versión «landed in 1.2.2» sin evidencia cliente fijada; esos datos externos deben verificarse por separado.
+Fuentes: [import](../internal/agents/antigravitycli/adapter.go#L785-L871), [uninstall](../internal/components/uninstall/service.go#L1408-L1460). No afirmar una convención de nombres runtime MCP o versión «landed in 1.2.2» sin evidencia cliente fijada; esos datos externos deben verificarse por separado.
 
 ## Recomendación operativa
 

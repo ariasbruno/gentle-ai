@@ -25,9 +25,9 @@ Gentle AI distribuye sus directivas en archivos especializados según su ciclo d
 | `rules/AGENTS.md` | Inyector de componentes | Persona base del mentor, reglas de estilo y restricciones globales |
 | `rules/gentle-ai-routing.md` | `injectAntigravityCLIRule` | Protocolo ODD (Organic Driven Development) y ciclo de trabajo |
 | `rules/gentle-ai-orchestrator.md` | Bundle + finalizador de contrato | Orquestador principal y contrato de ejecución RDD renderizado |
-| Satélites en raíz | `BundleAssets` | Especificaciones modulares de delegación, memoria, tracking y verificación |
+| Satélites (`rules/orchestrator-*.md`) | `BundleAssets` | Especificaciones modulares (8 satélites en `rules/` con `trigger: model_decision`) |
 
-Fuentes: [`SystemPromptFile`](../../internal/agents/antigravitycli/adapter.go#L128-L138), [`injectAntigravityCLIRule`](../../internal/components/agentguidance/inject.go#L320-L382), [`ensureAntigravityOrchestratorRule`](../../internal/cli/antigravity_orchestrator_rule.go#L28-L52).
+Fuentes: [`SystemPromptFile`](../../internal/agents/antigravitycli/adapter.go#L215-L217), [`injectAntigravityCLIRule`](../../internal/components/agentguidance/inject.go#L320-L382), [`ensureAntigravityOrchestratorRule`](../../internal/cli/antigravity_orchestrator_rule.go#L28-L52).
 
 ### Frontmatter YAML y modos de activación (`trigger`)
 
@@ -48,7 +48,7 @@ Gentle AI configura tanto `gentle-ai-routing.md` como `gentle-ai-orchestrator.md
 
 Antigravity aplica dos restricciones técnicas fundamentales para evitar desbordar la ventana de contexto:
 
-- **Límite de 24 KB (`24.000` bytes) por archivo:** Cualquier regla individual que supere los 24.000 bytes (tras expandir inclusiones `@[label](path)`) es truncada por `agy`. Por esta razón, el instalador y transpilador de Gentle AI imponen una cota estricta (`antigravityCLIRuleCap = 24000`), validada en [`antigravity_orchestrator_rule_test.go`](../../internal/cli/antigravity_orchestrator_rule_test.go).
+- **Límite de 24 KB (`24.000` bytes) por archivo:** Cualquier regla individual que supere los 24.000 bytes (tras expandir inclusiones `@` `[label]` `(path)`) es truncada por `agy`. Por esta razón, el instalador y transpilador de Gentle AI imponen una cota estricta (`antigravityCLIRuleCap = 24000`), validada en [`antigravity_orchestrator_rule_test.go`](../../internal/cli/antigravity_orchestrator_rule_test.go).
 - **Presupuesto agregado de 20.000 tokens:** Todas las reglas globales y `always_on` activas comparten una bolsa de 20.000 tokens. Si el total supera este límite, `agy` **degrada automáticamente las reglas más pesadas a punteros livianos** (`- <path>: <description>`) para que el agente las lea solo bajo demanda.
 - **Por qué `description` es obligatoria en Gentle AI:** Aunque `description` es estrictamente requerida solo en `model_decision`, Gentle AI la incluye explícitamente en sus reglas `always_on`:
   ```yaml
@@ -92,9 +92,9 @@ El plugin registra cinco eventos. No registra `SessionStart`. La página oficial
 | `PostInvocation` | 30 s | `handleAntigravityPostInvocation` | No-op portable: `{}` |
 | `Stop` | 60 s | `handleAntigravityStop` | Solo stop idle/model: bloquea el cierre ante un candidato `review_due` |
 
-Definición: [`antigravityCLIPluginHooksJSON`](../../internal/agents/antigravitycli/adapter.go#L407-L470); dispatch y handlers: [antigravity_hook.go, líneas 88–172](../../internal/cli/antigravity_hook.go#L88-L172), [Stop](../../internal/cli/antigravity_hook.go#L212-L282). Timeouts son configuración solicitada al cliente, no medición de ejecución.
+Definición: [`antigravityCLIPluginHooksJSON`](../../internal/agents/antigravitycli/adapter.go#L514-L562); dispatch y handlers: [antigravity_hook.go, líneas 88–172](../../internal/cli/antigravity_hook.go#L88-L172), [Stop](../../internal/cli/antigravity_hook.go#L516-L650). Timeouts son configuración solicitada al cliente, no medición de ejecución.
 
-El comando registrado llama directamente `gentle-ai hook run --agent=antigravity-cli --event <evento>`. También se escriben `hook.sh` y `hook.cmd`; no afirmar que hooks.json siempre los invoca: [`DeployPluginTree`, líneas 530–556](../../internal/agents/antigravitycli/adapter.go#L530-L556).
+El comando registrado llama directamente `gentle-ai hook run --agent=antigravity-cli --event <evento>`. También se escriben `hook.sh` y `hook.cmd`; no afirmar que hooks.json siempre los invoca: [`DeployPluginTreeToDir`, líneas 574–755](../../internal/agents/antigravitycli/adapter.go#L574-L755).
 
 ## `PreToolUse`: condiciones fail-closed
 
@@ -111,7 +111,7 @@ El comando registrado llama directamente `gentle-ai hook run --agent=antigravity
 - Los comandos de terminal estándar devuelven `ask`: delegan la decisión en el motor de permisos de Antigravity CLI, respetando la lista `permissions.allow` del usuario si ya fue autorizada, o solicitando confirmación si se trata de un comando nuevo.
 - Las operaciones estándar de archivo dentro del workspace devuelven `allow` (comportamiento habitual del sandbox).
 
-[`RunAntigravityCLIHook`](../../internal/cli/antigravity_hook.go#L88-L108), [`validateAntigravityCLIInvokeSubagentArgs`](../../internal/cli/antigravity_hook.go#L344-L383), [`antigravityCLIValidWorkspace`](../../internal/cli/antigravity_hook.go#L394-L401).
+[`RunAntigravityCLIHook`](../../internal/cli/antigravity_hook.go#L88-L108), [`validateAntigravityCLIInvokeSubagentArgs`](../../internal/cli/antigravity_hook.go#L759-L807), [`antigravityCLIValidWorkspace`](../../internal/cli/antigravity_hook.go#L823-L830).
 
 Ejemplo de **forma esperada por el handler**, no prueba oficial de schema nativo completo:
 
@@ -131,7 +131,7 @@ Ejemplo de **forma esperada por el handler**, no prueba oficial de schema nativo
 }
 ```
 
-El handler no demuestra que `TypeName` exista, no analiza si el prompt respeta todas las superficies ni autoriza un rol RDD por recibir ese string. Tests: [`PreToolUseEdgeCases`](../../internal/cli/antigravity_hook_test.go#L341-L375), [`TestAntigravityHookPreToolUseMalformedInvokePayloadFailsClosed`](../../internal/cli/antigravity_hook_test.go#L486-L499), [`TestAntigravityHookPreToolUseInvokeSubagentValidation`](../../internal/cli/antigravity_hook_test.go#L530-L635).
+El handler no demuestra que `TypeName` exista, no analiza si el prompt respeta todas las superficies ni autoriza un rol RDD por recibir ese string. Tests: [`PreToolUseEdgeCases`](../../internal/cli/antigravity_hook_test.go#L473-L505), [`TestAntigravityHookPreToolUseMalformedInvokePayloadFailsClosed`](../../internal/cli/antigravity_hook_test.go#L622-L664), [`TestAntigravityHookPreToolUseInvokeSubagentValidation`](../../internal/cli/antigravity_hook_test.go#L666-L771).
 
 ### Circuit breaker
 
@@ -145,9 +145,9 @@ Con `conversationId` y herramienta válida:
   cambio de nombre/args → reinicia count 1
 ```
 
-[`handleAntigravityPreToolUse`](../../internal/cli/antigravity_hook.go#L405-L476). Se persiste bajo `.gentle-ai/circuit-breaker/v1/<sha256(conversationId)>.json`, con fallback temporal si HOME no está disponible. El orden de claves de JSON no evade identidad: [`PreToolUseKeyOrdering`](../../internal/cli/antigravity_hook_test.go#L301-L339).
+[`handleAntigravityPreToolUse`](../../internal/cli/antigravity_hook.go#L921-L1017). Se persiste bajo `.gentle-ai/circuit-breaker/v1/<sha256(conversationId)>.json`, con fallback temporal si HOME no está disponible. El orden de claves de JSON no evade identidad: [`PreToolUseKeyOrdering`](../../internal/cli/antigravity_hook_test.go#L301-L339).
 
-Sin conversationId, toolCall o nombre, el circuit breaker retorna allow — el guard de rutas sensibles se evalúa antes y no depende de conversationId: [líneas 409–411](../../internal/cli/antigravity_hook.go#L409-L411). No es un detector de todos los loops ni de equivalencia semántica de comandos; solo repetición consecutiva de nombre/args. Persistencia fallida puede debilitar seguimiento entre invocaciones; no se trata de garantía universal anti-loop.
+Sin conversationId, toolCall o nombre, el circuit breaker retorna allow — el guard de rutas sensibles se evalúa antes y no depende de conversationId: [líneas 944–949](../../internal/cli/antigravity_hook.go#L944-L949). No es un detector de todos los loops ni de equivalencia semántica de comandos; solo repetición consecutiva de nombre/args. Persistencia fallida puede debilitar seguimiento entre invocaciones; no se trata de garantía universal anti-loop.
 
 ## `PreInvocation`: inicialización de sesión
 
@@ -201,7 +201,7 @@ Los hooks de Gentle AI operan con un enfoque de seguridad estricto (*fail-closed
 
 ### Jerarquía de permisos y resolución de conflictos (Hook vs settings.json)
 
-La evaluación de seguridad en Antigravity CLI opera mediante una separación estricta de responsabilidades entre el Hook de ciclo de vida (`PreToolUse`) y el motor nativo de permisos del CLI (`settings.json` y memoria de sesión):
+La evaluación de seguridad en Antigravity CLI opera mediante una separación estricta de responsabilidades entre el Hook de ciclo de vida (`PreToolUse`) y el motor nativo de permisos del CLI (`settings.json` y memoria de sesión). Gentle AI **no inyecta overlays estáticos en `settings.json`**; las entradas en `settings.json` provienen exclusivamente de las reglas configuradas por el usuario o autorizadas interactivamente con *Always Allow*:
 
 | Si el Hook de Gentle AI dice | Si en `settings.json` está como `ask` | Resultado Final (CLI) | Explicación técnica |
 |---|---|---|---|
