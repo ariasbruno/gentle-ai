@@ -120,7 +120,7 @@ Fuentes:
 Gentle AI provee una statusline interactiva y de alto rendimiento renderizada directamente en Go (`gentle-ai statusline` y `--title`):
 
 - **Configuración desatendida:** la opción `--include-theme` en `gentle-ai install` y `sync` escribe los bloques `statusLine` y `title` en `settings.json`.
-- **Diseño visual limpio y jerárquico:** flor pétalo `✿` en rosa Gentle Shell, modo y modelo, indicador de contexto (8 celdas), cuotas por familia de modelo en formato countdown, métricas de memoria Engram, estado en vivo de revisiones RDD, avance ODD (`odd/tasks/*.md`), cambios Git no commiteados y ayuda de atajos a la derecha (`? for shortcuts`).
+- **Diseño visual limpio y jerárquico:** flor pétalo `✿` en rosa Gentleman, modo y modelo, indicador de contexto (8 celdas), cuotas por familia de modelo en formato countdown, métricas de memoria Engram, estado en vivo de revisiones RDD, avance ODD (`odd/tasks/*.md`), cambios Git no commiteados y ayuda de atajos a la derecha (`? for shortcuts`).
 - **Prevención de ruido:** se omiten segmentos de jobs y subagentes que `agy` reporta nativamente, el costo de sesión sólo se muestra cuando es estrictamente mayor a cero, y la statusline se auto-silencia por completo si el plugin está desactivado en la configuración del usuario (`dbde78b81`).
 
 ---
