@@ -77,6 +77,14 @@ En upstream existe un adaptador genérico llamado `antigravity` que intentaba ab
 
 ## 2. El Ecosistema Antigravity y la Necesidad de un Adaptador Dedicado
 
+> [!NOTE]
+> **Convención de términos a partir de ahora:**
+> Una vez superado el Quickstart para el usuario final, nos adentramos en los detalles técnicos de la integración. Para mantener un lenguaje claro, ágil y sin repeticiones:
+> - **`agy`**: Hace referencia específica a **Antigravity CLI** (el runtime de terminal sobre el cual trabaja este fork).
+> - **`antigravity`**: Hace referencia a todo el ecosistema completo de Google (**Antigravity IDE**, **Antigravity App (2.0)** y **Antigravity CLI**), que es con lo que Gentle AI interactúa originalmente a través de su adaptador genérico.
+>
+> En síntesis: **Este FORK trabaja sobre `agy`**, mientras que **Gentle AI trabaja originalmente con `antigravity`**.
+
 El ecosistema de Google Antigravity engloba tres superficies de trabajo bien diferenciadas:
 
 1. **Antigravity IDE**: El editor de código tradicional de Antigravity, con su autocompletado, comandos de código en lenguaje natural y asistencia en edición con un IA.
