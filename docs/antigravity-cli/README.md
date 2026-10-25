@@ -1,18 +1,18 @@
 # Google Antigravity CLI (`agy`) con Gentle AI
 
-Integración nativa de primer nivel de Google Antigravity CLI (`agy`) en Gentle AI. Diseñada específicamente para aprovechar al máximo las capacidades de `agy` como runtime autónomo: arquitectura modular de plugins, 10 subagentes nativos especializados, ciclo de vida con hooks, statusline y título dinámicos, evaluación en memoria de permisos y revisión adversarial automatizada basada en recibos inmutables (RDD con lentes 4R).
+Integración nativa de primer nivel de **Google Antigravity CLI (`agy`)** en **Gentle AI**. Diseñada específicamente para aprovechar al máximo las capacidades de `agy` como runtime autónomo: arquitectura modular de plugins, 10 subagentes nativos especializados, ciclo de vida con hooks, statusline y título dinámicos, evaluación en memoria de permisos y revisión adversarial automatizada basada en recibos inmutables (RDD con lentes 4R).
 
 > [!IMPORTANT]
-> **Versión fijada actual**: **Gentle AI v4.2.1** (basada en upstream Gentle AI v4.2.0, Gentle Shell v4.3.0 y Antigravity CLI v1.4.4).
+> **Versión fijada actual**: **v4.2.1** (basada en upstream Gentle AI v4.2.0, Gentle Shell v4.3.0 y Antigravity CLI v1.4.4).
 
 ---
 
 ## 1. Inicio Rápido (Quick Start)
 
 ### Paso 1: Prerrequisitos
-Asegurate de tener `agy` (con login interactivo completado) y Go 1.25+ en tu sistema:
+Asegurate de haber abierto `agy` e iniciado sesión al menos una vez y tener Go 1.25+ en tu sistema:
 ```bash
-command -v agy && agy --version
+agy --version
 go version
 ```
 
@@ -30,7 +30,7 @@ go install ./cmd/gentle-ai
 
 ### Paso 3: Instalación y sincronización
 
-Elegí el alcance según tu flujo de trabajo:
+Elegí el alcance según tu flujo de trabajo (consultá la [Guía de Instalación Detallada](installation.md)):
 
 - **Instalación Global (Recomendada para uso personal en todos tus proyectos):**
   ```bash
@@ -43,6 +43,8 @@ Elegí el alcance según tu flujo de trabajo:
   gentle-ai install --agent antigravity-cli --scope workspace
   gentle-ai sync --agents antigravity-cli --scope workspace
   ```
+
+*(Opcional: Si querés que además configure la StatusLine y el título dinámico en `settings.json`, sumá el flag `--include-theme` a los comandos anteriores).*
 
 ### Paso 4: Verificación inmediata del estado
 ```bash
@@ -60,9 +62,9 @@ agy plugin validate --strict ~/.gemini/config/plugins/gentle-ai
 En upstream Gentle AI existe un único adaptador genérico llamado `antigravity` que comete el error de intentar abarcar **tres entornos completamente distintos (Antigravity CLI, Antigravity 2.0 y Antigravity IDE) en una sola bolsa**:
 
 - **El problema de upstream**: Trata a Antigravity como si fuera un editor desktop tradicional. Concatena un único prompt plano en `.gemini/GEMINI.md`, **no provee subagentes** (`SubAgentsDir` está vacío en el código), **carece de transporte RDD** (los usuarios de Antigravity no pueden ejecutar revisiones Receipt-Driven Development), no utiliza el sistema oficial de plugins de `agy`, no implementa hooks de ciclo de vida, no ofrece statusline nativa, no soporta aislamiento por workspace en `.agents/`, y mezcla rutas entre `.gemini/antigravity-desktop` y `.gemini/antigravity-cli`, provocando colisiones.
-- **Nuestra solución**: Creamos un adaptador dedicado y desacoplado (`model.AgentAntigravityCLI`). En lugar de emparchar las diferencias con el IDE, explota **el 100% de las posibilidades que Antigravity CLI ofrece como runtime moderno de agentes**.
+- **Solución**: Un adaptador dedicado y desacoplado (`model.AgentAntigravityCLI`). En lugar de emparchar las diferencias con el IDE, explota **el 100% de las posibilidades que Antigravity CLI ofrece como runtime moderno de agentes**.
 
-### Cuadro Comparativo: Upstream vs Nuestra Integración
+### Cuadro Comparativo: Upstream (Antigravity) vs Este Fork (Antigravity CLI)
 
 | Capacidad | Upstream (`antigravity` genérico) | Esta Integración (`antigravity-cli` dedicada) | Evidencia en Código |
 |---|---|---|---|
@@ -247,18 +249,28 @@ Gentle AI dota a `agy` de 10 subagentes nativos configurados en formato Markdown
 
 ---
 
-## 6. Documentación Detallada y Auditoría
+## 6. Documentación Modularizada
 
-Para profundizar en aspectos específicos de la arquitectura y auditoría:
+La documentación se organiza según la audiencia y el objetivo técnico:
 
-| Área de Interés | Documento de Referencia |
-|---|---|
-| Comparativa formal frente a la integración IDE upstream | [Antigravity IDE frente a CLI (docs/antigravity-ide-vs-cli.md)](../antigravity-ide-vs-cli.md) |
-| Mecánica técnica interna, transporte RDD y sandboxing | [Mapa Técnico y Mecánica Interna (SUMMARY.md)](SUMMARY.md) |
-| Proceso de transpilación y contratos con Gentle Shell | [Transpilador y Contratos (02-asset-transpiler.md)](02-asset-transpiler.md) |
-| Detalle de hooks, ledgers de mutaciones y reglas de stop | [Orquestación y Hooks (03-orchestration-and-hooks.md)](03-orchestration-and-hooks.md) |
-| Comparación frente a Claude Code, Codex, OpenCode y Pi | [Matriz Comparativa de Capacidades (07-comparison.md)](07-comparison.md) |
-| Decisiones de diseño y alternativas descartadas | [Registro de Decisiones (08-decisions.md)](08-decisions.md) |
-| Registro de verificación y resultados observados | [Registro de Verificación (09-verification.md)](09-verification.md) |
-| Detalle del último incremento v4.2.0 / v4.3.0 / v1.4.4 | [Reporte de Actualización Incremental (11-upgrade-ai-4.2.0-shell-4.3.0.md)](11-upgrade-ai-4.2.0-shell-4.3.0.md) |
-| Borrador de notas para GitHub Releases | [Borrador Release Notes v4.2.1 (RELEASE_NOTES_v4.2.1.md)](RELEASE_NOTES_v4.2.1.md) |
+### 📘 Guías Operativas para el Usuario
+- [**Guía de Instalación Paso a Paso**](installation.md): Opciones global y workspace, flag opcional `--include-theme` y qué se copia en disco.
+- [**StatusLine y Experiencia de Terminal**](statusline.md): Explicación de cada segmento, atajos de teclado, cuotas de modelos y auto-silenciado.
+- [**Seguridad, Jerarquías y Sandbox**](security-and-sandbox.md): Confinamiento del sandbox, capas de jerarquía, prevención de lectura de secretos (`.env`) e higiene con `.git/info/exclude`.
+- [**Resolución de Problemas (Troubleshooting)**](troubleshooting.md): Diagnóstico rápido con `gentle-ai doctor` y respuestas a preguntas frecuentes.
+- [**Antigravity IDE frente a CLI (ide-vs-cli.md)**](ide-vs-cli.md): Comparativa directa y sin tecnicismos entre el IDE desktop y el runtime de terminal.
+
+### 🏛️ Auditoría Técnica y Fundamentos de la Integración
+- [**Antigravity IDE frente a CLI (ide-vs-cli.md)**](ide-vs-cli.md): Comparativa directa entre el IDE desktop y el runtime de terminal.
+- [**Fundamentos y Puesta en Marcha (01-foundation.md)**](01-foundation.md): Despliegue de assets y directivas del plugin.
+- [**Transpilador Determinista (02-asset-transpiler.md)**](02-asset-transpiler.md): Transpilación desde Gentle Shell y drift gate `--check`.
+- [**Orquestación y Hooks (03-orchestration-and-hooks.md)**](03-orchestration-and-hooks.md): Hooks de ciclo de vida y ledger de mutaciones.
+- [**Transporte RDD In-Process (05-review-transport.md)**](05-review-transport.md): Arquitectura de revisión sandboxed y esquemas 4R.
+- [**Comparativa frente a otros Agentes (07-comparison.md)**](07-comparison.md): Tabla comparativa con Claude, Codex, OpenCode y Pi.
+- [**Registro de Decisiones (08-decisions.md)**](08-decisions.md): Decisiones arquitectónicas, tradeoffs y alternativas descartadas.
+- [**Registro de Verificación (09-verification.md)**](09-verification.md): Evidencia de suites de prueba, benchmarks y validación estricta.
+- [**Mapa Técnico Completo (SUMMARY.md)**](SUMMARY.md): Diagramas Mermaid de secuencias y flujo transaccional.
+
+### 🌐 Propuesta de Integración Upstream (Para Maintainers de Gentle AI)
+Toda la justificación técnica, matriz de no-regresión y especificaciones detalladas para mergear esta integración al repositorio oficial se encuentran en:
+- [**Propuesta de Integración Upstream (propuesta-upstream.md)**](propuesta-upstream.md)
