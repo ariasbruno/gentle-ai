@@ -115,22 +115,33 @@ Fuentes:
 
 ---
 
-## 4. Comparativa de Componentes Compartidos vs Específicos
+## 4. StatusLine y Experiencia de Usuario en Terminal
+
+Gentle AI provee una statusline interactiva y de alto rendimiento renderizada directamente en Go (`gentle-ai statusline` y `--title`):
+
+- **Configuración desatendida:** la opción `--include-theme` en `gentle-ai install` y `sync` escribe los bloques `statusLine` y `title` en `settings.json`.
+- **Diseño visual limpio y jerárquico:** flor pétalo `✿` en rosa Gentle Shell, modo y modelo, indicador de contexto (8 celdas), cuotas por familia de modelo en formato countdown, métricas de memoria Engram, estado en vivo de revisiones RDD, avance ODD (`odd/tasks/*.md`), cambios Git no commiteados y ayuda de atajos a la derecha (`? for shortcuts`).
+- **Prevención de ruido:** se omiten segmentos de jobs y subagentes que `agy` reporta nativamente, el costo de sesión sólo se muestra cuando es estrictamente mayor a cero, y la statusline se auto-silencia por completo si el plugin está desactivado en la configuración del usuario (`dbde78b81`).
+
+---
+
+## 5. Comparativa de Componentes Compartidos vs Específicos
 
 | Componente | Compartido con otros agentes | Específico de Antigravity CLI (`agy`) |
 |---|---|---|
+| **StatusLine e Interfaz** | Estilo visual y tokens de color | Ejecución in-process en Go con payload JSON vía stdin |
 | **Contratos de Revisión** | Esquemas y roles 4R definidos en Go | Traducción a frontmatter y tools nativas de `agy` |
 | **Presupuesto de Contexto** | Límites máximos por rol y sesión | Ajustado a los límites del runtime Gemini en `agy` |
-| **Ubicación de Plugins** | Convención unificada | Rutas específicas: `~/.gemini/config/plugins/gentle-ai` |
-| **Hooks de Eventos** | Concepto de ciclo de vida | `hooks.json` declarativo con scripts `.sh` y `.cmd` |
+| **Ubicación de Plugins** | Convención unificada | Rutas específicas: `~/.gemini/config/plugins/gentle-ai` (Global) y `.agents/plugins/gentle-ai` (Workspace) |
+| **Hooks de Eventos** | Concepto de ciclo de vida | `hooks.json` declarativo con scripts `.sh` y `.cmd` y ledger de mutaciones |
 | **Protocolo ODD** | Flujo de trabajo en 7 pasos | Regla `gentle-ai-routing.md` optimizada en tamaño (<44 KB) |
 | **Servidores MCP** | Engram, Context7 y CodeGraph | Nombres con prefijo adaptado y configuración en `mcp_config.json` |
 
 ---
 
-## 5. Resumen de Estado de Verificación y Calidad
+## 6. Resumen de Estado de Verificación y Calidad
 
 - **Drift Gate de Transpilación**: Pasa al 100% contra el commit fijado de Gentle Shell (`d5d692a6...`).
 - **Validación del Plugin**: `agy plugin validate --strict` ejecuta sin warnings ni errores sobre el plugin instalado.
-- **Suite de Pruebas Go**: 17 paquetes clave pasan en verde, incluidos `internal/agents/antigravitycli`, `internal/cli`, `internal/update` y `internal/releasepolicy`.
+- **Suite de Pruebas Go**: Suites unitarias y de integración pasan en verde (incluidos `internal/agents/antigravitycli`, `internal/cli`, `internal/statusline`).
 - **Inmutabilidad de Políticas**: Los contratos de release de upstream están congelados y verificados.
