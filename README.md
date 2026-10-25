@@ -101,13 +101,14 @@ https://github.com/user-attachments/assets/6d2bc422-a4dd-4ecf-a04b-fcd3bea7fea9
 <strong><a href="docs/agents.md#kiro-ide">Kiro IDE</a></strong> ·
 <strong><a href="docs/agents.md#qwen-code">Qwen Code</a></strong> ·
 <strong><a href="docs/agents.md#hermes">Hermes</a></strong> ·
-<strong><a href="docs/agents.md#antigravity">Antigravity</a></strong> ·
+<strong><a href="docs/agents.md#antigravity">Antigravity (IDE)</a></strong> ·
+<strong><a href="docs/agents.md#antigravity-cli">Antigravity CLI</a></strong> ·
 <strong><a href="docs/agents.md#windsurf">Windsurf</a></strong> ·
 <strong><a href="docs/agents.md#openclaw">OpenClaw</a></strong> ·
 <strong><a href="docs/agents.md#trae">Trae</a></strong> ·
 <strong><a href="docs/agents.md#conductor">Conductor</a></strong>
 
-<sub>17 integrations · native configuration · <a href="docs/agents.md">compare capabilities →</a></sub>
+<sub>18 integrations · native configuration · <a href="docs/agents.md">compare capabilities →</a></sub>
 
 </div>
 
