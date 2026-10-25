@@ -6,11 +6,11 @@
 
 ## Reglas y carga de contexto
 
-Antigravity gestiona las directivas de comportamiento a través de un sistema de reglas acumulativas (*cumulative*) con prioridades definidas. Para entender cómo encaja Gentle AI, es clave conocer la especificación oficial de reglas de `agy`:
+Antigravity gestiona las directivas de comportamiento a través de un sistema de reglas acumulativas con prioridades definidas. Para entender cómo encaja Gentle AI, es clave conocer la especificación oficial de reglas de `agy`:
 
 ### Jerarquía y descubrimiento de reglas
 
-Antigravity combina las reglas encontradas en distintos niveles en lugar de sobreescribirlas. Ante conflictos, prevalecen las reglas más específicas:
+`agy` combina las reglas encontradas en distintos niveles en lugar de sobreescribirlas. Ante conflictos, prevalecen las reglas más específicas:
 1. **Directorio y subdirectorios:** `<dir>/AGENTS.md`, `<dir>/.agents/rules/*.md` (se evalúan subiendo por el árbol hasta la raíz del workspace).
 2. **Workspace:** Reglas en la raíz del proyecto.
 3. **Globales de la estación de trabajo:** `~/.gemini/AGENTS.md` y reglas modulares en `~/.gemini/config/rules/*.md`.
@@ -46,7 +46,7 @@ Gentle AI configura tanto `gentle-ai-routing.md` como `gentle-ai-orchestrator.md
 
 ### Presupuesto de tokens y el rol de `description` como red de seguridad
 
-Antigravity aplica dos restricciones técnicas fundamentales para evitar desbordar la ventana de contexto:
+`agy` aplica dos restricciones técnicas fundamentales para evitar desbordar la ventana de contexto:
 
 - **Límite de 24 KB (`24.000` bytes) por archivo:** Cualquier regla individual que supere los 24.000 bytes (tras expandir inclusiones `@` `[label]` `(path)`) es truncada por `agy`. Por esta razón, el instalador y transpilador de Gentle AI imponen una cota estricta (`antigravityCLIRuleCap = 24000`), validada en [`antigravity_orchestrator_rule_test.go`](../../internal/cli/antigravity_orchestrator_rule_test.go).
 - **Presupuesto agregado de 20.000 tokens:** Todas las reglas globales y `always_on` activas comparten una bolsa de 20.000 tokens. Si el total supera este límite, `agy` **degrada automáticamente las reglas más pesadas a punteros livianos** (`- <path>: <description>`) para que el agente las lea solo bajo demanda.
@@ -108,7 +108,7 @@ El comando registrado llama directamente `gentle-ai hook run --agent=antigravity
 - Las tools de archivo y búsqueda (`view_file`, `read_file`, `write_file`, `edit_file`, `replace_file_content`, `multi_replace_file_content`, `grep_search`) reciben el guard de rutas sensibles: los patrones que el `settings.json` no puede expresar (el esquema del proveedor no tiene globs de archivo) se evalúan sobre la ruta concreta a cualquier profundidad y devuelven `deny`.
 - Los comandos de terminal (`run_command`) que referencian rutas sensibles (secretos como `.env*`, `.ssh`, `.aws`, claves `.pem`/`.key`) son bloqueados directamente con `deny`, impidiendo filtraciones o bypasses vía shell (ej. `cat .env`).
 - Los comandos de terminal destructivos (`rm -rf`, `git reset --hard`, `git push --force`, `git clean -fd`, `chmod -R 777`, etc.) devuelven `force_ask`: obligan al CLI a solicitar confirmación interactiva al usuario en pantalla, **ignorando cualquier regla previa en `settings.json` o caché de sesión**.
-- Los comandos de terminal estándar devuelven `ask`: delegan la decisión en el motor de permisos de Antigravity CLI, respetando la lista `permissions.allow` del usuario si ya fue autorizada, o solicitando confirmación si se trata de un comando nuevo.
+- Los comandos de terminal estándar devuelven `ask`: delegan la decisión en el motor de permisos de `agy`, respetando la lista `permissions.allow` del usuario si ya fue autorizada, o solicitando confirmación si se trata de un comando nuevo.
 - Las operaciones estándar de archivo dentro del workspace devuelven `allow` (comportamiento habitual del sandbox).
 
 [`RunAntigravityCLIHook`](../../internal/cli/antigravity_hook.go#L88-L108), [`validateAntigravityCLIInvokeSubagentArgs`](../../internal/cli/antigravity_hook.go#L759-L807), [`antigravityCLIValidWorkspace`](../../internal/cli/antigravity_hook.go#L823-L830).
@@ -158,7 +158,7 @@ Cuando inicia una nueva interacción (`InvocationNum == 0`), el hook ejecuta tar
 
 ## `Stop`: cierre bloqueado ante un candidato de alto riesgo
 
-Si el modelo finaliza su turno (`NO_TOOL_CALL` en Antigravity CLI, o `model_stop` para compatibilidad) y el sistema queda desocupado (`fullyIdle == true`), el hook comprueba si existe un candidato sin revisar **y** si ese candidato es `review_due`:
+Si el modelo finaliza su turno (`NO_TOOL_CALL` en `agy`, o `model_stop` para compatibilidad) y el sistema queda desocupado (`fullyIdle == true`), el hook comprueba si existe un candidato sin revisar **y** si ese candidato es `review_due`:
 - Resuelve el target y exige `Action=start` (cambios trackeados sin revisar). No exige un `NextTransition` ejecutable: archivos no trackeados pueden dejar el estado en `collect` aunque exista un candidato válido.
 - Consulta la misma evaluación in-process que publica `review assess` (`reviewStopHookReviewDue`). Un candidato pasivo o medio (`review_due == false`) cierra con `{}`. Una evaluación que no puede responder **falla cerrada a due**, así el recordatorio no se pierde por un error de assess; un candidato inassessable (por ejemplo, archivos no trackeados sin declarar) también queda `review_due`, porque el hook no elige `--untracked-scope` por el operador.
 - De-silencia en dos casos acotados: el candidato es el baseline registrado en la primera invocación (anterior a la sesión) o el operador rechazó el consentimiento hace menos de 15 minutos.
@@ -192,7 +192,7 @@ Los hooks de Gentle AI operan con un enfoque de seguridad estricto (*fail-closed
 | Ruta sensible en tools de archivo/búsqueda | `deny` | Guard sobre la ruta concreta: `.env` y variantes, `.ssh`, `.credentials`, `.aws/credentials`, `.pem`/`.key`, `hosts.yml`, Keychains, `secrets/` a cualquier profundidad |
 | Comando de terminal con ruta sensible | `deny` | La línea de `run_command` se tokeniza y si referencia secretos se bloquea directamente para evitar bypasses de lectura |
 | Comando de terminal destructivo | `force_ask` | Detecta `rm -rf`, `git reset --hard`, `push --force`, etc.; exige confirmación interactiva obligatoria ignorando cachés o reglas de `allow` |
-| Comando de terminal estándar | `ask` | Delega la decisión en Antigravity CLI: ejecuta si está en `permissions.allow` del usuario, o pide confirmación si no lo está |
+| Comando de terminal estándar | `ask` | Delega la decisión en `agy`: ejecuta si está en `permissions.allow` del usuario, o pide confirmación si no lo está |
 | 3 llamadas consecutivas idénticas (Circuit Breaker) | `deny` | Interrumpe bucles infinitos repetitivos del modelo |
 | Operaciones estándar de archivo | `allow` | Permite la ejecución de la herramienta de archivo dentro del sandbox |
 | Eventos posteriores (`PostToolUse`, `PostInvocation`) | `{}` | No bloqueantes, no interfieren con la respuesta del agente |
@@ -202,14 +202,14 @@ Los hooks de Gentle AI operan con un enfoque de seguridad estricto (*fail-closed
 
 ### Jerarquía de permisos y resolución de conflictos (Hook vs settings.json)
 
-La evaluación de seguridad en Antigravity CLI opera mediante una separación estricta de responsabilidades entre el Hook de ciclo de vida (`PreToolUse`) y el motor nativo de permisos del CLI (`settings.json` y memoria de sesión). Gentle AI **no inyecta overlays estáticos en `settings.json`**; las entradas en `settings.json` provienen exclusivamente de las reglas configuradas por el usuario o autorizadas interactivamente con *Always Allow*:
+La evaluación de seguridad en `agy` opera mediante una separación estricta de responsabilidades entre el Hook de ciclo de vida (`PreToolUse`) y el motor nativo de permisos de `agy` (`settings.json` y memoria de sesión). Gentle AI **no inyecta overlays estáticos en `settings.json`**; las entradas en `settings.json` provienen exclusivamente de las reglas configuradas por el usuario o autorizadas interactivamente con *Always Allow*:
 
 | Si el Hook de Gentle AI dice | Si en `settings.json` está como `ask` | Resultado Final (CLI) | Explicación técnica |
 |---|---|---|---|
 | **`deny`** *(Secretos / Breaker)* | `ask` o no configurado | **`deny` (Bloqueo total)** | Precedencia de corte absoluto. Se aborta sin consultar al usuario. |
 | **`force_ask`** *(Comandos destructivos)* | `allow` o `ask` | **`force_ask` (Confirmación obligatoria)** | Anula cualquier caché o `allow` previo. El usuario debe confirmar en pantalla. |
-| **`ask`** *(Comando estándar)* | `"command(cmd)"` en `allow` | **`allow` (Ejecución directa)** | Antigravity consulta `settings.json` y ejecuta sin interrumpir al usuario. |
-| **`ask`** *(Comando estándar)* | No en `allow` (postura `ask`) | **`ask` (Prompt interactivo)** | Antigravity solicita autorización interactiva (*Allow Once / Always Allow / Deny*). |
+| **`ask`** *(Comando estándar)* | `"command(cmd)"` en `allow` | **`allow` (Ejecución directa)** | `agy` consulta `settings.json` y ejecuta sin interrumpir al usuario. |
+| **`ask`** *(Comando estándar)* | No en `allow` (postura `ask`) | **`ask` (Prompt interactivo)** | `agy` solicita autorización interactiva (*Allow Once / Always Allow / Deny*). |
 | **`allow`** *(Archivos estándar sandbox)* | `ask` o no configurado | **`allow` (Ejecución directa)** | El `"allow"` del hook actúa como autorización del plugin para herramientas legítimas de archivo. |
 
 ### Diagrama de Flujo de Evaluación de Permisos
@@ -228,7 +228,7 @@ flowchart TD
     CheckDestructive -- "Sí" --> HookForceAsk["Retorna: force_ask<br/>(Confirmación obligatoria)"]
     CheckDestructive -- "No" --> CheckToolType{"¿Es comando de terminal?<br/>(run_command)"}
 
-    CheckToolType -- "Sí" --> HookAsk["Retorna: ask<br/>(Delegación a Antigravity)"]
+    CheckToolType -- "Sí" --> HookAsk["Retorna: ask<br/>(Delegación a agy)"]
     CheckToolType -- "No (archivos normales)" --> HookAllow["Retorna: allow<br/>(Sandbox legítimo)"]
 
     HookDenyBreaker --> CLIAbort["CLI: Aborta Tool Call de inmediato"]

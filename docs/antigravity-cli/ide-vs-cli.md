@@ -19,7 +19,7 @@ En Gentle AI upstream se diseñó un único adaptador denominado `antigravity` q
 - **Limitaciones graves en terminal**: Al tratar a la terminal como si fuera un editor tradicional, **no incluye subagentes**, no aprovecha el sistema modular de plugins de `agy`, no implementa hooks de seguridad ni ciclo de vida, carece de barra de estado nativa y **no soporta revisiones formales bajo RDD** (`transport: nil`).
 
 ### Nuestro Adaptador Dedicado (`--agent antigravity-cli`)
-Diseñamos un adaptador desacoplado y especializado para **Antigravity CLI (`agy`)**:
+Diseñamos un adaptador desacoplado y especializado para `agy`:
 - Despliega un **plugin nativo y completo** (`plugin.json`, `rules/`, `agents/`, `skills/`, `hooks.json`).
 - Provee **10 subagentes nativos** en formato Markdown listos para delegación en terminal.
 - Implementa **5 hooks de ciclo de vida** con protecciones en memoria contra lectura de secretos (`.env`) y advertencias ante comandos destructivos.
@@ -49,7 +49,7 @@ Diseñamos un adaptador desacoplado y especializado para **Antigravity CLI (`agy
 
 Un error frecuente es suponer que se pueden instalar ambos adaptadores en la misma máquina. **Esto no es posible y generará conflictos**:
 
-1. **Colisión en Antigravity CLI:** El adaptador de upstream escribe archivos en `~/.gemini/antigravity-cli/skills/` y `~/.gemini/antigravity-cli/settings.json`, mientras que nuestro adaptador despliega el plugin en `~/.gemini/config/plugins/gentle-ai/`.
+1. **Colisión en `agy`:** El adaptador de upstream escribe archivos en `~/.gemini/antigravity-cli/skills/` y `~/.gemini/antigravity-cli/settings.json`, mientras que nuestro adaptador despliega el plugin en `~/.gemini/config/plugins/gentle-ai/`.
 2. **Duplicación de habilidades:** Al iniciar `agy`, la terminal descubriría skills duplicadas con el mismo nombre y directivas superpuestas.
 3. **Incompatibilidad de configuraciones:** Ambas integraciones intentarían gobernar las opciones de terminal de Antigravity simultáneamente.
 
@@ -60,6 +60,6 @@ Un error frecuente es suponer que se pueden instalar ambos adaptadores en la mis
 # 1. Desinstalar el adaptador genérico de upstream:
 gentle-ai uninstall --agent antigravity
 
-# 2. Instalar el adaptador dedicado de Antigravity CLI:
+# 2. Instalar el adaptador dedicado de agy (`antigravity-cli`):
 gentle-ai install --agent antigravity-cli --scope global
 ```

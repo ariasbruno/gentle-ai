@@ -32,7 +32,7 @@ flowchart TD
         Bin["Binario gentle-ai"]
     end
 
-    subgraph Target["4. Despliegue en Antigravity CLI"]
+    subgraph Target["4. Despliegue en agy"]
         Deploy["gentle-ai install / sync<br/>(Atomic write + pruning)"]
         FS["Directorio de plugin en filesystem<br/>• ~/.gemini/config/plugins/gentle-ai/ (Global)<br/>• &lt;repo&gt;/.agents/plugins/gentle-ai/ (Workspace)"]
         AGY["Cliente agy (Runtime)"]
@@ -127,7 +127,7 @@ Gentle AI provee una statusline interactiva y de alto rendimiento renderizada di
 
 ## 5. Comparativa de Componentes Compartidos vs Específicos
 
-| Componente | Compartido con otros agentes | Específico de Antigravity CLI (`agy`) |
+| Componente | Compartido con otros agentes | Específico de `agy` |
 |---|---|---|
 | **StatusLine e Interfaz** | Estilo visual y tokens de color | Ejecución in-process en Go con payload JSON vía stdin |
 | **Contratos de Revisión** | Esquemas y roles 4R definidos en Go | Traducción a frontmatter y tools nativas de `agy` |

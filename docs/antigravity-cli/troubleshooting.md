@@ -1,6 +1,6 @@
 # Resolución de Problemas y Diagnóstico (Troubleshooting)
 
-Esta guía te ayuda a diagnosticar y solucionar rápidamente cualquier inconveniente común con la integración de Antigravity CLI (`agy`) y Gentle AI.
+Esta guía te ayuda a diagnosticar y solucionar rápidamente cualquier inconveniente común con la integración de `agy` y Gentle AI.
 
 ---
 
@@ -14,7 +14,7 @@ gentle-ai doctor
 ```
 
 ### Validación Estricta del Plugin
-Verificá que el plugin instalado cumpla con las especificaciones del validador de Antigravity CLI:
+Verificá que el plugin instalado cumpla con las especificaciones del validador de `agy`:
 
 ```bash
 # Para instalación global:

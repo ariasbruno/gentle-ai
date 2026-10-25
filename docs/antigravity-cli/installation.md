@@ -81,7 +81,7 @@ En upstream existía un adaptador genérico llamado `antigravity` que intentaba 
 > [!WARNING]
 > **No es posible usar ambas integraciones al mismo tiempo:** Ambos adaptadores configuran el entorno de Antigravity en tu máquina. Mantener los dos activos provocaría duplicación de skills, configuraciones redundantes y colisiones en la terminal. **Debés elegir uno u otro.**
 
-- **Para migrar al adaptador de Antigravity CLI:**
+- **Para migrar al adaptador de agy (`antigravity-cli`):**
   Desinstalá primero el adaptador genérico e instalá el adaptador dedicado:
   ```bash
   gentle-ai uninstall --agent antigravity
@@ -147,7 +147,7 @@ Gentle AI nunca ensucia tu árbol de trabajo:
 
 Podés validar el estado de la integración mediante dos verificaciones complementarias:
 
-1. **Validación del Plugin de Antigravity CLI (Mandatoria):**
+1. **Validación del Plugin en agy (Mandatoria):**
    Comprobá que el plugin cumpla al 100% con las especificaciones oficiales de `agy`:
    ```bash
    agy plugin validate --strict ~/.gemini/config/plugins/gentle-ai

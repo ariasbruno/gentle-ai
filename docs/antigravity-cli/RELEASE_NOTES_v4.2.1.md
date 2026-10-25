@@ -96,6 +96,6 @@ sha256sum --check --strict --ignore-missing checksums.txt
 ---
 
 ## 📚 Documentación Completa
-- [Guía de Arquitectura de Antigravity CLI](https://github.com/ariasbruno/gentle-ai/blob/agy/ai-v4.2.0_shell-v4.3.0/docs/antigravity-cli/README.md)
+- [Guía de Arquitectura de agy (Antigravity CLI)](https://github.com/ariasbruno/gentle-ai/blob/agy/ai-v4.2.0_shell-v4.3.0/docs/antigravity-cli/README.md)
 - [Mapa Técnico y Mecánica Interna](https://github.com/ariasbruno/gentle-ai/blob/agy/ai-v4.2.0_shell-v4.3.0/docs/antigravity-cli/SUMMARY.md)
 - [Registro de Decisiones Arquitectónicas](https://github.com/ariasbruno/gentle-ai/blob/agy/ai-v4.2.0_shell-v4.3.0/docs/antigravity-cli/08-decisions.md)

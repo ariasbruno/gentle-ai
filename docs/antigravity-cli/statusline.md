@@ -1,6 +1,6 @@
 # StatusLine y Experiencia de Terminal
 
-Gentle AI provee una barra de estado dinámica y de alto rendimiento renderizada directamente en Go in-process (`gentle-ai statusline`) y un título de ventana (`gentle-ai statusline --title`) diseñado específicamente para la interfaz de Antigravity CLI (`agy`).
+Gentle AI provee una barra de estado dinámica y de alto rendimiento renderizada directamente en Go in-process (`gentle-ai statusline`) y un título de ventana (`gentle-ai statusline --title`) diseñado específicamente para la interfaz de `agy`.
 
 ---
 

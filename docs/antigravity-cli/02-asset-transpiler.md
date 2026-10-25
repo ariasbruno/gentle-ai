@@ -96,7 +96,7 @@ La página oficial [Agents](https://antigravity.google/docs/cli/commands/agents/
 
 Dado que `agy` no ejecuta el runtime TypeScript de Pi ni sus extensiones propietarias, el transpilador aplica mutaciones específicas para adaptar las directivas a las capacidades reales de `agy`:
 
-| Directiva en Gentle Shell (Pi) | Adaptación para Antigravity CLI | Motivo técnico |
+| Directiva en Gentle Shell (Pi) | Adaptación para `agy` | Motivo técnico |
 |---|---|---|
 | `subagent_run` en background | `invoke_subagent` / `send_message` | `agy` ejecuta subagentes mediante su sistema nativo de mensajería interactiva |
 | Menús interactivos `ask_user_choice` | `ask_question` nativo | Se mapea al modal de preguntas nativo de `agy` |

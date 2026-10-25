@@ -1,4 +1,4 @@
-# Native instruction modules in Antigravity CLI
+# Native instruction modules in `agy`
 
 The plugin keeps persona and mandatory orchestration separate from conditional procedures. Native rule discovery helps select procedures; it does not replace explicit phase loading or make ODD, applicable test-first development, or provider-owned RDD optional.
 

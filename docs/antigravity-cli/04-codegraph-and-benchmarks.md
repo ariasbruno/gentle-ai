@@ -1,6 +1,6 @@
 # 4. Integración MCP, CodeGraph y validación de ciclo de vida
 
-**La integración MCP conecta a Antigravity CLI con herramientas especializadas de desarrollo.** Gentle AI gestiona la configuración de servidores MCP como CodeGraph (análisis de grafos de código), Engram (memoria persistente) y Context7 (documentación), garantizando persistencia atómica e idempotencia. Asimismo, el módulo de benchmarks (`j4500`) valida el ciclo de vida de instalación y desinstalación de forma hermética y reproducible.
+**La integración MCP conecta a `agy` con herramientas especializadas de desarrollo.** Gentle AI gestiona la configuración de servidores MCP como CodeGraph (análisis de grafos de código), Engram (memoria persistente) y Context7 (documentación), garantizando persistencia atómica e idempotencia. Asimismo, el módulo de benchmarks (`j4500`) valida el ciclo de vida de instalación y desinstalación de forma hermética y reproducible.
 
 [Índice](README.md) · [Orquestación](03-orchestration-and-hooks.md) · [Transporte RDD](05-review-transport.md)
 
@@ -32,11 +32,11 @@ Fuentes: [`engramOverlayJSON`](../../internal/components/engram/inject.go#L102-L
 
 ## Reconciliación y persistencia atómica de CodeGraph
 
-Para asegurar que CodeGraph esté siempre disponible cuando Antigravity CLI está seleccionado, el reconciliador de Gentle AI gestiona `mcp_config.json` respetando las configuraciones preexistentes:
+Para asegurar que CodeGraph esté siempre disponible cuando `agy` está seleccionado, el reconciliador de Gentle AI gestiona `mcp_config.json` respetando las configuraciones preexistentes:
 
 ```text
-Antigravity CLI no seleccionado ─────────────► No reconciliar
-Antigravity CLI seleccionado:
+agy no seleccionado ─────────────────────────► No reconciliar
+agy seleccionado:
   ├── Archivo ya cuenta con wiring canónico ──► Sin cambios (idempotente)
   ├── Archivo con JSON válido no canónico ────► Preservar otros servidores y hacer upsert de codegraph
   └── Archivo ausente o malformado ───────────► Generar documento canónico nuevo
@@ -91,7 +91,7 @@ Entorno aislado (Fixture)
 Para garantizar reproducibilidad absoluta en cualquier entorno de CI o local:
 - **Sandbox aislado:** Crea un directorio temporal con un PATH controlado y sin acceso al entorno global del usuario.
 - **Mock de runtime `agy`:** Simula los subcomandos de `agy` (como `plugin install` y validaciones de manifiesto).
-- **Canario de coexistencia con el IDE:** Coloca un archivo de configuración testigo en `.config/antigravity/settings.json` y valida que la desinstalación del CLI jamás altere la configuración del entorno de escritorio.
+- **Canario de coexistencia con el IDE:** Coloca un archivo de configuración testigo en `.config/antigravity/settings.json` y valida que la desinstalación de `agy` jamás altere la configuración del entorno de escritorio.
 
 ### Estructura de pruebas del proyecto
 

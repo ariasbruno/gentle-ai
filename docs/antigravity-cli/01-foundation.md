@@ -6,7 +6,7 @@
 
 ## Identidad y detección del agente
 
-El adaptador [`antigravitycli`](../../internal/agents/antigravitycli/adapter.go) implementa el soporte para Google Antigravity CLI bajo el identificador `antigravity-cli` (`model.AgentAntigravityCLI`):
+El adaptador [`antigravitycli`](../../internal/agents/antigravitycli/adapter.go) implementa el soporte para `agy` (Antigravity CLI) bajo el identificador `antigravity-cli` (`model.AgentAntigravityCLI`):
 
 - **Detección del binario:** Busca `agy` en las rutas del sistema mediante `exec.LookPath("agy")`.
 - **Detección de configuración:** Comprueba la existencia del directorio de configuración global en `~/.gemini/antigravity-cli/`.
@@ -59,7 +59,7 @@ Las rutas y mappings pertenecen a [`PluginDir`, `BundleAssets`, `SubAgentsDir`](
 
 ### 3. Rutas de plugins según la especificación de agy
 
-Antigravity CLI reconoce dos ubicaciones oficiales para plugins:
+`agy` reconoce dos ubicaciones oficiales para plugins:
 - **Global:** `~/.gemini/config/plugins/<nombre>` (gestionado con registro en `~/.gemini/config/import_manifest.json`).
 - **Por proyecto (Workspace):** `<workspace>/.agents/plugins/<nombre>` (descubierto automáticamente por `agy` al ejecutarse en el proyecto).
 
@@ -192,7 +192,7 @@ No hace falta inspeccionar carpetas a mano. Podés validar la instalación direc
 
 ## Permisos: guardias dinámicas in-process sin mutar settings.json
 
-A diferencia de otros agentes, Gentle AI **no inyecta overlays estáticos en `settings.json` para Antigravity CLI** ([`internal/components/permissions/inject.go#L172-L176`](../../internal/components/permissions/inject.go#L172-L176) devuelve `nil`). Esto preserva intacta la configuración del usuario y evita dependencias de mutación de archivos de configuración globales.
+A diferencia de otros agentes, Gentle AI **no inyecta overlays estáticos en `settings.json` para `agy`** ([`internal/components/permissions/inject.go#L172-L176`](../../internal/components/permissions/inject.go#L172-L176) devuelve `nil`). Esto preserva intacta la configuración del usuario y evita dependencias de mutación de archivos de configuración globales.
 
 En su lugar, toda la seguridad preventiva se evalúa **dinámicamente in-process** en cada llamada a través del hook `PreToolUse` ([`handleAntigravityPreToolUse`](../../internal/cli/antigravity_hook.go#L921-L1017)):
 
@@ -248,10 +248,10 @@ La línea sigue el orden y las prioridades fijadas con el usuario: **pétalo est
 ## CLI frente a IDE
 
 Gentle AI ofrece dos integraciones distintas para el ecosistema de Antigravity:
-- **Antigravity CLI (`agy`):** Despliega el plugin completo con reglas, subagentes nativos, MCP servers y revisión RDD vía subproceso Go.
+- **`agy`:** Despliega el plugin completo con reglas, subagentes nativos, MCP servers y revisión RDD vía subproceso Go.
 - **Antigravity IDE:** Configura directivas a través de archivos de contexto como `GEMINI.md` en el workspace.
 
-Para una comparación detallada entre ambos enfoques, consultá [El Ecosistema Antigravity: IDE, 2.0 y CLI](ide-vs-cli.md).
+Para una comparación detallada entre ambos enfoques, consultá [El Ecosistema Antigravity: IDE, App (2.0) y CLI](ide-vs-cli.md).
 
 ---
 

@@ -1,12 +1,12 @@
-# Seguridad, Jerarquías y Políticas de Sandbox en Antigravity CLI
+# Seguridad, Jerarquías y Políticas de Sandbox en agy
 
-La integración de Antigravity CLI (`agy`) en Gentle AI implementa un modelo de defensa en profundidad diseñado para proteger tus credenciales, prevenir la ejecución accidental de comandos destructivos y mantener la higiene total de tu repositorio.
+La integración de `agy` en Gentle AI implementa un modelo de defensa en profundidad diseñado para proteger tus credenciales, prevenir la ejecución accidental de comandos destructivos y mantener la higiene total de tu repositorio.
 
 ---
 
-## 1. Jerarquía de Reglas y Configuración en Antigravity
+## 1. Jerarquía de Reglas y Configuración en agy
 
-Antigravity CLI utiliza un sistema acumulativo de directivas donde conviven reglas en distintos niveles del sistema. Para evitar comportamientos inesperados, es fundamental comprender cómo se ordenan y qué precedencia tienen:
+`agy` utiliza un sistema acumulativo de directivas donde conviven reglas en distintos niveles del sistema. Para evitar comportamientos inesperados, es fundamental comprender cómo se ordenan y qué precedencia tienen:
 
 ```mermaid
 graph TD
@@ -69,9 +69,9 @@ Si un comando de terminal contiene operaciones peligrosas como:
 - `git reset --hard`, `git clean -fd`, `git push --force`
 - `chmod -R 777`, `chown -R`
 
-El hook responde con **`force_ask`**. Esto obliga a Antigravity CLI a solicitar una confirmación explícita e interactiva en la pantalla del usuario, **ignorando cualquier caché previa o regla permisiva en `settings.json`**.
+El hook responde con **`force_ask`**. Esto obliga a `agy` a solicitar una confirmación explícita e interactiva en la pantalla del usuario, **ignorando cualquier caché previa o regla permisiva en `settings.json`**.
 
-### Capa 3: Motor Nativo de Permisos de Antigravity CLI (`ask` / `allow`)
+### Capa 3: Motor Nativo de Permisos de `agy` (`ask` / `allow`)
 Para comandos normales y herramientas dentro del workspace:
 - Si el comando ya fue autorizado por el usuario en `~/.gemini/antigravity-cli/settings.json` (`permissions.allow`), se ejecuta con normalidad (`allow`).
 - Si es la primera vez que se ejecuta, `agy` delega en el usuario mediante una consulta interactiva en terminal (`ask`).

@@ -99,9 +99,9 @@ En Gentle AI upstream existe un único adaptador genérico llamado `antigravity`
 - Mezcla rutas entre `antigravity-desktop` y `antigravity-cli`, intentando escribir configuraciones en ambos sitios.
 
 ### Nuestra solución: Adaptador especializado para CLI
-En lugar de forzar a la terminal a conformarse con un prompt plano, creamos el adaptador dedicado **`antigravity-cli`** (`model.AgentAntigravityCLI`). Este adaptador explota **el 100% de las posibilidades que Antigravity CLI ofrece como runtime moderno de agentes** (plugins nativos, 10 subagentes en Markdown, 5 hooks de ciclo de vida, statusline en Go y transporte RDD sandboxed).
+En lugar de forzar a la terminal a conformarse con un prompt plano, creamos el adaptador dedicado **`antigravity-cli`** (`model.AgentAntigravityCLI`). Este adaptador explota **el 100% de las posibilidades que `agy` ofrece como runtime moderno de agentes** (plugins nativos, 10 subagentes en Markdown, 5 hooks de ciclo de vida, statusline en Go y transporte RDD sandboxed).
 
-*(Nuestra integración se enfoca en Antigravity CLI, pero como se indicó, es posiblemente compatible también con Antigravity IDE y Antigravity App (2.0), aunque no está certificado).*
+*(Este fork se enfoca en la integración de Gentle AI en `agy`, pero como se indicó, es posiblemente compatible también con el resto del ecosistema `antigravity` (IDE y App/2.0), aunque no está certificado).*
 
 ### Cuadro Comparativo de Enfoques
 
@@ -203,7 +203,7 @@ flowchart TD
         ExcludeFS["Exclusiones Git<br/>.git/info/exclude"]
     end
 
-    subgraph Runtime["4. Ejecución en Antigravity CLI"]
+    subgraph Runtime["4. Ejecución en agy"]
         AGY["Runtime agy"]
     end
 
@@ -225,13 +225,13 @@ flowchart TD
 ---
 
 ### Diagrama 2: Ciclo de Vida de una Sesión con Hooks y RDD
-Durante una sesión interactiva, los hooks de Antigravity CLI colaboran con el motor en Go para auditar mutaciones, proteger archivos sensibles y exigir revisiones antes de cerrar cambios de alto riesgo:
+Durante una sesión interactiva, los hooks de `agy` colaboran con el motor en Go para auditar mutaciones, proteger archivos sensibles y exigir revisiones antes de cerrar cambios de alto riesgo:
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Dev as Desarrollador
-    participant AGY as Antigravity CLI (agy)
+    participant AGY as agy (Terminal Runtime)
     participant HookPre as Hook PreInvocation
     participant HookPreTool as Hook PreToolUse
     participant Orch as Orquestador Gentle AI
@@ -298,7 +298,7 @@ La documentación se organiza según la audiencia y el objetivo técnico:
 - [**StatusLine y Experiencia de Terminal (statusline.md)**](statusline.md): Explicación de cada segmento, atajos de teclado, cuotas de modelos y auto-silenciado.
 - [**Seguridad, Jerarquías y Sandbox (security-and-sandbox.md)**](security-and-sandbox.md): Confinamiento del sandbox, capas de jerarquía, prevención de lectura de secretos (`.env`) e higiene con `.git/info/exclude`.
 - [**Resolución de Problemas (troubleshooting.md)**](troubleshooting.md): Diagnóstico rápido con `gentle-ai doctor` y respuestas a preguntas frecuentes.
-- [**El Ecosistema Antigravity: IDE, 2.0 y CLI (ide-vs-cli.md)**](ide-vs-cli.md): Explicación del ecosistema, diferencias entre el adaptador genérico y el dedicado, y por qué no usarlos a la vez.
+- [**El Ecosistema Antigravity: IDE, App (2.0) y CLI (ide-vs-cli.md)**](ide-vs-cli.md): Explicación del ecosistema, diferencias entre el adaptador genérico y el dedicado, y por qué no usarlos a la vez.
 
 ### 🏛️ Para Mantenedores de Upstream y Auditoría Técnica
 - [**Propuesta de Integración Upstream (propuesta-upstream.md)**](propuesta-upstream.md): Documento técnico para el equipo de Gentle AI justificando el desacople de CLI e IDE, arquitectura de assets, drift gate determinista y ausencia de regresiones.

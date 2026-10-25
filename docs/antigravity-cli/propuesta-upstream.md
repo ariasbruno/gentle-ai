@@ -20,7 +20,7 @@ Esta integración desacopla la experiencia de terminal mediante un adaptador esp
 4. **Puente de Hooks y Seguridad**: Intercepción en memoria (`PreToolUse`) para bloquear lectura de secretos (`.env*`, `.ssh`), circuit breaker anti-bucles y recordatorio de cierre (`Stop`).
 5. **StatusLine In-Process de Alto Rendimiento**: Barra de estado nativa en Go ejecutada por stdin con latencia menor a 5 ms y auto-silenciado si el plugin está inactivo.
 6. **Cero Regresiones**: El código añadido es puramente aditivo o condicional a `AgentAntigravityCLI`, sin romper ningún otro cliente ni la integración preexistente de upstream.
-7. **Compatibilidad con el Ecosistema**: Centrada y verificada en Antigravity CLI (`agy`), y potencialmente compatible con Antigravity IDE y Antigravity App (2.0) (al compartir la infraestructura base de Gemini/Antigravity, aunque no está certificado).
+7. **Compatibilidad con el Ecosistema**: Centrada y verificada en `agy`, y potencialmente compatible con el resto del ecosistema `antigravity` (IDE y App (2.0)), aunque no está certificado.
 
 ---
 
@@ -33,7 +33,7 @@ El adaptador genérico heredado `antigravity` intentó agrupar IDE, App (2.0) y 
 - No gestiona hooks ni statuslines de terminal.
 - Genera riesgos de colisión de rutas al escribir en `~/.gemini/antigravity-cli/skills` y `GEMINI.md` simultáneamente.
 
-Antigravity CLI (`agy`) es un runtime moderno de agentes para terminal, capaz de descubrir plugins modulares, ejecutar herramientas con control de permisos y correr procesos confinados. Intentar conciliar las necesidades de una terminal autónoma con un enfoque pasivo de editor degrada la experiencia del desarrollador en terminal.
+`agy` es un runtime moderno de agentes para terminal, capaz de descubrir plugins modulares, ejecutar herramientas con control de permisos y correr procesos confinados. Intentar conciliar las necesidades de una terminal autónoma con un enfoque pasivo de editor degrada la experiencia del desarrollador en terminal.
 
 La solución arquitectónica correcta es mantener el adaptador genérico para entornos pasivos y proveer el adaptador especializado `antigravity-cli` para el runtime de terminal `agy`.
 
@@ -43,9 +43,9 @@ La solución arquitectónica correcta es mantener el adaptador genérico para en
 
 ```mermaid
 graph TD
-    User["Terminal del Desarrollador"] --> AGY["Antigravity CLI (agy)"]
+    User["Terminal del Desarrollador"] --> AGY["Runtime agy"]
     
-    subgraph Runtime_AGY ["Entorno Antigravity CLI"]
+    subgraph Runtime_AGY ["Entorno agy"]
         AGY --> Plugins["Plugin Loader (~/.gemini/config/plugins/gentle-ai/)"]
         Plugins --> Hooks["Hooks de Ciclo de Vida (hooks.json)"]
         Plugins --> Agents["10 Subagentes Nativos (agents/*.md)"]
@@ -69,13 +69,13 @@ graph TD
 - Preserva la higiene de Git gestionando exclusiones en `.git/info/exclude` en lugar de ensuciar el `.gitignore` del usuario.
 
 ### B. Transporte de Revisión RDD (`internal/reviewerprovider/antigravitycli_adapter.go`)
-- Implementa `reviewerprovider.Adapter` para Antigravity CLI.
+- Implementa `reviewerprovider.Adapter` para `agy`.
 - Lanza revisores en subprocesos independientes invocando `agy --sandbox` sobre un árbol Git temporal e inmutable.
 - Admisión estricta del resultado mediante validación del esquema JSON en Go.
 - Admite roles de refutación (`review-refuter`) y validación (`review-validator`) configurables en `review-models.json`.
 
 ### C. Pipeline de Assets y Drift Gate (`scripts/transpile-antigravitycli/`)
-- Transpilador determinista que convierte los assets canónicos de Gentle Shell al formato esperado por Antigravity CLI.
+- Transpilador determinista que convierte los assets canónicos de Gentle Shell al formato esperado por `agy`.
 - Gate de verificación `--check` que valida en CI byte a byte contra el commit fijado de Gentle Shell (`PROVENANCE.json`).
 - Asegura que el nombre de cada skill coincida con su directorio, cumpliendo la validación estricta oficial.
 
