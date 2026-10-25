@@ -125,19 +125,18 @@ func colorChanges(s string) string {
 const FallbackLine = "✿"
 
 // Segment tags drive the degradation cascade (S3): the survival priority is
-// petal+mode·model > tasklist > rdd > engram > git > jobs > subagents > ctx >
-// cost > quota, and dropOrder walks the exact reverse.
+// petal+mode·model > tasklist > rdd > engram > git > ctx > cost > quota,
+// and dropOrder walks the exact reverse. Jobs and subagents are omitted
+// because Antigravity CLI renders them natively above the prompt box.
 const (
-	tagPetal     = "petal"
-	tagCtx       = "ctx"
-	tagCost      = "cost"
-	tagQuota     = "quota"
-	tagJobs      = "jobs"
-	tagSubagents = "subagents"
-	tagMem       = "mem"
-	tagRDD       = "rdd"
-	tagTasklist  = "tasklist"
-	tagChanges   = "changes"
+	tagPetal    = "petal"
+	tagCtx      = "ctx"
+	tagCost     = "cost"
+	tagQuota    = "quota"
+	tagMem      = "mem"
+	tagRDD      = "rdd"
+	tagTasklist = "tasklist"
+	tagChanges  = "changes"
 )
 
 const (
@@ -150,7 +149,7 @@ const (
 	agyBoxMargin = 3
 )
 
-var dropOrder = []string{tagQuota, tagCost, tagCtx, tagSubagents, tagJobs, tagChanges, tagMem, tagRDD, tagTasklist}
+var dropOrder = []string{tagQuota, tagCost, tagCtx, tagChanges, tagMem, tagRDD, tagTasklist}
 
 type segment struct {
 	tag string
@@ -420,15 +419,10 @@ func buildSegments(p *Payload, config Config, extras Extras) []segment {
 			fmt.Sprintf("%sctx%s %s %d%%%s", ansiDim, ansiReset, paintGauge(pct, cells), pct, marker),
 			fmt.Sprintf("%sctx%s %s%d%%%s", ansiDim, ansiReset, gaugeColor(pct), pct, ansiReset))
 
-		cost := 0.0
-		if p.Cost != nil {
-			cost = *p.Cost
+		if p.Cost != nil && *p.Cost > 0 {
+			costStr := formatCost(*p.Cost)
+			segmentOf(tagCost, costStr, "")
 		}
-		costStr := formatCost(cost)
-		if cost == 0 {
-			costStr = ansiDim + costStr + ansiReset
-		}
-		segmentOf(tagCost, costStr, "")
 
 		quota := activeQuota(p)
 		family := modelFamily(p.Model.ID, p.Model.DisplayName)
@@ -453,27 +447,6 @@ func buildSegments(p *Payload, config Config, extras Extras) []segment {
 			segmentOf(tagQuota,
 				fmt.Sprintf("%s%s%s %s %d%%", ansiDim, label, ansiReset, paintGauge(used, cells), used),
 				fmt.Sprintf("%s%s%s %s%d%%%s", ansiDim, label, ansiReset, gaugeColor(used), used, ansiReset))
-		}
-	}
-
-	if config.Visibility.Agents {
-		if p.TaskCount > 0 {
-			jobsWord := "jobs"
-			if p.TaskCount == 1 {
-				jobsWord = "job"
-			}
-			segmentOf(tagJobs,
-				fmt.Sprintf("%s⧗%s %d %s", ansiEffort, ansiReset, p.TaskCount, jobsWord),
-				fmt.Sprintf("%s⧗%s %d", ansiEffort, ansiReset, p.TaskCount))
-		}
-		if count := p.SubagentCount(); count > 0 {
-			agentsWord := "subagents"
-			if count == 1 {
-				agentsWord = "subagent"
-			}
-			segmentOf(tagSubagents,
-				fmt.Sprintf("%s✦%s %d %s", ansiEffort, ansiReset, count, agentsWord),
-				fmt.Sprintf("%s✦%s %d", ansiEffort, ansiReset, count))
 		}
 	}
 

@@ -49,13 +49,13 @@ func TestRunStatusLineRendersPayload(t *testing.T) {
 	line := runStatusLineTest(t, nil, payload, home)
 	for _, want := range []string{
 		"⟡", "planning · Gemini 3.5 Pro (High)",
-		"ctx", "43%", "$0.312", "⧗ 2 jobs", "🌹 on",
+		"ctx", "43%", "$0.312", "🌹 on",
 	} {
 		if !strings.Contains(stripStatusLineANSI(line), want) {
 			t.Errorf("missing segment %q in: %s", want, line)
 		}
 	}
-	if plain := stripStatusLineANSI(line); strings.Contains(plain, "feat/login") || strings.Contains(plain, "fix login") || strings.Contains(plain, "…") {
+	if plain := stripStatusLineANSI(line); strings.Contains(plain, "feat/login") || strings.Contains(plain, "fix login") || strings.Contains(plain, "⧗") || strings.Contains(plain, "…") {
 		t.Errorf("removed segments rendered: %s", line)
 	}
 }

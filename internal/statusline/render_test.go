@@ -19,8 +19,8 @@ func defaultExtras() Extras {
 }
 
 // TestRenderFullLine pins the comfortable full line: the bare petal with the
-// mode·model block first, then ctx, cost, quota, jobs, subagents, engram,
-// rdd, and changes — and nothing that L19 removed.
+// mode·model block first, then ctx, cost, quota, engram, rdd, and changes —
+// and nothing that L19 or agy native surfaces removed.
 func TestRenderFullLine(t *testing.T) {
 	payload := mustPayload(t, `{
 		"agent_state": "working",
@@ -43,13 +43,13 @@ func TestRenderFullLine(t *testing.T) {
 	plain := stripANSI(line)
 	for _, want := range []string{
 		"planning · Gemini 3.5 Pro (High)", "ctx ", "43%", "$0.312",
-		"1d", "30%", "⧗ 2 jobs", "✦ 2 subagents", "🌹 on",
+		"1d", "30%", "🌹 on",
 	} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("missing segment %q in: %s", want, line)
 		}
 	}
-	for _, banned := range []string{"gentle ai", "feat/login", "~/", "⊘ sandbox", "vim.NORMAL", "fix login", "…"} {
+	for _, banned := range []string{"gentle ai", "feat/login", "~/", "⊘ sandbox", "vim.NORMAL", "fix login", "⧗", "✦", "…"} {
 		if strings.Contains(plain, banned) {
 			t.Errorf("removed segment %q still rendered: %s", banned, line)
 		}
@@ -145,7 +145,7 @@ func TestRenderCascade(t *testing.T) {
 
 	full := Render(payload, DefaultConfig(), extras)
 	plainFull := stripANSI(full)
-	for _, want := range []string{"7d", "$0.312", "ctx ", "⧗ 2 jobs", "✦ 2 subagents", "🧠 gentle-ai · 918", "🌹 on"} {
+	for _, want := range []string{"7d", "$0.312", "ctx ", "🧠 gentle-ai · 918", "🌹 on"} {
 		if !strings.Contains(plainFull, want) {
 			t.Fatalf("wide line missing %q: %s", want, full)
 		}
@@ -233,7 +233,6 @@ func TestRenderVisibilityHiding(t *testing.T) {
 	}{
 		{"modelDetails", func(c *Config) { c.Visibility.ModelDetails = false }, []string{"Gemini 3.5 Pro"}},
 		{"usageCost", func(c *Config) { c.Visibility.UsageCost = false }, []string{"ctx", "$0.312", "1d0h"}},
-		{"agents", func(c *Config) { c.Visibility.Agents = false }, []string{"⧗ 2 jobs"}},
 	}
 	for _, testCase := range cases {
 		config := DefaultConfig()
@@ -628,7 +627,7 @@ func TestRenderVisualHierarchy(t *testing.T) {
 	payload := mustPayload(t, `{
 		"model": {"display_name": "Gemini 3.8 Flash (High)", "effort": "high"},
 		"context_window": {"used_percentage": 25.0},
-		"cost": 0.0,
+		"cost": 0.312,
 		"quota": {"gemini-daily": {"remaining_fraction": 0.5, "reset_in_seconds": 3600}},
 		"task_count": 1,
 		"subagents": [{"name": "sub1"}],
@@ -664,9 +663,9 @@ func TestRenderVisualHierarchy(t *testing.T) {
 		t.Errorf("quota label not in dim: %s", line)
 	}
 
-	// 4. Zero cost in dim
-	if !strings.Contains(line, ansiDim+"$0.000"+ansiReset) {
-		t.Errorf("zero cost not in dim: %s", line)
+	// 4. Positive cost rendered
+	if !strings.Contains(line, "$0.312") {
+		t.Errorf("cost missing: %s", line)
 	}
 
 	// 5. RDD on in accent
@@ -689,12 +688,9 @@ func TestRenderVisualHierarchy(t *testing.T) {
 		t.Errorf("git changes colors missing: %s", line)
 	}
 
-	// 8. Glyph styling for jobs and subagents
-	if !strings.Contains(line, ansiEffort+"⧗"+ansiReset+" 1 job") {
-		t.Errorf("jobs glyph not in effort color: %s", line)
-	}
-	if !strings.Contains(line, ansiEffort+"✦"+ansiReset+" 1 subagent") {
-		t.Errorf("subagents glyph not in effort color: %s", line)
+	// 8. Jobs and subagents are excluded from the statusline (rendered natively by agy)
+	if strings.Contains(line, "⧗") || strings.Contains(line, "✦") {
+		t.Errorf("jobs or subagents unexpectedly present: %s", line)
 	}
 }
 
@@ -773,3 +769,60 @@ func TestRenderShortcutsRightAligned(t *testing.T) {
 		t.Errorf("disabled shortcuts should not pad to width 120: got %d", got)
 	}
 }
+
+func TestRenderZeroCostHidden(t *testing.T) {
+	// Zero cost must NOT be rendered.
+	pZero := mustPayload(t, `{
+		"model": {"display_name": "Gemini 3.8 Flash"},
+		"context_window": {"used_percentage": 25.0},
+		"cost": 0.0,
+		"terminal_width": 120
+	}`)
+	lineZero := Render(pZero, DefaultConfig(), Extras{})
+	if strings.Contains(lineZero, "$0.000") || strings.Contains(lineZero, "$0.00") {
+		t.Errorf("zero cost ($0.000) should be hidden, got: %s", lineZero)
+	}
+
+	// Missing/nil cost must NOT be rendered.
+	pNil := mustPayload(t, `{
+		"model": {"display_name": "Gemini 3.8 Flash"},
+		"context_window": {"used_percentage": 25.0},
+		"terminal_width": 120
+	}`)
+	lineNil := Render(pNil, DefaultConfig(), Extras{})
+	if strings.Contains(lineNil, "$0.000") || strings.Contains(lineNil, "$0.00") {
+		t.Errorf("nil cost ($0.000) should be hidden, got: %s", lineNil)
+	}
+
+	// Positive cost (>0) MUST be rendered.
+	pPositive := mustPayload(t, `{
+		"model": {"display_name": "Gemini 3.8 Flash"},
+		"context_window": {"used_percentage": 25.0},
+		"cost": 0.312,
+		"terminal_width": 120
+	}`)
+	linePositive := Render(pPositive, DefaultConfig(), Extras{})
+	if !strings.Contains(linePositive, "$0.312") {
+		t.Errorf("positive cost $0.312 should be rendered, got: %s", linePositive)
+	}
+}
+
+func TestRenderJobsAndSubagentsExcluded(t *testing.T) {
+	// Even with task_count > 0 and subagents present, they must not be rendered
+	// because agy displays them natively above the input box.
+	p := mustPayload(t, `{
+		"model": {"display_name": "Gemini 3.8 Flash"},
+		"task_count": 3,
+		"subagents": [{"name": "researcher"}, {"name": "worker"}],
+		"terminal_width": 120
+	}`)
+	line := Render(p, DefaultConfig(), Extras{})
+	plain := stripANSI(line)
+	if strings.Contains(plain, "job") || strings.Contains(plain, "⧗") {
+		t.Errorf("jobs segment should not be rendered in statusline, got: %s", line)
+	}
+	if strings.Contains(plain, "subagent") || strings.Contains(plain, "✦") {
+		t.Errorf("subagents segment should not be rendered in statusline, got: %s", line)
+	}
+}
+
