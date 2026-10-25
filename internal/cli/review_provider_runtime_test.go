@@ -16,7 +16,7 @@ func TestReviewProviderAdapterWithRoutingAntigravityCLI(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	dir := filepath.Join(home, ".gemini", "antigravity-cli", "gentle-ai")
+	dir := filepath.Join(home, ".gemini", "config", "plugins", "gentle-ai")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestReviewProviderAdapterWithRoutingCanonicalKeys(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	dir := filepath.Join(home, ".gemini", "antigravity-cli", "gentle-ai")
+	dir := filepath.Join(home, ".gemini", "config", "plugins", "gentle-ai")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestReviewProviderAdapterWithRoutingMissingKeyDiagnostic(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	dir := filepath.Join(home, ".gemini", "antigravity-cli", "gentle-ai")
+	dir := filepath.Join(home, ".gemini", "config", "plugins", "gentle-ai")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
