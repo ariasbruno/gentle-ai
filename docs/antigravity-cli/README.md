@@ -46,37 +46,75 @@ Elegí el alcance según tu flujo de trabajo (consultá la [Guía de Instalació
 
 *(Opcional: Si querés que además configure la StatusLine y el título dinámico en `settings.json`, sumá el flag `--include-theme` a los comandos anteriores).*
 
-### Paso 4: Verificación inmediata del estado
-```bash
-# Diagnóstico integral del sistema y servidores MCP
-gentle-ai doctor
+*(Nota: el comando `gentle-ai sync` no hace falta al instalar; solo se utiliza después, en el día a día, si actualizás el binario y querés refrescar el plugin).*
 
-# Validación estricta mediante el validador oficial de Antigravity CLI
-agy plugin validate --strict ~/.gemini/config/plugins/gentle-ai
-```
+#### ¿Venías usando la integración genérica de Antigravity? (Migración obligatoria)
+En upstream existe un adaptador genérico llamado `antigravity` que intentaba abarcar todo el ecosistema (IDE, 2.0 y CLI) escribiendo configuración tanto en `.gemini/antigravity-cli/` como en `GEMINI.md`.
+
+> [!WARNING]
+> **No es posible usar ambas integraciones al mismo tiempo:** Ambos adaptadores configuran el entorno de Antigravity en tu máquina. Mantener los dos activos provocaría duplicación de skills, configuraciones redundantes y colisiones en la terminal. **Debés elegir uno u otro.**
+
+- **Para migrar al adaptador de Antigravity CLI:**
+  Desinstalá primero el adaptador genérico e instalá el adaptador dedicado:
+  ```bash
+  gentle-ai uninstall --agent antigravity
+  gentle-ai install --agent antigravity-cli --scope global
+  ```
+
+> [!NOTE]
+> **Compatibilidad con Antigravity IDE y Antigravity 2.0:** Esta integración está centrada, optimizada y verificada en **Antigravity CLI (`agy`)**. Sin embargo, debido a que Antigravity IDE y Antigravity 2.0 comparten gran parte de la infraestructura base de Antigravity, esta integración es **posiblemente compatible con Antigravity IDE y Antigravity 2.0**, aunque esto **no ha sido probado oficialmente aún**.
+
+### Paso 4: Verificación de la instalación
+
+1. **Validar el plugin de Antigravity CLI (Mandatorio):**
+   Comprobá que el plugin cumpla al 100% las especificaciones oficiales de `agy`:
+   ```bash
+   agy plugin validate --strict ~/.gemini/config/plugins/gentle-ai
+   ```
+   *(Verifica manifiestos, esquemas, los 10 subagentes, skills y hooks con 0 errores y 0 warnings).*
+
+2. **Diagnóstico general de Gentle AI (Opcional):**
+   ```bash
+   gentle-ai doctor
+   ```
+   *(Comprueba herramientas del sistema, espacio en disco y conectividad con la memoria persistente Engram).*
 
 ---
 
-## 2. ¿Por qué existe esta integración? (La Realidad vs Upstream)
+## 2. El Ecosistema Antigravity y la Necesidad de un Adaptador Dedicado
 
-En upstream Gentle AI existe un único adaptador genérico llamado `antigravity` que comete el error de intentar abarcar **tres entornos completamente distintos (Antigravity CLI, Antigravity 2.0 y Antigravity IDE) en una sola bolsa**:
+El ecosistema de Google Antigravity engloba tres entornos con necesidades operativas distintas:
 
-- **El problema de upstream**: Trata a Antigravity como si fuera un editor desktop tradicional. Concatena un único prompt plano en `.gemini/GEMINI.md`, **no provee subagentes** (`SubAgentsDir` está vacío en el código), **carece de transporte RDD** (los usuarios de Antigravity no pueden ejecutar revisiones Receipt-Driven Development), no utiliza el sistema oficial de plugins de `agy`, no implementa hooks de ciclo de vida, no ofrece statusline nativa, no soporta aislamiento por workspace en `.agents/`, y mezcla rutas entre `.gemini/antigravity-desktop` y `.gemini/antigravity-cli`, provocando colisiones.
-- **Solución**: Un adaptador dedicado y desacoplado (`model.AgentAntigravityCLI`). En lugar de emparchar las diferencias con el IDE, explota **el 100% de las posibilidades que Antigravity CLI ofrece como runtime moderno de agentes**.
+1. **Antigravity IDE**: El entorno gráfico y visual de escritorio para edición asistida.
+2. **Antigravity 2.0**: Nueva generación del entorno con enfoque agentico.
+3. **Antigravity CLI (`agy`)**: El runtime de terminal headless para agentes autónomos.
 
-### Cuadro Comparativo: Upstream (Antigravity) vs Este Fork (Antigravity CLI)
+### La problemática del enfoque genérico de upstream
+En Gentle AI upstream existe un único adaptador genérico llamado `antigravity` que intentó abarcar estos tres entornos en una sola bolsa:
+- Trata a la terminal como si fuera un editor pasivo: concatena directivas en un único archivo plano (`.gemini/GEMINI.md`), sin aprovechar el sistema de plugins estructurado de `agy`.
+- **No provee subagentes** (`SubAgentsDir` queda vacío), privando a la terminal de agentes especializados en exploración o verificación.
+- **Carece de transporte RDD**, impidiendo que los usuarios de Antigravity ejecuten revisiones formales bajo Receipt-Driven Development.
+- Mezcla rutas entre `antigravity-desktop` y `antigravity-cli`, intentando escribir configuraciones en ambos sitios.
 
-| Capacidad | Upstream (`antigravity` genérico) | Esta Integración (`antigravity-cli` dedicada) | Evidencia en Código |
+### Nuestra solución: Adaptador especializado para CLI
+En lugar de forzar a la terminal a conformarse con un prompt plano, creamos el adaptador dedicado **`antigravity-cli`** (`model.AgentAntigravityCLI`). Este adaptador explota **el 100% de las posibilidades que Antigravity CLI ofrece como runtime moderno de agentes** (plugins nativos, 10 subagentes en Markdown, 5 hooks de ciclo de vida, statusline en Go y transporte RDD sandboxed).
+
+*(Nuestra integración se enfoca en Antigravity CLI, pero como se indicó, es posiblemente compatible también con Antigravity IDE y Antigravity 2.0, aunque no está certificado).*
+
+### Cuadro Comparativo de Enfoques
+
+| Capacidad / Dimensión | Upstream Genérico (`antigravity` para IDE/2.0/CLI) | Esta Integración (`antigravity-cli` especializada) | Justificación Técnica |
 |---|---|---|---|
-| **Arquitectura de carga** | Concatena texto plano en `.gemini/GEMINI.md` | Plugin nativo con `plugin.json`, `rules/`, `agents/`, `skills/` y `hooks.json` | [`internal/agents/antigravitycli/adapter.go`](../../internal/agents/antigravitycli/adapter.go#L275-L295) |
-| **Subagentes nativos** | ❌ Ninguno (`SubAgentsDir: ""` vacío) | ✅ **10 subagentes nativos** en formato Markdown listos para delegación | [`internal/assets/antigravitycli/agents/`](../../internal/assets/antigravitycli/agents) |
-| **Revisión RDD (4R)** | ❌ No soportada (`transport: nil`) | ✅ **Transporte RDD in-process** con subprocesos sandboxed y árboles Git inmutables | [`internal/reviewerprovider/antigravitycli_adapter.go`](../../internal/reviewerprovider/antigravitycli_adapter.go) |
-| **Ciclo de vida con Hooks** | ❌ No implementado | ✅ **5 hooks declarativos** (`PreInvocation`, `PreToolUse`, `PostToolUse`, `PostInvocation`, `Stop`) | [`internal/cli/antigravity_hook.go`](../../internal/cli/antigravity_hook.go#L122-L136) |
-| **StatusLine y Título** | ❌ Sin soporte | ✅ **Statusline in-process y título dinámico** con fases ODD, RDD, cuotas y memoria Engram | [`internal/cli/statusline.go`](../../internal/cli/statusline.go), [`internal/statusline`](../../internal/statusline) |
-| **Políticas de Seguridad** | ❌ No existen | ✅ **Guardia dinámica en memoria** (bloquea `.env*`, `.ssh`, `cat .env`, y fuerza `force_ask` en comandos destructivos) | [`internal/cli/antigravity_hook.go`](../../internal/cli/antigravity_hook.go#L921-L943) |
-| **Registro de Plugins** | ❌ Manual | ✅ Automático en `import_manifest.json` vía `agy plugin install` en staging | [`internal/agents/antigravitycli/adapter.go`](../../internal/agents/antigravitycli/adapter.go#L820-L865) |
-| **Soporte Multi-Scope** | ⚠️ Riesgo de colisión en `$HOME` | ✅ Separación estricta: `--scope global` vs `--scope workspace` (`.agents/plugins/gentle-ai`) | [`internal/cli/run.go`](../../internal/cli/run.go#L1053-L1071) |
-| **Aislamiento de Git** | ❌ Riesgo de ensuciar `.gitignore` | ✅ Gestión limpia en `.git/info/exclude` sin alterar el working tree del repositorio | [`internal/components/localexclude`](../../internal/components/localexclude) |
+| **Público y Entorno** | Enfoque genérico para IDE, 2.0 y CLI | Especializado en CLI (`agy`), posiblemente compatible con IDE/2.0 | La terminal de agentes autónomos requiere herramientas y hooks que un editor no usa. |
+| **Mecanismo de Carga** | Archivo plano `.gemini/GEMINI.md` | Plugin nativo (`plugin.json`, `rules/`, `agents/`, `skills/`) | `agy` cuenta con un sistema formal de plugins y reglas jerárquicas. |
+| **Subagentes** | ❌ Ninguno (`SubAgentsDir: ""` vacío) | ✅ 10 subagentes nativos en Markdown | `agy` soporta delegación autónoma (`invoke_subagent`). |
+| **Ciclo de Vida y Hooks** | ❌ No implementado | ✅ 5 hooks declarativos (`PreInvocation`, `PreToolUse`, etc.) | Permite control de seguridad, métricas de sesión y ledger inmutable. |
+| **Revisión de Código RDD** | ❌ No disponible (`transport: nil`) | ✅ Transporte in-process sandboxed (Lentes 4R) | Ejecución determinista de revisiones y refutaciones en terminal. |
+| **Barra de Estado** | ❌ No disponible | ✅ Statusline in-process y título dinámico en Go | Terminal enriquecida con gauges de cuota, Engram y avance ODD. |
+| **Políticas de Seguridad** | ❌ Ninguna | ✅ Filtros en memoria (`PreToolUse`, `force_ask`) | Bloqueo preventivo de secretos y advertencia en comandos destructivos. |
+| **Aislamiento de Scope** | ⚠️ Mezcla rutas en `.gemini/` | ✅ `--scope global` vs `--scope workspace` (`.agents/plugins`) | Aislamiento por repositorio para equipos con requerimientos específicos. |
+
+*(Para una comparativa técnica en profundidad, consultá [ide-vs-cli.md](ide-vs-cli.md) y la [propuesta para upstream](propuesta-upstream.md)).*
 
 ---
 
@@ -87,7 +125,7 @@ El siguiente mapa describe todos los componentes instalados, registros de integr
 ```text
 Entorno del Sistema y Repositorio
 │
-├── 1. Plugin Oficial de Gentle AI
+├── 1. Plugin Gentle AI
 │   (Global: ~/.gemini/config/plugins/gentle-ai/  |  Workspace: <repo>/.agents/plugins/gentle-ai/)
 │   ├── plugin.json                                      # Manifiesto del plugin para agy
 │   ├── mcp_config.json                                  # Servidores MCP (CodeGraph, Context7, Engram)
@@ -124,7 +162,7 @@ Entorno del Sistema y Repositorio
 
 Gentle AI provee una statusline rica y nativa ejecutada in-process sin dependencias externas (`jq` o `bash`), totalmente compatible con Linux, macOS y Windows:
 
-- **Pétalo estático**: Muestra el glifo de rosa estático `✿` en rosa Gentle Shell (`ansiRose + ansiBold + "✿"`), consistente y sin animación en todos los estados del agente.
+- **Pétalo estático**: Muestra el glifo de rosa estático `✿` en rosa Gentleman (`ansiRose + ansiBold + "✿"`), consistente y sin animación en todos los estados del agente.
 - **Modo y modelo**: Refleja el modo de ciclo activo (ej. `auto · Gemini 3.8 Flash`).
 - **Gauges de contexto y cuotas**: Muestra el consumo de la ventana de contexto (`ctx ▰▰▰▱▱▱▱▱ 43%`) y el tiempo restante de cuota.
 - **Memoria Engram reactiva**: Indica el estado del proyecto (`🧠 <proyecto> · ready` o `✓ saved #id` al registrar observaciones).
@@ -132,7 +170,7 @@ Gentle AI provee una statusline rica y nativa ejecutada in-process sin dependenc
 - **Métricas Git y Tareas ODD**: Contador de cambios (`±N +A/−D`) y avance de tareas del documento ODD más reciente (`⋗ 12/17 · T15 in_progress`).
 - **Atajos alineados a la derecha**: Muestra `? for shortcuts` (o `?` en terminales compactas) alineado al margen derecho.
 - **Auto-silenciado inteligente**: Si el plugin se desactiva en `config.json`, la barra se apaga automáticamente para no ensuciar la salida.
-- **Personalización del usuario**: Mediante `~/.gentle-ai/statusline.json` podés ajustar la densidad (`comfortable`, `compact`, `minimal`) y alternar la visibilidad de cualquier segmento.
+- **Personalización del usuario**: Mediante `~/.gentle-ai/statusline.json` podés ajustar la densidad (`comfortable`, `compact`, `minimal`) y alternar la visibilidad de cualquier segmento. Para más detalles, consultá la [Guía completa de StatusLine](statusline.md).
 
 ---
 
@@ -254,14 +292,14 @@ Gentle AI dota a `agy` de 10 subagentes nativos configurados en formato Markdown
 La documentación se organiza según la audiencia y el objetivo técnico:
 
 ### 📘 Guías Operativas para el Usuario
-- [**Guía de Instalación Paso a Paso**](installation.md): Opciones global y workspace, flag opcional `--include-theme` y qué se copia en disco.
-- [**StatusLine y Experiencia de Terminal**](statusline.md): Explicación de cada segmento, atajos de teclado, cuotas de modelos y auto-silenciado.
-- [**Seguridad, Jerarquías y Sandbox**](security-and-sandbox.md): Confinamiento del sandbox, capas de jerarquía, prevención de lectura de secretos (`.env`) e higiene con `.git/info/exclude`.
-- [**Resolución de Problemas (Troubleshooting)**](troubleshooting.md): Diagnóstico rápido con `gentle-ai doctor` y respuestas a preguntas frecuentes.
-- [**Antigravity IDE frente a CLI (ide-vs-cli.md)**](ide-vs-cli.md): Comparativa directa y sin tecnicismos entre el IDE desktop y el runtime de terminal.
+- [**Guía de Instalación Paso a Paso (installation.md)**](installation.md): Opciones global y workspace, flag opcional `--include-theme` y qué se copia en disco.
+- [**StatusLine y Experiencia de Terminal (statusline.md)**](statusline.md): Explicación de cada segmento, atajos de teclado, cuotas de modelos y auto-silenciado.
+- [**Seguridad, Jerarquías y Sandbox (security-and-sandbox.md)**](security-and-sandbox.md): Confinamiento del sandbox, capas de jerarquía, prevención de lectura de secretos (`.env`) e higiene con `.git/info/exclude`.
+- [**Resolución de Problemas (troubleshooting.md)**](troubleshooting.md): Diagnóstico rápido con `gentle-ai doctor` y respuestas a preguntas frecuentes.
+- [**El Ecosistema Antigravity: IDE, 2.0 y CLI (ide-vs-cli.md)**](ide-vs-cli.md): Explicación del ecosistema, diferencias entre el adaptador genérico y el dedicado, y por qué no usarlos a la vez.
 
-### 🏛️ Auditoría Técnica y Fundamentos de la Integración
-- [**Antigravity IDE frente a CLI (ide-vs-cli.md)**](ide-vs-cli.md): Comparativa directa entre el IDE desktop y el runtime de terminal.
+### 🏛️ Para Mantenedores de Upstream y Auditoría Técnica
+- [**Propuesta de Integración Upstream (propuesta-upstream.md)**](propuesta-upstream.md): Documento técnico para el equipo de Gentle AI justificando el desacople de CLI e IDE, arquitectura de assets, drift gate determinista y ausencia de regresiones.
 - [**Fundamentos y Puesta en Marcha (01-foundation.md)**](01-foundation.md): Despliegue de assets y directivas del plugin.
 - [**Transpilador Determinista (02-asset-transpiler.md)**](02-asset-transpiler.md): Transpilación desde Gentle Shell y drift gate `--check`.
 - [**Orquestación y Hooks (03-orchestration-and-hooks.md)**](03-orchestration-and-hooks.md): Hooks de ciclo de vida y ledger de mutaciones.
