@@ -164,6 +164,8 @@ Entorno del Sistema y Repositorio
 
 Gentle AI provee una statusline rica y nativa ejecutada in-process sin dependencias externas (`jq` o `bash`), totalmente compatible con Linux, macOS y Windows:
 
+![StatusLine en agy](../assets/features/statusline-agy.png)
+
 - **Pétalo estático**: Muestra el glifo de rosa estático `✿` en rosa Gentleman (`ansiRose + ansiBold + "✿"`), consistente y sin animación en todos los estados del agente.
 - **Modo y modelo**: Refleja el modo de ciclo activo (ej. `auto · Gemini 3.8 Flash`).
 - **Gauges de contexto y cuotas**: Muestra el consumo de la ventana de contexto (`ctx ▰▰▰▱▱▱▱▱ 43%`) y el tiempo restante de cuota.

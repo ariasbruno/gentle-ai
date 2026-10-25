@@ -26,6 +26,8 @@ Esto registrará los comandos en `~/.gemini/antigravity-cli/settings.json`:
 
 La línea de estado muestra información contextual en tiempo real con una jerarquía visual limpia:
 
+![StatusLine en agy](../assets/features/statusline-agy.png)
+
 ```text
 ✿ accept-edits · gemini-3.8-flash ▰▰▰▱▱▱▱▱ 38% 4h12m ▰▰▰▱▱ 60% $0.14 🧠 gentle-ai · 24 🌹 ✓ Approved ⋗ 3/5 · T2 in_progress ±2 +14/−3                   ? for shortcuts
 ```
@@ -33,14 +35,14 @@ La línea de estado muestra información contextual en tiempo real con una jerar
 ### Segmentos y su Significado
 
 1. **Pétalo Estático (`✿`)**: Flor estática en color rosa Gentleman (`ansiRose + bold`). Se mantiene sobria y sin animaciones que distraigan.
-2. **Modo y Modelo (`accept-edits · gemini-3.8-flash`)**: Modo de ciclo de vida (`plan`, `accept-edits`, `auto`) y modelo reportado verbatim por `agy`. Si el modo es el predeterminado, permanece silencioso.
-3. **Gauge de Contexto (`▰▰▰▱▱▱▱▱ 38%`)**: Barra de 8 celdas indicando el consumo de la ventana de contexto. Cambia de color dinámicamente (<80% sobrio, ≥80% amarillo de advertencia, ≥95% rojo crítico).
-4. **Ventana de Cuotas (`4h12m ▰▰▰▱▱ 60%`)**: Countdown en tiempo real hasta el próximo reinicio de cuota de la familia del modelo activo, junto a la barra de porcentaje consumido.
-5. **Costo de Sesión (`$0.14`)**: Se muestra **exclusivamente cuando es mayor a cero** (`$X.YZ`), evitando ruidos innecesarios en sesiones gratuitas o recién iniciadas.
-6. **Memoria Engram (`🧠 gentle-ai · 24`)**: Proyecto activo de memoria persistente Engram y cantidad de observaciones registradas.
-7. **Estado de Revisión RDD (`🌹 ✓ Approved` / `🌹 Review in progress`)**: Estado en vivo del motor de Receipt-Driven Development. Muestra si hay una revisión activa, corregida o aprobada.
-8. **Progreso ODD (`⋗ 3/5 · T2 in_progress`)**: Tareas completadas vs totales según el archivo de seguimiento en `odd/tasks/*.md`.
-9. **Cambios en Git (`±2 +14/−3`)**: Archivos modificados, inserciones y eliminaciones en el repositorio actual (con caché eficiente de 5 s).
+2. **Modelo y Nivel de Esfuerzo (`accept-edits · Gemini 3.8 Flash · high`)**: Modelo reportado por `agy` junto a su nivel de thinking/effort (`high`, `low`, etc.) o modo de ciclo de vida (`plan`, `accept-edits`, `auto`).
+3. **Gauge de Contexto (`ctx ▰▰▱▱▱ 17%`)**: Barra indicando el consumo de la ventana de contexto. Cambia de color dinámicamente (<80% sobrio, ≥80% amarillo de advertencia, ≥95% rojo crítico).
+4. **Ventanas de Cuota (`3h ▰▱▱▱▱ 5% ◈ 5d ▰▰▰▱▱ 57%`)**: Countdown en tiempo real hasta el próximo reinicio de cuota del modelo activo (por horas y días), junto al porcentaje consumido.
+5. **Costo de Sesión (`$0.14`)**: Se muestra **exclusivamente cuando es mayor a cero** (`$X.YZ`), evitando ruidos innecesarios en cuentas de cuota por suscripción o sesiones recién iniciadas.
+6. **Memoria Engram (`🧠 gentle-ai · ready`)**: Proyecto activo de memoria persistente Engram y su estado dinámico (`ready` o `✓ saved #id` al registrar observaciones).
+7. **Estado de Revisión RDD (`🌹 off` / `🌹 ✓ Approved` / `🌹 Review in progress`)**: Estado en vivo del motor de Receipt-Driven Development (`off`/`on` en reposo, o veredicto de la revisión activa).
+8. **Progreso ODD (`⋗ 3/5 · T2 in_progress`)**: Tareas completadas vs totales según el archivo de seguimiento en `odd/tasks/*.md` (se oculta automáticamente cuando no hay tareas activas).
+9. **Cambios en Git (`±2 +13/-70`)**: Archivos modificados, inserciones y eliminaciones en el repositorio actual (con caché eficiente de 5 s).
 10. **Atajos a la Derecha (`? for shortcuts`)**: Recordatorio interactivo alineado al margen derecho para consultar atajos de teclado sin ocupar espacio central.
 
 ---
