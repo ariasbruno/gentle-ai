@@ -81,16 +81,16 @@ Gentle AI soporta instalación y sincronización en ambos alcances:
 Con ambos binarios ya disponibles:
 
 ```sh
-# Instalación global (afecta a todas las sesiones de agy del usuario)
-gentle-ai install --agent antigravity-cli --scope global
-gentle-ai sync --agents antigravity-cli --scope global
+# Instalación global (opcionalmente con --include-theme para configurar StatusLine en settings.json)
+gentle-ai install --agent antigravity-cli --scope global --include-theme
+gentle-ai sync --agents antigravity-cli --scope global --include-theme
 
 # Instalación en workspace (aislada a este repositorio)
 gentle-ai install --agent antigravity-cli --scope workspace
 gentle-ai sync --agents antigravity-cli --scope workspace
 ```
 
-Las opciones `--agent`/`--agents` y `--scope` están registradas por [`ParseInstallFlags`](../../internal/cli/install.go#L72-L135) y [`ParseSyncFlags`](../../internal/cli/sync.go#L176-L210). La resolución de alcances está definida en [`ResolveInstallScope`](../../internal/cli/scope.go#L24-L44). Los comandos configuran el entorno para el agente, pero no instalan el binario `agy`: el adaptador no cuenta con autoinstalación de ejecutables externos.
+Las opciones `--agent`/`--agents`, `--scope` y `--include-theme` están registradas por [`ParseInstallFlags`](../../internal/cli/install.go#L72-L135) y [`ParseSyncFlags`](../../internal/cli/sync.go#L176-L210). La opción `--include-theme` automatiza la configuración de `statusLine` y `title` en `settings.json` mediante [`EnsureStatusLineSettings`](../../internal/agents/antigravitycli/statusline_settings.go). Si no se pasa `--include-theme`, `settings.json` se preserva intacto sin mutaciones automáticas. La resolución de alcances está definida en [`ResolveInstallScope`](../../internal/cli/scope.go#L24-L44). Los comandos configuran el entorno para el agente, pero no instalan el binario `agy`: el adaptador no cuenta con autoinstalación de ejecutables externos.
 
 En alcance global, la secuencia del paso final es `DeployPluginTreeToDir → ensureAntigravityOrchestratorRuleForScope → EnsurePluginImportedToDir`: [`antigravityCLIPluginImportStep.Run`](../../internal/cli/run.go#L1042-L1073). `EnsureStatusLineSettings` no se ejecuta durante install/sync para preservar el `settings.json` del usuario sin mutaciones automáticas. En alcance workspace, se despliega el árbol en `<workspace>/.agents/plugins/gentle-ai/` y se inicializa la regla de orquestador localmente, prescindiendo del registro en el manifiesto global y del registro de status line.
 
@@ -215,7 +215,7 @@ Esta decisión de diseño está respaldada por tests unitarios explícitos: [`Te
 }
 ```
 
-La línea sigue el orden y las prioridades fijadas con el usuario: **pétalo estático** (flor estática `✿` en rosa Gentle Shell `ansiRose + ansiBold + "✿"` en todos los estados del agente — sin animación y tiempo-independiente) + `modo · modelo` mostrado **verbatim cuando agy lo reporta** (`cycle_mode` en vivo: `plan`, `accept-edits`, `auto` donde la cuenta lo permite — un modo aparte con gating de cuenta; el `execution_mode` de los docs canónicos queda como fallback) y **en silencio en el modo default** — el ausente nunca recibe un label inventado, separador `⟡`, gauge de contexto `▰▱` de 8 celdas (acento <80 / warning ≥80 / error ≥95, marcador `!` ≥90), costo de sesión plano `$X.YZ` (sin sufijo), ventanas de quota **solo de la familia del modelo activo** en formato countdown — `4h32m ▰▰▱▱ 38%`: tiempo hasta el reset, barra y % usado (sin countdown cae al label derivado de la key) —, jobs (`⧗ N jobs`, `⧗ 1 job`), subagentes (`✦ N subagents`), Engram `🧠 proyecto · count`, RDD con **estados de review** (`🌹 Review in progress`/`✓ Approved`/`Fixing findings…`/…; sin autoridad activa muestra `on`/`off` del switch), tasklist ODD (`⋗ 12/17 · T15 in_progress`, `⚠N` con bloqueadas, `⋗ 17/17 ✓` completa; lee `odd/tasks/*.md` del doc más reciente por mtime) y cambios git `±N +A/−D` (visible por defecto, subprocess con cache de 5 s por cwd; oculto en repo limpio o no-git). **Responsive:** en overflow cada segmento compacta (`4h32m 38%`, `ctx 43%`, `⧗ 2`, `✦ 3`, `🧠 918`, `⋗ 12/17`) antes de caer, y los cortes siguen la prioridad del usuario — primero quota, luego costo, ctx, subagentes, jobs, git, engram, RDD, tasklist; el bloque pétalo·modelo nunca cae; truncado `…` final. Density: `compact` = formas cortas con gauges de 6 celdas; `minimal` = solo pétalo·modelo, tasklist, RDD y engram. Un payload ausente o roto degrada a `✿` sola con exit 0. El modo `--title` alimenta el título de la terminal.
+La línea sigue el orden y las prioridades fijadas con el usuario: **pétalo estático** (flor estática `✿` en rosa Gentleman `ansiRose + ansiBold + "✿"` en todos los estados del agente — sin animación y tiempo-independiente) + `modo · modelo` mostrado **verbatim cuando agy lo reporta** (`cycle_mode` en vivo: `plan`, `accept-edits`, `auto` donde la cuenta lo permite — un modo aparte con gating de cuenta; el `execution_mode` de los docs canónicos queda como fallback) y **en silencio en el modo default** — el ausente nunca recibe un label inventado, separador `⟡`, gauge de contexto `▰▱` de 8 celdas (acento <80 / warning ≥80 / error ≥95, marcador `!` ≥90), costo de sesión mostrado **exclusivamente cuando es mayor a cero** (`$X.YZ`), ventanas de quota **solo de la familia del modelo activo** en formato countdown — `4h32m ▰▰▱▱ 38%`: tiempo hasta el reset, barra y % usado (sin countdown cae al label derivado de la key) —, Engram `🧠 proyecto · count`, RDD con **estados de review** (`🌹 Review in progress`/`✓ Approved`/`Fixing findings…`/…; sin autoridad activa muestra `on`/`off` del switch), tasklist ODD (`⋗ 12/17 · T15 in_progress`, `⚠N` con bloqueadas, `⋗ 17/17 ✓` completa; lee `odd/tasks/*.md` del doc más reciente por mtime), cambios git `±N +A/−D` (visible por defecto, subprocess con cache de 5 s por cwd; oculto en repo limpio o no-git) y atajos a la derecha (`? for shortcuts`). Los segmentos de jobs y subagentes se omiten intencionalmente para evitar saturación visual, ya que `agy` los reporta de forma nativa en su interfaz. Si el plugin está desactivado en la configuración de agy (`plugins.gentle-ai.enabled: false`), la StatusLine se **auto-silencia por completo** retornando cadena vacía (`""`). Un payload ausente o roto degrada a `✿` sola con exit 0. El modo `--title` alimenta el título de la terminal.
 
 **Fase ODD (hook PreToolUse):** cada tool call actualiza `~/.gentle-ai/statusline-phase/<hash-conversación>.json` con la fase inferida (reads → `exploring`, edits → `implementing`, corridas de test → `checking`, dispatch de subagentes → `delegating`, resto → `working`), best-effort y sin afectar la decisión del hook; los registros se podan a la hora. El archivo queda como infraestructura (útil para usos futuros): desde la reordenación de la línea el statusline no muestra la fase — el pétalo es solo el pétalo.
 
@@ -251,7 +251,7 @@ Gentle AI ofrece dos integraciones distintas para el ecosistema de Antigravity:
 - **Antigravity CLI (`agy`):** Despliega el plugin completo con reglas, subagentes nativos, MCP servers y revisión RDD vía subproceso Go.
 - **Antigravity IDE:** Configura directivas a través de archivos de contexto como `GEMINI.md` en el workspace.
 
-Para una comparación detallada entre ambos modelos, consultá [Antigravity IDE frente a CLI](../antigravity-ide-vs-cli.md).
+Para una comparación detallada entre ambos enfoques, consultá [El Ecosistema Antigravity: IDE, 2.0 y CLI](ide-vs-cli.md).
 
 ---
 

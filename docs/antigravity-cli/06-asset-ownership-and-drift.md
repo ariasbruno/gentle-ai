@@ -84,7 +84,7 @@ Fuentes: [constantes](../../internal/agents/antigravitycli/adapter.go#L38-L44), 
 2. **No prueba recarga de cambios.** Se evita reimport cuando existe registro; debe comprobarse cómo el cliente usa las copias/rutas en la versión instalada.
 3. **No prueba salud MCP.** El manifest de import y la lista MCP global tienen poblaciones diferentes.
 4. **No es universalmente pasiva la consulta `plugin list`.** La documentación histórica anterior advertía rewrite del manifest por agy 1.2.9. Aquí se conserva como precaución histórica, no como fallo confirmado de 1.3.0.
-5. **No garantiza rutas workspace.** El paso final usa HOME real en install/sync; [análisis](01-foundation.md#alcance-workspace-no-es-un-camino-garantizado).
+5. **Aislamiento en rutas workspace garantizado.** En `--scope workspace`, el despliegue se realiza exclusivamente en `<workspace>/.agents/plugins/gentle-ai/` sin mutar `$HOME` ni tocar el manifiesto global; ver [Fundamentos](01-foundation.md#puesta-en-marcha-global-y-workspace).
 
 El mock de [j4500](../../bench/journeys_antigravity_cli.go#L27-L67) reproduce el rewrite destructivo atribuido a 1.2.9. La fecha/timestamp en ese script es dato fixture, no evidencia de un import realizado en esta tarea.
 

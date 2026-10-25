@@ -168,7 +168,7 @@ La existencia de tests `TestCheckGate*` ejecutados dentro del paquete no permite
 | Sandbox impide escrituras/red | Probe real acotado, por cliente/plataforma | El adapter solicita `--sandbox` |
 | Todos los frontmatter fields son enforcing | Ensayo positivo/negativo cliente y contrato oficial por versión | El transpilador los emite |
 | Plugin cargado y recargado por agy1.3.0 | Observación real de discovery/context en HOME desechable | Árbol y registro implementados |
-| Workspace local no toca HOME | Test end-to-end de destinos tras decisión de producto | No ofrecer ruta garantizada |
+| Workspace local no toca HOME | Verificado en `sync_scope_test.go` | Despliega en `.agents/plugins/gentle-ai/` aisladamente |
 | Rules bajo budget agregado | Medición tras includes/tokenización del cliente | Tests de bytes locales específicos |
 | Preset disponible/óptimo | Catálogo y mediciones de cuenta/modelo | Slugs/política hardcoded |
 | Paridad de los cinco agentes | Ensayo homogéneo de capacidades | Matriz de diferencias de código |

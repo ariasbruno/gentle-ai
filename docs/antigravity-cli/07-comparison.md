@@ -2,7 +2,7 @@
 
 **Estos cinco agentes comparten la identidad de runtime registrada para revisión, no mecanismos idénticos.** Elegir uno implica elegir owners, carriers y límites diferentes. Esta matriz compara el código de Gentle AI v4; no pretende certificar cada producto externo ni demostrar igualdad de modelos.
 
-[Índice](README.md) · [IDE frente a CLI](../antigravity-ide-vs-cli.md) · [Decisiones](08-decisions.md)
+[Índice](README.md) · [Ecosistema Antigravity](ide-vs-cli.md) · [Decisiones](08-decisions.md)
 
 ## Cómo interpretar la matriz
 
@@ -38,7 +38,7 @@ No se extrapola desde `FileSubAgents=false` a «sin delegación» en OpenCode/Pi
 | OpenCode | `ConfigPath`/`AGENTS.md` expuesto; routing always-loaded en orchestrator dentro de settings | `ConfigPath/skills`; no `SubAgentsDir` | Settings `opencode.json/jsonc` | [`Adapter`](../../internal/agents/opencode/adapter.go#L85-L130), [`FileSubAgents`](../../internal/agents/opencode/adapter.go#L196-L205), [carrier efectivo](../../internal/components/agentguidance/inject.go#L283-L295) |
 | Pi | `.pi` root global; agent paths resueltos separadamente por `AgentConfigPath` | `SkillsDir` y `SubAgentsDir` vacíos en adapter; host/package owner | `AgentConfigPath` + MCP config | [`Adapter`](../../internal/agents/pi/adapter.go#L300-L348), [canon orchestrator](https://github.com/Gentleman-Programming/gentle-shell/blob/d5d692a6888da9e9844e7e443ee30991fa4b9d14/assets/orchestrator.md#L94-L112) |
 
-El path expuesto por un adaptador no siempre es el **carrier efectivo** de un componente. OpenCode y Claude ilustran por qué hay que leer dispatch/inyector, no solo comparar nombres de métodos. Para agy no hay evidencia equivalente de instalación `.agents/plugins` desde el scope workspace de Gentle AI: [límite específico](01-foundation.md#alcance-workspace-no-es-un-camino-garantizado).
+El path expuesto por un adaptador no siempre es el **carrier efectivo** de un componente. OpenCode y Claude ilustran por qué hay que leer dispatch/inyector, no solo comparar nombres de métodos. Para agy, la instalación en workspace despliega de forma aislada en `<workspace>/.agents/plugins/gentle-ai/` donde `agy` lo descubre automáticamente sin requerir manifiesto global; ver [Fundamentos](01-foundation.md#puesta-en-marcha-global-y-workspace).
 
 ## Revisión e aislamiento
 

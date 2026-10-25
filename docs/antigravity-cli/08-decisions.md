@@ -96,7 +96,7 @@ El resolver establece una preferencia global de usuario, fuera del candidato. Ma
 
 **Coste:** con `inherit`, el default efectivo es el del propio AGY en el perfil aislado — no el del perfil habitual ni el de la sesión interactiva — y no se elige por rol explícitamente. Un effort inválido bloquea la revisión (fail-closed). Presets hardcoded pueden caducar o no estar disponibles para una cuenta. No se midió relación coste/calidad de Recommended/Economy.
 
-**Pendiente de producto:** el flag workspace no tiene una entrega agy local coherente demostrada; documentación oficial de `.agents` no corrige las rutas implementadas. [Análisis concreto](01-foundation.md#alcance-workspace-no-es-un-camino-garantizado).
+**Soporte de workspace:** en `--scope workspace`, Gentle AI despliega el plugin aislado en `<repo>/.agents/plugins/gentle-ai/` donde `agy` lo descubre nativamente sin tocar `HOME` ni el manifiesto global; ver [Fundamentos](01-foundation.md#puesta-en-marcha-global-y-workspace).
 
 ## 7. Fail-open frente a fail-closed: decidir por frontera
 
@@ -140,9 +140,9 @@ Tres guards de assets por runtime lo excluyen de forma nombrada y explicada, no 
 
 **Por qué se documenta en vez de unificarse:** las dos entradas resuelven su configuración bajo el mismo árbol `~/.gemini`, así que la duplicación salta a la vista y es el tipo de cosa que alguien «arregla» renombrando o fusionando entradas. Renombrar la heredada cambiaría el destino de instalaciones existentes, y fusionar los dos ids obligaría a adivinar cuál de los dos harness quiso seleccionar el usuario. La regla de esta remediación también lo pide: un cambio que afecta a agy y a otro agente se trata como que afecta a los dos, y acá el «otro» es la entrada heredada de upstream, que este fork **no toca**.
 
-**Consecuencia operativa:** cada id tiene su propio camino de limpieza. El desinstalador trabaja por agente y reporta por agente qué completó y qué no ([`Result`](../../internal/components/uninstall/service.go#L48-L62)), y el arreglo de permisos de esta remediación trata a `antigravity-cli` como un caso aparte del de la entrada heredada.
+**Consecuencia operativa:** cada id tiene su propio camino de limpieza. El desinstalador trabaja por agente y reporta por agente qué completó y qué no ([`Result`](../../internal/components/uninstall/service.go#L48-L62)), y el arreglo de permisos de esta remediación trata a `antigravity-cli` como un caso aparte del de la entrada heredada. **Importante:** no deben mantenerse ambas entradas instaladas al mismo tiempo porque ambas configuran el entorno de Antigravity en el sistema, lo que genera duplicación de skills y colisiones en la terminal; el usuario debe elegir una u otra.
 
-**Límite no medido:** no se probó una instalación cruzada (instalar una entrada, desinstalar la otra y medir el árbol resultante). Queda anotado en la misma línea que el resto de esta página: no se afirma paridad ni aislamiento entre ambas.
+**Límite no medido:** no se probó una instalación cruzada (instalar una entrada, desinstalar la otra y medir el árbol resultante). Queda anotado en la misma línea que el resto de esta página: no se afirma paridad ni aislamiento entre ambas. Adicionalmente, se anota que la integración de Antigravity CLI es potencialmente compatible con Antigravity IDE y Antigravity App (2.0), pero esto no ha sido probado oficialmente.
 
 ## 10. El protocolo ODD no viene del canon: exclusión aceptada por runtime
 
@@ -185,7 +185,7 @@ Tres guards de assets por runtime lo excluyen de forma nombrada y explicada, no 
 
 | Límite | Qué falta para resolverlo | Qué no se hizo |
 |---|---|---|
-| Workspace/hogar mezclados | Diseño de destinos y test de no-mutation HOME | Cambiar rutas o recomendar happy path local |
+| Aislamiento de Workspace | Implementado y verificado en `sync_scope_test.go` | Despliega en `.agents/plugins/gentle-ai/` sin mutar HOME |
 | Sandbox y discovery del reviewer | Ensayo real positivo/negativo agy, por versión/plataforma | Auth, llamadas remotas o pruebas destructivas |
 | Copia administrada del cliente/import recarga | Observar dónde carga y actualiza el plugin agy actual | Reinstalar para forzar un resultado |
 | Presets y defaults efímeros | Modelo disponible y resolución del proceso nuevo | Descubrir catálogo remoto o inventar precios |
