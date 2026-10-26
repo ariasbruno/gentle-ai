@@ -104,6 +104,7 @@ Ambos alcances despliegan el bundle completo de assets (13 reglas bajo `rules/`)
 ├── import_manifest.json
 └── plugins/gentle-ai/
     ├── plugin.json
+    ├── review-models.json           # asignaciones de modelos de revisión (opcional, configurable por el usuario)
     ├── mcp_config.json
     ├── hooks.json
     ├── hooks/{hook.sh,hook.cmd}
@@ -129,6 +130,7 @@ Ambos alcances despliegan el bundle completo de assets (13 reglas bajo `rules/`)
 # En --scope workspace:
 <workspace>/.agents/plugins/gentle-ai/
 ├── plugin.json
+├── review-models.json           # asignaciones de modelos de revisión (opcional, configurable por el usuario)
 ├── mcp_config.json
 ├── hooks.json
 ├── hooks/{hook.sh,hook.cmd}

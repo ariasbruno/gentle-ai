@@ -150,6 +150,7 @@ Entorno del Sistema y Repositorio
 │   ├── agents/                                          # 10 Subagentes nativos Markdown
 │   ├── skills/                                          # Catálogo completo de skills transpiladas
 │   ├── chains/                                          # Flujos compuestos (4r-review.chain.md)
+│   ├── review-models.json                               # Configuración de modelos para revisión RDD (opcional)
 │   └── .native-rule-ownership.json                      # Registro de propiedad y digests de reglas
 │
 ├── 2. Integración de StatusLine y Título (~/.gemini/antigravity-cli/settings.json)
