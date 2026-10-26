@@ -33,6 +33,25 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
+      - name: Set up mock agy for unit tests
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          cat << 'EOF' > "$HOME/.local/bin/agy"
+          #!/bin/sh
+          if [ "$1" = "version" ] || [ "$1" = "--version" ]; then
+            echo "1.4.4"
+            exit 0
+          fi
+          if [ "$1" = "plugin" ] && [ "$2" = "install" ]; then
+            mkdir -p "$HOME/.gemini/config"
+            echo '{"imports":[{"name":"gentle-ai","source":"antigravity","importedAt":"2026-10-26T00:00:00Z"}]}' > "$HOME/.gemini/config/import_manifest.json"
+            exit 0
+          fi
+          exit 0
+          EOF
+          chmod +x "$HOME/.local/bin/agy"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
       - name: Run unit tests
         run: go test ./...
 

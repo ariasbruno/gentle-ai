@@ -40,15 +40,18 @@ jobs:
             exit 1
           fi
           PINNED_SHA=$(jq -r '.source_commit' "$PROV_FILE")
-          SOURCE_REPO=$(jq -r '.source_repo' "$PROV_FILE")
+          RAW_REPO=$(jq -r '.source_repo' "$PROV_FILE")
+          SOURCE_SLUG=$(echo "$RAW_REPO" | sed -e 's|^https://github.com/||' -e 's|^git@github.com:||' -e 's|\.git$||')
+          SOURCE_URL="https://github.com/${SOURCE_SLUG}"
           echo "pinned_sha=$PINNED_SHA" >> $GITHUB_OUTPUT
-          echo "source_repo=$SOURCE_REPO" >> $GITHUB_OUTPUT
+          echo "source_repo=$SOURCE_URL" >> $GITHUB_OUTPUT
+          echo "source_slug=$SOURCE_SLUG" >> $GITHUB_OUTPUT
         id: provenance
 
       - name: Checkout gentle-shell at pinned commit
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
         with:
-          repository: ${{ steps.provenance.outputs.source_repo }}
+          repository: ${{ steps.provenance.outputs.source_slug }}
           ref: ${{ steps.provenance.outputs.pinned_sha }}
           path: gentle-shell
 
