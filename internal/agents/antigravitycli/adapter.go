@@ -870,6 +870,29 @@ func (a *Adapter) EnsurePluginImportedToDir(ctx context.Context, homeDir, plugin
 	return nil
 }
 
+// RecordPluginImportedDirectly records the gentle-ai plugin registration in the global
+// Antigravity CLI import manifest directly when agy is not available in PATH.
+func (a *Adapter) RecordPluginImportedDirectly(homeDir string) error {
+	manifestPath := a.ImportManifestPath(homeDir)
+	snapshot, err := snapshotPluginImportManifest(manifestPath)
+	if err != nil {
+		return err
+	}
+	if snapshot.manifest != nil && snapshot.manifest.registered {
+		return nil
+	}
+	created := json.RawMessage(fmt.Sprintf(`{"name":%q,"source":"antigravity","importedAt":%q}`, gentleAIPluginName, time.Now().UTC().Format(time.RFC3339)))
+	if snapshot.manifest == nil {
+		data := []byte(fmt.Sprintf("{\n  \"imports\": [\n    %s\n  ]\n}\n", created))
+		return a.writeManifest(manifestPath, data, 0o644)
+	}
+	merged, err := mergePluginImportManifest(snapshot.manifest, created)
+	if err != nil {
+		return err
+	}
+	return a.writeManifest(manifestPath, merged, snapshot.mode)
+}
+
 func runPluginInstall(ctx context.Context, command string, args []string, env []string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, command, args...)
 	cmd.Env = env

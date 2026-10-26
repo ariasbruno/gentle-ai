@@ -1065,10 +1065,14 @@ func (s antigravityCLIPluginImportStep) Run() error {
 		return fmt.Errorf("finalize Antigravity CLI orchestrator rule: %w", err)
 	}
 	if s.scope != ScopeWorkspace {
-		if _, err := cmdLookPath("agy"); err == nil {
-			if err := agy.EnsurePluginImportedToDir(context.Background(), s.homeDir, pluginDir); err != nil {
-				return fmt.Errorf("import Antigravity CLI plugin: %w", err)
+		if err := agy.EnsurePluginImportedToDir(context.Background(), s.homeDir, pluginDir); err != nil {
+			if strings.Contains(err.Error(), "locate agy for Antigravity CLI plugin import") {
+				if directErr := agy.RecordPluginImportedDirectly(s.homeDir); directErr != nil {
+					return fmt.Errorf("import Antigravity CLI plugin: %w", directErr)
+				}
+				return nil
 			}
+			return fmt.Errorf("import Antigravity CLI plugin: %w", err)
 		}
 	}
 	return nil
