@@ -2,9 +2,9 @@
 
 El ecosistema de Google Antigravity abarca tres superficies de trabajo complementarias:
 
-1. **Antigravity IDE**: La vista de editor (*Editor view*) de Google Antigravity. Ofrece autocompletado por tabulación (*tab autocompletion*), comandos de código en lenguaje natural (*natural language code commands*) y asistencia de edición con un agente configurable y consciente del contexto.
-2. **Antigravity App (2.0)**: La plataforma dedicada (*dedicated platform*) de Google Antigravity para trabajar con agentes (anteriormente conocida como Antigravity 2.0). Permite orquestar múltiples agentes autónomos trabajando en paralelo a través de proyectos independientes.
-3. **Antigravity CLI (`agy`)**: La superficie de terminal (*terminal-first surface*) de Google Antigravity para interactuar con agentes directamente en la consola. Te permite mantenerte en tu flujo de trabajo sin cambios de contexto (*context switching*).
+1. **Antigravity IDE**: El editor de código tradicional de Antigravity, con su autocompletado, comandos de código en lenguaje natural y asistencia en edición con un IA.
+2. **Antigravity App (2.0)**: La plataforma dedicada de Google Antigravity para trabajar con agentes (anteriormente conocida como Antigravity 2.0).
+3. **Antigravity CLI (`agy`)**: La superficie de terminal de Google Antigravity para interactuar con agentes directamente en la consola.
 
 Esta guía explica la diferencia entre el enfoque genérico heredado de upstream y nuestro adaptador dedicado, aclarando compatibilidades y por qué **no se deben utilizar ambos adaptadores a la vez**.
 
