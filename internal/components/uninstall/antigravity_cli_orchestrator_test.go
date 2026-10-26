@@ -34,6 +34,7 @@ func TestRetainedAntigravityCLIPluginOperationsCoverOrchestratorRuleAndLegacyRoo
 	// Static file removals that should always be present
 	wanted := []string{
 		filepath.Join(pluginDir, "rules", "gentle-ai-orchestrator.md"),
+		filepath.Join(pluginDir, "rules", "gentle-ai-review.md"),
 		filepath.Join(pluginDir, "orchestrator.md"),
 		filepath.Join(pluginDir, "review-models.json"),
 	}

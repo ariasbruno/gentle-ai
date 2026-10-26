@@ -215,13 +215,33 @@ func assertAntigravityCLIFirstSync(sandbox *Sandbox, observation Observation) er
 	if strings.Contains(orchestratorStr, "<!-- antigravity-review-execution-contract:insert -->") {
 		return fmt.Errorf("orchestrator rule still carries the unfilled review-contract marker")
 	}
-	if !strings.Contains(orchestratorStr, "## Entry rule") || !strings.Contains(orchestratorStr, "Concurrent Reviewer Group") {
-		return fmt.Errorf("orchestrator rule missing the rendered review execution contract")
+	if !strings.Contains(orchestratorStr, "rules/gentle-ai-review.md") {
+		return fmt.Errorf("orchestrator rule missing pointer to detached review rule")
+	}
+	if !strings.Contains(orchestratorStr, "#### Delegation Triggers") {
+		return fmt.Errorf("orchestrator rule missing inlined Delegation Triggers")
 	}
 	if len(orchestratorBytes) >= 24000 {
 		return fmt.Errorf("rendered orchestrator exceeds native byte cap: %d", len(orchestratorBytes))
 	}
 	sandbox.Scratch["j4500-orchestrator-first-sync"] = orchestratorStr
+
+	reviewPath := filepath.Join(pluginDir, "rules", "gentle-ai-review.md")
+	reviewBytes, err := os.ReadFile(reviewPath)
+	if err != nil {
+		return fmt.Errorf("missing review rule %s: %w", reviewPath, err)
+	}
+	reviewStr := string(reviewBytes)
+	if !strings.HasPrefix(reviewStr, "---\ntrigger: model_decision\n") {
+		return fmt.Errorf("review rule missing model_decision frontmatter: %.120q", reviewStr)
+	}
+	if !strings.Contains(reviewStr, "## Entry rule") || !strings.Contains(reviewStr, "Concurrent Reviewer Group") {
+		return fmt.Errorf("review rule missing rendered review execution contract")
+	}
+	if len(reviewBytes) >= 24000 {
+		return fmt.Errorf("rendered review rule exceeds native byte cap: %d", len(reviewBytes))
+	}
+	sandbox.Scratch["j4500-review-first-sync"] = reviewStr
 	if _, err := os.Stat(filepath.Join(pluginDir, "orchestrator.md")); !os.IsNotExist(err) {
 		return fmt.Errorf("legacy root orchestrator.md survived deploy: agy never reads the plugin root")
 	}
@@ -342,6 +362,13 @@ func assertAntigravityCLISecondSync(sandbox *Sandbox, observation Observation) e
 	if string(orchestratorBytes) != sandbox.Scratch["j4500-orchestrator-first-sync"] {
 		return fmt.Errorf("second sync modified orchestrator rule (fill not deterministic)")
 	}
+	reviewBytes, err := os.ReadFile(filepath.Join(sandbox.Home, ".gemini", "config", "plugins", "gentle-ai", "rules", "gentle-ai-review.md"))
+	if err != nil {
+		return fmt.Errorf("missing review rule after second sync: %w", err)
+	}
+	if string(reviewBytes) != sandbox.Scratch["j4500-review-first-sync"] {
+		return fmt.Errorf("second sync modified review rule (fill not deterministic)")
+	}
 	for _, module := range antigravityNativePhaseModules {
 		data, err := os.ReadFile(filepath.Join(rulesDir, module))
 		if err != nil || string(data) != sandbox.Scratch["j4500-phase-first-sync-"+module] {
@@ -415,10 +442,14 @@ func assertAntigravityCLIUninstall(sandbox *Sandbox, observation Observation) er
 			return fmt.Errorf("routing part %s was not uninstalled", name)
 		}
 	}
-	// Verify orchestrator rule is removed
+	// Verify orchestrator and review rules are removed
 	orchestratorRule := filepath.Join(pluginDir, "rules", "gentle-ai-orchestrator.md")
 	if _, err := os.Stat(orchestratorRule); !os.IsNotExist(err) {
 		return fmt.Errorf("rule file %s was not uninstalled", orchestratorRule)
+	}
+	reviewRule := filepath.Join(pluginDir, "rules", "gentle-ai-review.md")
+	if _, err := os.Stat(reviewRule); !os.IsNotExist(err) {
+		return fmt.Errorf("rule file %s was not uninstalled", reviewRule)
 	}
 	if _, err := os.Stat(filepath.Join(pluginDir, "orchestrator.md")); !os.IsNotExist(err) {
 		return fmt.Errorf("legacy root orchestrator.md was not uninstalled")

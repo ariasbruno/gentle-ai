@@ -35,11 +35,14 @@ func TestEnsureAntigravityOrchestratorRuleFillsContractAndFrontmatter(t *testing
 	if bytes.Contains(data, []byte(antigravitycliagent.ReviewContractInsertMarker)) {
 		t.Fatalf("orchestrator rule still contains the unfilled insert marker")
 	}
-	if !strings.Contains(content, "## Entry rule") {
-		t.Fatalf("orchestrator rule missing rendered review execution contract")
+	if !strings.Contains(content, "rules/gentle-ai-review.md") {
+		t.Fatalf("orchestrator rule missing pointer to detached review rule")
 	}
-	if !strings.Contains(content, "Concurrent Reviewer Group") {
-		t.Fatalf("orchestrator rule missing the concurrent reviewer group contract section")
+	if !strings.Contains(content, "#### Delegation Triggers") {
+		t.Fatalf("orchestrator rule missing inlined Delegation Triggers heading")
+	}
+	if !strings.Contains(content, "Evidence-budget rule") {
+		t.Fatalf("orchestrator rule missing Evidence-budget mapping trigger")
 	}
 	if !strings.Contains(content, "#### Review Execution Contract") {
 		t.Fatalf("orchestrator rule lost its Review Execution Contract heading")
@@ -59,9 +62,29 @@ func TestEnsureAntigravityOrchestratorRuleFillsContractAndFrontmatter(t *testing
 			t.Errorf("rendered always_on core lost obligation or route %q", want)
 		}
 	}
-	t.Logf("rendered core: %d bytes", len(data))
+	t.Logf("rendered orchestrator core: %d bytes", len(data))
 	if len(data) >= 24000 {
 		t.Fatalf("orchestrator rule exceeds agy per-file cap of 24000 bytes: %d", len(data))
+	}
+
+	reviewPath := filepath.Join(adapter.PluginDir(home), "rules", "gentle-ai-review.md")
+	reviewData, err := os.ReadFile(reviewPath)
+	if err != nil {
+		t.Fatalf("read %q: %v", reviewPath, err)
+	}
+	reviewContent := string(reviewData)
+	if !strings.HasPrefix(reviewContent, "---\ntrigger: model_decision\n") {
+		t.Fatalf("review rule must start with model_decision frontmatter, got prefix:\n%.200q", reviewContent)
+	}
+	if !strings.Contains(reviewContent, "## Entry rule") {
+		t.Fatalf("review rule missing rendered review execution contract")
+	}
+	if !strings.Contains(reviewContent, "Concurrent Reviewer Group") {
+		t.Fatalf("review rule missing the concurrent reviewer group contract section")
+	}
+	t.Logf("rendered review rule: %d bytes", len(reviewData))
+	if len(reviewData) >= 24000 {
+		t.Fatalf("review rule exceeds agy per-file cap of 24000 bytes: %d", len(reviewData))
 	}
 
 	// Idempotent: the actual sync sequence redeploys then fills the core.
@@ -78,6 +101,13 @@ func TestEnsureAntigravityOrchestratorRuleFillsContractAndFrontmatter(t *testing
 	}
 	if !bytes.Equal(data, again) {
 		t.Fatalf("second fill changed the orchestrator rule bytes")
+	}
+	againReview, err := os.ReadFile(reviewPath)
+	if err != nil {
+		t.Fatalf("re-read %q: %v", reviewPath, err)
+	}
+	if !bytes.Equal(reviewData, againReview) {
+		t.Fatalf("second fill changed the review rule bytes")
 	}
 }
 

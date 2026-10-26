@@ -104,7 +104,7 @@ Entorno del Sistema y Repositorio
 │   ├── mcp_config.json                                  # Servidores MCP (CodeGraph, Context7, Engram)
 │   ├── hooks.json                                       # Definición de hooks de ciclo de vida
 │   ├── hooks/                                           # Ejecutables puente (hook.sh / hook.cmd)
-│   ├── rules/                                           # Reglas operativas (AGENTS.md, orchestrator, routing ODD, strict-tdd)
+│   ├── rules/                                           # Reglas operativas (AGENTS.md, orchestrator, review RDD, routing ODD, strict-tdd)
 │   ├── agents/                                          # 10 Subagentes nativos Markdown
 │   │   ├── gentle-ai-explore/agent.md
 │   │   ├── gentle-ai-worker/agent.md

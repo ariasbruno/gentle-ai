@@ -39,6 +39,7 @@ El adaptador [`antigravitycli`](../../internal/agents/antigravitycli/adapter.go)
     │   ├── AGENTS.md
     │   ├── gentle-ai-routing.md
     │   ├── gentle-ai-orchestrator.md
+    │   ├── gentle-ai-review.md
     │   ├── orchestrator-delegation.md
     │   ├── orchestrator-delegation-reference.md
     │   ├── orchestrator-memory.md
@@ -112,6 +113,7 @@ Ambos alcances despliegan el bundle completo de assets (13 reglas bajo `rules/`)
     │   ├── AGENTS.md
     │   ├── gentle-ai-routing.md
     │   ├── gentle-ai-orchestrator.md
+    │   ├── gentle-ai-review.md
     │   ├── orchestrator-delegation.md
     │   ├── orchestrator-delegation-reference.md
     │   ├── orchestrator-memory.md
@@ -138,6 +140,7 @@ Ambos alcances despliegan el bundle completo de assets (13 reglas bajo `rules/`)
 │   ├── AGENTS.md
 │   ├── gentle-ai-routing.md
 │   ├── gentle-ai-orchestrator.md
+│   ├── gentle-ai-review.md
 │   ├── orchestrator-delegation.md
 │   ├── orchestrator-delegation-reference.md
 │   ├── orchestrator-memory.md

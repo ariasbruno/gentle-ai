@@ -13,7 +13,8 @@ The plugin keeps persona and mandatory orchestration separate from conditional p
 | Surface | Responsibility |
 |---|---|
 | `rules/AGENTS.md` | Injected persona and conversation style; not a worker's implementation policy. |
-| `rules/gentle-ai-orchestrator.md` (`always_on`) | Mandatory ODD/applicable test-first obligations, phase routing, safety and rendered canonical RDD contract. |
+| `rules/gentle-ai-orchestrator.md` (`always_on`) | Mandatory ODD/applicable test-first obligations, inlined delegation triggers, phase routing, and safety. |
+| `rules/gentle-ai-review.md` (`model_decision`) | Rendered canonical native review execution contract (RDD). |
 | `rules/orchestrator-*.md` (`model_decision`) | Triggered delegation, skills, memory, tracking, writer, verification and prompt-relay procedures. |
 | `rules/strict-tdd.md`, `rules/strict-tdd-verify.md` (`model_decision`) | Applicable implementation and verification guidance; legacy filenames do not imply a Strict TDD switch. |
 | `agents/<role>/agent.md` | Bounded role instructions; agent bodies already use deployed paths and are not rewritten by rule rendering. |

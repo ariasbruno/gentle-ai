@@ -24,8 +24,9 @@ Gentle AI distribuye sus directivas en archivos especializados según su ciclo d
 |---|---|---|
 | `rules/AGENTS.md` | Inyector de componentes | Persona base del mentor, reglas de estilo y restricciones globales |
 | `rules/gentle-ai-routing.md` | `injectAntigravityCLIRule` | Protocolo ODD (Organic Driven Development) y ciclo de trabajo |
-| `rules/gentle-ai-orchestrator.md` | Bundle + finalizador de contrato | Orquestador principal y contrato de ejecución RDD renderizado |
-| Satélites (`rules/orchestrator-*.md`) | `BundleAssets` | Especificaciones modulares (8 satélites en `rules/` con `trigger: model_decision`) |
+| `rules/gentle-ai-orchestrator.md` | Bundle + finalizador de reglas | Orquestador principal, triggers de delegación inlined y puntero a RDD |
+| `rules/gentle-ai-review.md` | `ensureAntigravityReviewRuleAtPath` | Contrato de ejecución RDD nativo renderizado (`trigger: model_decision`) |
+| Satélites (`rules/orchestrator-*.md`) | `BundleAssets` | Especificaciones modulares (satélites en `rules/` con `trigger: model_decision`) |
 
 Fuentes: [`SystemPromptFile`](../../internal/agents/antigravitycli/adapter.go#L215-L217), [`injectAntigravityCLIRule`](../../internal/components/agentguidance/inject.go#L320-L382), [`ensureAntigravityOrchestratorRule`](../../internal/cli/antigravity_orchestrator_rule.go#L28-L52).
 
@@ -72,13 +73,13 @@ Usuario solicita cambio o tarea
   → Síntesis final para el usuario
 ```
 
-## Inyección del contrato de revisión RDD
+## Contrato de revisión RDD desacoplado
 
-Para que el modelo conozca el protocolo de revisión formal de Gentle AI, el paso final del instalador inyecta el contrato canónico dentro de `rules/gentle-ai-orchestrator.md`:
+Para que el modelo conozca el protocolo de revisión formal de Gentle AI sin sobrecargar la regla principal ni superar el tope estricto de 24.000 bytes por archivo de `agy`, el contrato canónico de revisión se desacopla en `rules/gentle-ai-review.md` con activación bajo demanda (`trigger: model_decision`), mientras que `rules/gentle-ai-orchestrator.md` incorpora los disparadores de delegación obligatorios (Evidence-Budget Mapping Trigger) y referencia el contrato de revisión:
 
-1. Localiza el marcador `<!-- antigravity-review-execution-contract:insert -->` en la plantilla del orquestador.
-2. Renderiza el contrato canónico para `agy` vía `reviewassets.ReviewExecutionContractFor(AgentAntigravityCLI)`.
-3. Sustituye el marcador atómicamente garantizando idempotencia en ejecuciones sucesivas (`ensureAntigravityOrchestratorRule`).
+1. El paso final del instalador/sync ejecuta `ensureAntigravityOrchestratorRuleForScope`.
+2. Genera `rules/gentle-ai-review.md` renderizando el contrato canónico para `agy` vía `reviewassets.ReviewExecutionContractFor(AgentAntigravityCLI)` con `trigger: model_decision`.
+3. Finaliza `rules/gentle-ai-orchestrator.md` sustituyendo el marcador con el puntero a `rules/gentle-ai-review.md` y anteponiendo `trigger: always_on`, garantizando idempotencia en ejecuciones sucesivas.
 
 ## Hooks: contrato registrado
 
