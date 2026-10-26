@@ -86,6 +86,11 @@ Elegí el alcance según tu flujo de trabajo (consultá la [Guía de Instalació
    ```
    *(Comprueba herramientas del sistema, espacio en disco y conectividad con la memoria persistente Engram).*
 
+3. **Verificación interactiva dentro de `agy`:**
+   Iniciá `agy` en tu terminal y utilizá los comandos slash integrados para comprobar el entorno:
+   - `/plugins`: Confirma que `gentle-ai` aparezca en la lista de plugins habilitados.
+   - `/statusline`: Si instalaste con `--include-theme` y no ves la barra de inmediato en tu consola, usá este comando para inspeccionar su estado o forzar su recarga.
+
 ---
 
 ## 2. El Ecosistema Antigravity y la Necesidad de un Adaptador Dedicado
