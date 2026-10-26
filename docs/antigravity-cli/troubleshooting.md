@@ -136,7 +136,7 @@ gentle-ai doctor
 
 ## 4. Enlaces de Referencia
 
-- [**README Principal**](README.md): Arquitectura, matriz de 10 subagentes y flujo de hooks.
-- [**Guía de Instalación (installation.md)**](installation.md): Proceso de clonación, compilación y migración paso a paso.
-- [**StatusLine y Experiencia de Terminal (statusline.md)**](statusline.md): Gauges de cuota, memoria y densidades visuales.
-- [**Transporte RDD In-Process (05-review-transport.md)](05-review-transport.md)**: Arquitectura de revisión sandboxed y configuración de `review-models.json`.
+- [**README Principal**](README.md)
+- [**Guía de Instalación (installation.md)**](installation.md)
+- [**StatusLine y Experiencia de Terminal (statusline.md)**](statusline.md)
+- [**Transporte RDD In-Process (05-review-transport.md)**](05-review-transport.md): Arquitectura de revisión sandboxed y configuración de `review-models.json`.
