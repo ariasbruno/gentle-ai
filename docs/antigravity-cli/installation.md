@@ -1,6 +1,6 @@
 # Guía de Instalación: Antigravity CLI (`agy`) con Gentle AI
 
-Esta guía detalla el proceso completo de instalación, configuración y verificación de la integración de Antigravity CLI (`agy`) en Gentle AI.
+Esta guía detalla el proceso completo de instalación, configuración, migración desde upstream y verificación de la integración de Antigravity CLI (`agy`) en Gentle AI.
 
 > [!IMPORTANT]
 > **Versión fijada actual**: **v4.2.1** (basada en upstream Gentle AI v4.2.0, Gentle Shell v4.3.0 y Antigravity CLI v1.4.4).
@@ -19,79 +19,70 @@ Antes de comenzar, verificá que tu entorno cumpla con los siguientes requisitos
 
 ## 2. Obtención e Instalación del Binario `gentle-ai` (Desde este Fork)
 
-Para contar con el soporte nativo de **Antigravity CLI (`agy`)**, debés instalar el binario correspondiente a este fork (ya que upstream aún no incorpora este adaptador):
-
-### Opción A: Compilación local desde el repositorio (Recomendado)
-Es el método estándar y directo para instalar forks en el ecosistema Go. Clona la rama con la integración y compila el ejecutable en tu máquina:
+Debés compilar e instalar el binario correspondiente a este fork (ya que upstream aún no incorpora este adaptador dedicado):
 
 ```bash
-# 1. Clonar el repositorio en la rama de integración de AGY:
+# 1. Clonar el repositorio en la rama fijada de la integración:
 git clone -b agy/ai-v4.2.0_shell-v4.3.0 https://github.com/ariasbruno/gentle-ai.git
 cd gentle-ai
 
-# 2. Compilar e instalar:
-# Vía compilación directa (genera el binario local './gentle-ai'):
-go build -o gentle-ai ./cmd/gentle-ai
-./gentle-ai --version
-mv gentle-ai ~/.local/bin/   # O sudo mv gentle-ai /usr/local/bin/
-
-# O vía go install local (lo instala directo en tu $GOPATH/bin):
+# 2. Compilar e instalar el binario en tu sistema:
 go install ./cmd/gentle-ai
-```
 
-### Opción B: Descarga de binarios precompilados
-Si no disponés del compilador de Go en tu máquina, podés descargar el binario compilado para tu plataforma desde las [Releases del fork](https://github.com/ariasbruno/gentle-ai/releases):
-```bash
-chmod +x gentle-ai
-mv gentle-ai ~/.local/bin/   # O sudo mv gentle-ai /usr/local/bin/
+# 3. Comprobar que el binario instalado esté disponible:
+gentle-ai --version
 ```
 
 ---
 
-## 3. Alcance de la Instalación: Global vs Workspace
+## 3. Instalación en Antigravity CLI: Migración vs Instalación Limpia
 
-Gentle AI ofrece dos formas de instalación perfectamente aisladas:
+Antes de ejecutar la instalación, determiná cuál es tu situación:
+
+### Caso A: Si ya usabas Gentle AI oficial / upstream (Migración obligatoria)
+En upstream existe un adaptador genérico llamado `antigravity` que intentaba abarcar todo el ecosistema (IDE, 2.0 y CLI) escribiendo configuraciones tanto en `.gemini/antigravity-cli/` como en `GEMINI.md`.
+
+> [!WARNING]
+> **No es posible usar ambas integraciones al mismo tiempo:** Ambos adaptadores configuran el entorno de Antigravity en tu máquina. Mantener los dos activos provocaría duplicación de skills y configuraciones redundantes. **Debés desinstalar el adaptador genérico antes de instalar el nuevo.**
+
+1. **Paso 1: Desinstalá el adaptador genérico de upstream:**
+   ```bash
+   gentle-ai uninstall --agent antigravity
+   ```
+   *(Este comando remueve las configuraciones y reglas genéricas viejas sin tocar el resto de tus herramientas).*
+
+2. **Paso 2: Instalá el adaptador dedicado para Antigravity CLI:**
+   ```bash
+   gentle-ai install --agent antigravity-cli --scope global
+   ```
+   *(Opcional: Si querés que además configure la StatusLine y el título dinámico, sumá el flag `--include-theme` al comando anterior).*
+
+---
+
+### Caso B: Instalación limpia (Primera vez con Gentle AI)
+
+Si nunca antes habías instalado Gentle AI en tu máquina, elegí el alcance según tu flujo de trabajo:
 
 | Dimensión | Alcance Global (`--scope global`) | Alcance Workspace (`--scope workspace`) |
 |---|---|---|
 | **Destino en disco** | `~/.gemini/config/plugins/gentle-ai/` | `<repo>/.agents/plugins/gentle-ai/` |
 | **Afecta a** | Todos tus repositorios y proyectos | Exclusivamente al repositorio actual |
-| **Descubrimiento** | Registrado en `~/.gemini/config/import_manifest.json` | Automático por `agy` al abrir la terminal en el proyecto |
 | **Impacto en HOME** | Escribe en configuración global | Cero mutación en `$HOME` |
 | **Uso recomendado** | Tu máquina de desarrollo personal | Entornos compartidos, CI o configuraciones por equipo |
 
-### Comando de Instalación Global
-Para instalar en toda tu máquina:
-
-```bash
-gentle-ai install --agent antigravity-cli --scope global
-```
-
-*(Opcional: Si querés que además configure la StatusLine y el título dinámico en `~/.gemini/antigravity-cli/settings.json`, sumá el flag `--include-theme` al comando global).*
-
-*(Nota: el comando `gentle-ai sync` no hace falta al instalar; solo se utiliza después, en el día a día, si actualizás el binario y querés refrescar el plugin).*
-
-### Comando de Instalación en Workspace (Aislado)
-Para instalar únicamente dentro de este proyecto:
-
-```bash
-gentle-ai install --agent antigravity-cli --scope workspace
-```
-
-*(Nota: El flag `--include-theme` no aplica en workspace ya que la configuración de terminal de `agy` es global).*
-
-### ¿Venías usando la integración genérica de Antigravity? (Migración obligatoria)
-En upstream existe un adaptador genérico llamado `antigravity` que intentaba abarcar todo el ecosistema (IDE, 2.0 y CLI) escribiendo configuración tanto en `.gemini/antigravity-cli/` como en `GEMINI.md`.
-
-> [!WARNING]
-> **No es posible usar ambas integraciones al mismo tiempo:** Ambos adaptadores configuran el entorno de Antigravity en tu máquina. Mantener los dos activos provocaría duplicación de skills, configuraciones redundantes y colisiones en la terminal. **Debés elegir uno u otro.**
-
-- **Para migrar al adaptador de Antigravity CLI:**
-  Desinstalá primero el adaptador genérico e instalá el adaptador dedicado:
+- **Instalación Global (en toda tu máquina):**
   ```bash
-  gentle-ai uninstall --agent antigravity
   gentle-ai install --agent antigravity-cli --scope global
   ```
+  *(Opcional: Si querés que además configure la StatusLine y el título dinámico en `~/.gemini/antigravity-cli/settings.json`, sumá el flag `--include-theme` al comando global).*
+
+- **Instalación en Workspace (aislada solo a este repositorio):**
+  ```bash
+  gentle-ai install --agent antigravity-cli --scope workspace
+  ```
+  *(Nota: El flag `--include-theme` no aplica en workspace ya que la configuración de terminal de `agy` es global).*
+
+*(Nota sobre sync: El comando `gentle-ai sync` no hace falta al instalar; solo se utiliza después, en el día a día, si actualizás el binario y querés refrescar el plugin).*
 
 > [!NOTE]
 > **Compatibilidad con Antigravity IDE y Antigravity App (2.0):** Esta integración está centrada, optimizada y verificada en **Antigravity CLI (`agy`)**. Sin embargo, debido a que Antigravity IDE y Antigravity App (2.0) comparten gran parte de la infraestructura base de Antigravity, esta integración es **posiblemente compatible con Antigravity IDE y Antigravity App (2.0)**, aunque esto **no ha sido probado oficialmente aún**.
