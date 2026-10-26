@@ -1,76 +1,142 @@
 # Resolución de Problemas y Diagnóstico (Troubleshooting)
 
-Esta guía te ayuda a diagnosticar y solucionar rápidamente cualquier inconveniente común con la integración de `agy` y Gentle AI.
+Esta guía documenta problemas reales, causas raíz empíricas y soluciones verificadas para la integración de Antigravity CLI (`agy`) con Gentle AI.
 
 ---
 
 ## 1. Herramientas de Diagnóstico Integradas
 
-### Diagnóstico Completo del Sistema
-Ejecutá el comando `doctor` para comprobar el estado de los componentes, rutas de configuración y servidores MCP:
-
+### Diagnóstico General de Gentle AI
+Comprueba dependencias del sistema (`git`, `curl`, `node`, `go`), espacio en disco y conectividad con la memoria persistente Engram:
 ```bash
 gentle-ai doctor
 ```
 
-### Validación Estricta del Plugin
-Verificá que el plugin instalado cumpla con las especificaciones del validador de `agy`:
+### Validación Estricta del Plugin de `agy`
+Verifica manifiestos, esquemas, los 10 subagentes, reglas (límite de 24.000 bytes) y hooks sin errores:
+- **Instalación Global:**
+  ```bash
+  agy plugin validate --strict ~/.gemini/config/plugins/gentle-ai
+  ```
+- **Instalación en Workspace:**
+  ```bash
+  agy plugin validate --strict .agents/plugins/gentle-ai
+  ```
+Ambos comandos deben retornar exit code 0 (`0 errors, 0 warnings`).
+
+### Comprobación de la StatusLine Directa en Consola
+Podés probar la respuesta del renderizador de statusline directamente fuera de `agy`:
+```bash
+echo '{}' | gentle-ai statusline
+```
+O el título de ventana:
+```bash
+echo '{}' | gentle-ai statusline --title
+```
+
+---
+
+## 2. Problemas Reales y Soluciones Verificadas
+
+### A. La StatusLine no aparece en la terminal de `agy`
+
+- **Causa 1: La terminal no refrescó la barra al iniciar sesión.**
+  - **Solución:** Dentro del prompt de `agy`, ejecutá el comando slash `/statusline` para forzar la inicialización y recarga de la barra.
+
+- **Causa 2: No se configuró el bloque de tema en `settings.json`.**
+  - **Explicación:** Para no mutar configuraciones sin tu consentimiento, la instalación no inyecta la statusline a menos que uses `--include-theme`.
+  - **Solución:** Reconfigurá el tema ejecutando:
+    ```bash
+    gentle-ai sync --agents antigravity-cli --scope global --include-theme
+    ```
+    Y comprobá que `~/.gemini/antigravity-cli/settings.json` contenga:
+    ```json
+    {
+      "statusLine": { "type": "command", "command": "gentle-ai statusline" },
+      "title": { "type": "command", "command": "gentle-ai statusline --title" }
+    }
+    ```
+
+- **Causa 3: El ejecutable `gentle-ai` no está disponible en el `$PATH` de la terminal.**
+  - **Explicación:** Go compila los binarios en `~/go/bin` (o `$GOPATH/bin`). Si esa ruta no está exportada en el entorno interactivo de tu shell, `agy` no podrá encontrar el comando.
+  - **Solución:**
+    - En Linux / macOS: Agregá a tu `~/.bashrc` o `~/.zshrc`:
+      ```bash
+      export PATH="$HOME/go/bin:$PATH"
+      ```
+    - En Windows: Agregá `%USERPROFILE%\go\bin` a la variable de entorno `PATH` de tu usuario.
+    - Verificá la disponibilidad con `command -v gentle-ai` (o `where gentle-ai` en Windows).
+
+---
+
+### B. La validación falla con `agy plugin validate --strict`
+- **Causa 1: Se validó la ruta incorrecta según el alcance de instalación.**
+  - **Explicación:** Si instalaste con `--scope workspace`, el plugin reside en `.agents/plugins/gentle-ai` y la ruta global `~/.gemini/config/plugins/gentle-ai` no existirá o estará desactualizada.
+  - **Solución:**
+    - Si instalaste con `--scope global`: `agy plugin validate --strict ~/.gemini/config/plugins/gentle-ai`
+    - Si instalaste con `--scope workspace`: `agy plugin validate --strict .agents/plugins/gentle-ai`
+
+- **Causa 2: Una regla en `rules/` excede el límite de tamaño de Antigravity CLI.**
+  - **Explicación:** `agy` impone un límite estricto de 24.000 bytes por archivo de regla. Si modificaste manualmente alguna regla y superó ese tope, el validador estricto fallará.
+  - **Solución:** Ejecutá `gentle-ai sync --agents antigravity-cli` para restaurar los assets.
+
+---
+
+### C. La revisión RDD en modo headless falla o no emite veredicto ("produced no final message")
+- **Causa: El modelo configurado en el rol de revisión intenta ejecutar herramientas interactivas.**
+  - **Explicación:** Durante el ciclo de revisión automatizada (RDD con lentes 4R), los subagentes revisores corren en un sandbox estricto de solo lectura. Algunos modelos (como `gemini-3.8-flash` con esfuerzo `high`) intentan generar llamadas a herramientas de ejecución que el sandbox bloquea.
+  - **Solución:** Configurá explícitamente modelos verificados para roles de revisión creando o editando `~/.gemini/config/plugins/gentle-ai/review-models.json`:
+    ```json
+    {
+      "review-risk": "gemini-3.8-flash-low",
+      "review-readability": "gemini-3.8-flash-low",
+      "review-reliability": "gemini-3.8-flash-low",
+      "review-resilience": "gemini-3.8-flash-low",
+      "review-refuter": "gemini-3.8-flash-low",
+      "review-validator": "claude-sonnet-4-6"
+    }
+    ```
+    Para más detalles sobre la sintaxis de modelos y esfuerzo, consultá la [Guía de Transporte RDD (05-review-transport.md)](05-review-transport.md#modelos-de-revisión-y-propiedad-global).
+
+---
+
+### D. Colisiones, skills duplicadas o prompts redundantes (Conflicto con Upstream)
+- **Causa: Coexistencia del adaptador genérico `antigravity` de upstream.**
+  - **Explicación:** Si anteriormente utilizaste la versión oficial de Gentle AI, quedó instalado el adaptador genérico `antigravity`, el cual escribe directivas conflictivas en `.gemini/` y `GEMINI.md`.
+  - **Solución:** Desinstalá el adaptador genérico viejo y asegurá el nuevo:
+    ```bash
+    # 1. Desinstalar el adaptador genérico viejo:
+    gentle-ai uninstall --agent antigravity
+
+    # 2. Re-sincronizar el adaptador dedicado:
+    gentle-ai sync --agents antigravity-cli --scope global
+    ```
+
+---
+
+## 3. Reinstalación Limpia (Clean Rollback & Reinstall)
+
+Si necesitás reiniciar toda la integración a un estado completamente nuevo y limpio:
 
 ```bash
-# Para instalación global:
+# 1. Desinstalar la integración (limpia plugins, manifiestos y settings.json):
+gentle-ai uninstall --agent antigravity-cli
+
+# 2. Reinstalar el adaptador de forma global con la StatusLine:
+gentle-ai install --agent antigravity-cli --scope global --include-theme
+
+# 3. Comprobar la validez del plugin:
 agy plugin validate --strict ~/.gemini/config/plugins/gentle-ai
 
-# Para instalación en workspace:
-agy plugin validate --strict .agents/plugins/gentle-ai
-```
-Debe retornar exit 0 con cero errores y cero advertencias.
-
----
-
-## 2. Problemas Comunes y Soluciones
-
-### A. La StatusLine no aparece en la terminal
-- **Causa 1**: No se pasó `--include-theme` al instalar.
-  - **Solución**: Ejecutá `gentle-ai sync --agents antigravity-cli --scope global --include-theme`.
-- **Causa 2**: El binario `gentle-ai` no está en tu `$PATH` del sistema.
-  - **Solución**: Comprobá `command -v gentle-ai`. En `settings.json`, `agy` busca el comando en el `$PATH` del entorno de la terminal. Asegurate de que `~/.local/bin` o `/usr/local/bin` formen parte del `$PATH` de tu shell.
-- **Causa 3**: El plugin está desactivado en la configuración.
-  - **Solución**: Revisá `~/.gemini/config/config.json`. Si `plugins.gentle-ai.enabled` está en `false`, la StatusLine se auto-silencia por diseño. Cambialo a `true`.
-
-### B. El hook de `Stop` bloquea el cierre de la interacción
-- **Causa**: Realizaste modificaciones sustanciales de código que califican como de alto riesgo (`review_due`) y aún no fueron revisadas bajo RDD.
-  - **Solución**: Ejecutá el preflight de revisión indicado en el mensaje:
-    ```bash
-    gentle-ai review status --cwd . --contract gentle-ai.review-integration/v2 --agent antigravity-cli --next-transition
-    ```
-    Y luego ejecutá el comando `review.start` devuelto para completar la revisión.
-
-### C. Conflicto entre `antigravity` (IDE) y `antigravity-cli` (CLI)
-- **Causa**: Se intentó sincronizar el adaptador genérico `antigravity` en lugar del específico `antigravity-cli`.
-  - **Solución**: Para la terminal CLI, siempre utilizá el nombre formal de agente:
-    ```bash
-    gentle-ai sync --agents antigravity-cli
-    ```
-    El identificador `antigravity` sin sufijo `-cli` está reservado exclusivamente para la integración con el IDE gráfico.
-
-### D. En Windows: problemas de resolución de `gentle-ai.exe`
-- **Causa**: Go instala binarios en `%USERPROFILE%\go\bin` y este directorio no siempre está en el `%PATH%` de usuario.
-  - **Solución**: Agregá `%USERPROFILE%\go\bin` a las variables de entorno de Windows o copiá `gentle-ai.exe` a una carpeta incluida en `%PATH%` (ej. `C:\Windows\System32` o tu carpeta de herramientas).
-
----
-
-## 3. Restablecimiento Completo (Clean Reinstall)
-
-Si necesitás reiniciar la configuración a un estado limpio:
-
-```bash
-# 1. Desinstalar el plugin actual
-gentle-ai uninstall --agent antigravity-cli --scope global
-
-# 2. Reinstalar con configuración limpia de tema
-gentle-ai install --agent antigravity-cli --scope global --include-theme
-gentle-ai sync --agents antigravity-cli --scope global --include-theme
-
-# 3. Comprobar salud
+# 4. Verificar salud del sistema:
 gentle-ai doctor
 ```
+
+---
+
+## 4. Enlaces de Referencia
+
+- [**README Principal**](README.md): Arquitectura, matriz de 10 subagentes y flujo de hooks.
+- [**Guía de Instalación (installation.md)**](installation.md): Proceso de clonación, compilación y migración paso a paso.
+- [**StatusLine y Experiencia de Terminal (statusline.md)**](statusline.md): Gauges de cuota, memoria y densidades visuales.
+- [**Transporte RDD In-Process (05-review-transport.md)](05-review-transport.md)**: Arquitectura de revisión sandboxed y configuración de `review-models.json`.
