@@ -494,4 +494,3 @@ func TestParseInstallFlagsIncludeTheme(t *testing.T) {
 		t.Errorf("ParseInstallFlags() IncludeTheme = false, want true")
 	}
 }
-

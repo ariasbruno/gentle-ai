@@ -825,4 +825,3 @@ func TestRenderJobsAndSubagentsExcluded(t *testing.T) {
 		t.Errorf("subagents segment should not be rendered in statusline, got: %s", line)
 	}
 }
-

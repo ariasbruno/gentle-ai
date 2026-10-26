@@ -354,4 +354,3 @@ func TestEnsureStatusLineSettingsChanged_ReportsModificationAndIdempotency(t *te
 		t.Errorf("second EnsureStatusLineSettingsChanged(): changed = true, want false (idempotent)")
 	}
 }
-

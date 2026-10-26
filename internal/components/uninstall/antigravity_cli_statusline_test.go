@@ -331,4 +331,3 @@ func TestPartialUninstallAntigravityCLIThemeRemovesStatusLine(t *testing.T) {
 		t.Errorf("user customKey was lost during partial theme uninstall:\n%s", got)
 	}
 }
-

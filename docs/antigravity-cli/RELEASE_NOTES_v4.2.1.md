@@ -87,7 +87,7 @@ minisign -VQm checksums.txt \
   -P "$GENTLE_AI_MINISIGN_PUBLIC_KEY"
 
 # Debe imprimir exactamente:
-# repo=ariasbruno/gentle-ai;tag=v4.2.1
+# repo=Gentleman-Programming/gentle-ai;tag=v4.2.1
 
 # 3. Validar los hashes SHA-256:
 sha256sum --check --strict --ignore-missing checksums.txt

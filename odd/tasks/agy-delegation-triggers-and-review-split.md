@@ -15,13 +15,13 @@ Separate the Review Execution Contract from `rules/gentle-ai-orchestrator.md` in
 
 ## Tasks
 
-- [x] T1: Update `scripts/transpile-antigravitycli/orchestrator-core.md` and `internal/assets/antigravitycli/orchestrator.md` with inlined Delegation Triggers, corrected `TypeName` invocation, reference to `gentle-ai-review.md`, and RDD phase loading entry (S2, S3) [commit 50eaf8409].
-- [x] T2: Update `internal/cli/antigravity_orchestrator_rule.go` to generate `rules/gentle-ai-review.md` with `trigger: model_decision` and finalize `rules/gentle-ai-orchestrator.md` with review pointer and `trigger: always_on` (S2, S4) [commit 50eaf8409].
-- [x] T3: Update uninstall cleanup in `internal/components/uninstall/service.go` and tests in `internal/components/uninstall/` (S5) [commit 50eaf8409].
-- [x] T4: Update tests in `internal/cli/antigravity_orchestrator_rule_test.go` and `bench/journeys_antigravity_cli.go` to assert both rules exist, are under 24,000 bytes, and verify idempotent sync (S6) [commit 50eaf8409].
-- [x] T5: Sync and verify deployed plugin rules and run test suite (S1-S6) [commit 50eaf8409].
+- [x] T1: Update `scripts/transpile-antigravitycli/orchestrator-core.md` and `internal/assets/antigravitycli/orchestrator.md` with inlined Delegation Triggers, corrected `TypeName` invocation, reference to `gentle-ai-review.md`, and RDD phase loading entry (S2, S3) [commit 500ebb936].
+- [x] T2: Update `internal/cli/antigravity_orchestrator_rule.go` to generate `rules/gentle-ai-review.md` with `trigger: model_decision` and finalize `rules/gentle-ai-orchestrator.md` with review pointer and `trigger: always_on` (S2, S4) [commit 500ebb936].
+- [x] T3: Update uninstall cleanup in `internal/components/uninstall/service.go` and tests in `internal/components/uninstall/` (S5) [commit 500ebb936].
+- [x] T4: Update tests in `internal/cli/antigravity_orchestrator_rule_test.go` and `bench/journeys_antigravity_cli.go` to assert both rules exist, are under 24,000 bytes, and verify idempotent sync (S6) [commit 500ebb936].
+- [x] T5: Sync and verify deployed plugin rules and run test suite (S1-S6) [commit 500ebb936].
 
 ## Log
 
 - L1: User requested investigation into why Antigravity CLI does not delegate to subagents like Gentle Shell does. Analysis identified the 24 KB rule cap catch-22, inlined brevity contract, and subagent invocation syntax. User chose Option A (split review contract to `gentle-ai-review.md`, inline delegation triggers in orchestrator).
-- L2: Completed T1-T5 in commit 50eaf8409. Split Review Execution Contract to `rules/gentle-ai-review.md` (17,502 bytes) with `trigger: model_decision`. Inlined 7 Delegation Triggers and updated subagent invocation in `rules/gentle-ai-orchestrator.md` (10,141 bytes) with `trigger: always_on`. Verified idempotency and clean uninstall. Full test suite passing.
+- L2: Completed T1-T5 in commit 500ebb936. Split Review Execution Contract to `rules/gentle-ai-review.md` (17,502 bytes) with `trigger: model_decision`. Inlined 7 Delegation Triggers and updated subagent invocation in `rules/gentle-ai-orchestrator.md` (10,141 bytes) with `trigger: always_on`. Verified idempotency and clean uninstall. Full test suite passing.

@@ -197,7 +197,7 @@ Una vez hecha la instalación, comproba que el entorno responda correctamente:
 
 2. **Comandos de verificación dentro de la sesión de `agy`:**
    Dentro del prompt interactivo de `agy`, podés ejecutar los siguientes comandos slash para confirmar que todo esté operativo:
-   - `/plugin`: Verificá que `gentle-ai` figure en la lista de plugins cargados y habilitados (con sus 10 subagentes, reglas y skills).
+   - `/plugins`: Verificá que `gentle-ai` figure en la lista de plugins cargados y habilitados (con sus 10 subagentes, reglas y skills).
    - `/statusline`: Si instalaste con `--include-theme` y por la configuración de tu terminal no ves la barra inferior de inmediato, ejecutá `/statusline` para forzar su refresco.
 
 3. **Comportamiento en tiempo real:**
