@@ -85,47 +85,6 @@ jobs:
       - name: Verify tag, main, trust anchors, and module immutability
         run: ./scripts/release-preflight.sh
 
-      - name: Set up mock agy for unit tests
-        run: |
-          mkdir -p "$HOME/.local/bin"
-          cat << 'EOF' > "$HOME/.local/bin/agy"
-          #!/bin/sh
-          if [ "$1" = "version" ] || [ "$1" = "--version" ]; then
-            echo "1.4.4"
-            exit 0
-          fi
-          if [ "$1" = "plugin" ] && [ "$2" = "install" ]; then
-            mkdir -p "$HOME/.gemini/config"
-            echo '{"imports":[{"name":"gentle-ai","source":"antigravity","importedAt":"2026-10-26T00:00:00Z"}]}' > "$HOME/.gemini/config/import_manifest.json"
-            exit 0
-          fi
-          if [ "$1" = "plugin" ] && [ "$2" = "validate" ]; then
-            shift 2
-            DIR=""
-            for arg in "$@"; do
-              case "$arg" in
-                --*) ;;
-                *) DIR="$arg" ;;
-              esac
-            done
-            for r in "$DIR"/rules/*.md; do
-              if [ -f "$r" ]; then
-                SZ=$(wc -c < "$r")
-                if [ "$SZ" -ge 24000 ]; then
-                  DIFF=$((SZ - 24000))
-                  echo "{\"findings\":[{\"severity\":\"error\",\"file\":\"$r\",\"message\":\"the content is cut by $DIFF bytes to fit the 24000-byte limit\"}]}"
-                  exit 1
-                fi
-              fi
-            done
-            echo "{\"findings\":[]}"
-            exit 0
-          fi
-          exit 0
-          EOF
-          chmod +x "$HOME/.local/bin/agy"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
       - name: Unit tests
         run: go test ./...
 
