@@ -134,7 +134,7 @@ En lugar de forzar a la terminal a conformarse con un prompt plano, creamos el a
 | **Políticas de Seguridad** | ❌ Ninguna | ✅ Filtros en memoria (`PreToolUse`, `force_ask`) | Bloqueo preventivo de secretos y advertencia en comandos destructivos. |
 | **Aislamiento de Scope** | ⚠️ Mezcla rutas en `.gemini/` | ✅ `--scope global` vs `--scope workspace` (`.agents/plugins`) | Aislamiento por repositorio para equipos con requerimientos específicos. |
 
-*(Para una comparativa técnica en profundidad, consultá [ide-vs-cli.md](ide-vs-cli.md) y la [propuesta para upstream](propuesta-upstream.md)).*
+*(Para una comparativa técnica en profundidad, consultá [generic-vs-dedicated.md](generic-vs-dedicated.md) y la [propuesta para upstream](propuesta-upstream.md)).*
 
 ---
 
@@ -319,7 +319,7 @@ La documentación se organiza según la audiencia y el objetivo técnico:
 - [**StatusLine y Experiencia de Terminal (statusline.md)**](statusline.md): Explicación de cada segmento, atajos de teclado, cuotas de modelos y auto-silenciado.
 - [**Seguridad, Jerarquías y Sandbox (security-and-sandbox.md)**](security-and-sandbox.md): Confinamiento del sandbox, capas de jerarquía, prevención de lectura de secretos (`.env`) e higiene con `.git/info/exclude`.
 - [**Resolución de Problemas (troubleshooting.md)**](troubleshooting.md): Diagnóstico rápido con `gentle-ai doctor` y respuestas a preguntas frecuentes.
-- [**El Ecosistema Antigravity: IDE, App (2.0) y CLI (ide-vs-cli.md)**](ide-vs-cli.md): Explicación del ecosistema, diferencias entre el adaptador genérico y el dedicado, y por qué no usarlos a la vez.
+- [**Comparativa: Adaptador Genérico frente a Dedicado (generic-vs-dedicated.md)**](generic-vs-dedicated.md): Explicación del ecosistema, diferencias entre el adaptador genérico y el dedicado, y por qué no usarlos a la vez.
 
 ### 🏛️ Para Mantenedores de Upstream y Auditoría Técnica
 - [**Propuesta de Integración Upstream (propuesta-upstream.md)**](propuesta-upstream.md): Documento técnico para el equipo de Gentle AI justificando el desacople de CLI e IDE, arquitectura de assets, drift gate determinista y ausencia de regresiones.

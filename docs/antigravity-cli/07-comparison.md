@@ -2,7 +2,7 @@
 
 **Estos cinco agentes comparten la identidad de runtime registrada para revisión, no mecanismos idénticos.** Elegir uno implica elegir owners, carriers y límites diferentes. Esta matriz compara el código de Gentle AI v4; no pretende certificar cada producto externo ni demostrar igualdad de modelos.
 
-[Índice](README.md) · [Ecosistema Antigravity](ide-vs-cli.md) · [Decisiones](08-decisions.md)
+[Índice](README.md) · [Ecosistema y Adaptadores](generic-vs-dedicated.md) · [Decisiones](08-decisions.md)
 
 ## Cómo interpretar la matriz
 

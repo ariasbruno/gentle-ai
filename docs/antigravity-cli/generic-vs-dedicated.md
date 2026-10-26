@@ -1,4 +1,4 @@
-# El Ecosistema Antigravity: IDE, App (2.0) y CLI frente a la Integración Dedicada
+# Comparativa: Adaptador Genérico frente a Adaptador Dedicado (`generic-vs-dedicated`)
 
 El ecosistema de Google Antigravity abarca tres superficies de trabajo complementarias:
 

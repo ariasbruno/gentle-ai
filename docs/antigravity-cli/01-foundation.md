@@ -253,7 +253,7 @@ Gentle AI ofrece dos integraciones distintas para el ecosistema de Antigravity:
 - **`agy`:** Despliega el plugin completo con reglas, subagentes nativos, MCP servers y revisión RDD vía subproceso Go.
 - **Antigravity IDE:** Configura directivas a través de archivos de contexto como `GEMINI.md` en el workspace.
 
-Para una comparación detallada entre ambos enfoques, consultá [El Ecosistema Antigravity: IDE, App (2.0) y CLI](ide-vs-cli.md).
+Para una comparación detallada entre ambos enfoques, consultá [El Ecosistema Antigravity: Genérico frente a Dedicado](generic-vs-dedicated.md).
 
 ---
 
