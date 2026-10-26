@@ -186,20 +186,41 @@ Podés validar el estado de la integración mediante dos verificaciones compleme
 
 ---
 
-## 6. Desinstalación Limpia
+## 6. Primer Uso y Verificación en Vivo
 
-Si deseás remover la integración:
+Una vez hecha la instalación, comproba que el entorno responda correctamente:
+
+1. **Abrir Antigravity CLI:**
+   ```bash
+   agy
+   ```
+
+2. **Comandos de verificación dentro de la sesión de `agy`:**
+   Dentro del prompt interactivo de `agy`, podés ejecutar los siguientes comandos slash para confirmar que todo esté operativo:
+   - `/plugin`: Verificá que `gentle-ai` figure en la lista de plugins cargados y habilitados (con sus 10 subagentes, reglas y skills).
+   - `/statusline`: Si instalaste con `--include-theme` y por la configuración de tu terminal no ves la barra inferior de inmediato, ejecutá `/statusline` para forzar su refresco.
+
+3. **Comportamiento en tiempo real:**
+   - Si activaste `--include-theme`, la **StatusLine nativa** se renderiza en el margen inferior mostrando el modelo activo, gauges de contexto, estado de memoria Engram y contador de cambios Git.
+   - Al enviar tu primera instrucción, Gentle AI cargará de inmediato las reglas de orquestación ODD (`rules/AGENTS.md`) y tendrás disponibles los 10 subagentes nativos Markdown.
+
+4. **Guías para profundizar y personalizar:**
+   - [**README Principal**](README.md): Arquitectura completa, matriz de 10 subagentes y flujo de trabajo con hooks y ciclo RDD.
+   - [**StatusLine y Experiencia de Terminal (statusline.md)**](statusline.md): Personalización de densidad (`comfortable`, `compact`), visibilidad de segmentos y atajos de teclado.
+   - [**Seguridad, Jerarquías y Sandbox (security-and-sandbox.md)**](security-and-sandbox.md): Confinamiento del sandbox, prevención de lectura de secretos (`.env`) y filtros en memoria.
+   - [**Resolución de Problemas (troubleshooting.md)**](troubleshooting.md): Diagnóstico rápido con `gentle-ai doctor` y respuestas a preguntas frecuentes.
+
+---
+
+## 7. Desinstalación Limpia
+
+Si en algún momento deseás remover la integración de Antigravity CLI de tu sistema:
 
 ```bash
 gentle-ai uninstall --agent antigravity-cli
 ```
-Esto removerá el árbol del plugin y limpiará los registros administrados en `import_manifest.json` y `settings.json` (tanto en instalaciones globales como en el workspace activo), sin alterar configuraciones de otros agentes.
-
----
-
-## 7. Siguientes Pasos
-
-Una vez instalado y verificado, consultá:
-- [**README Principal**](README.md): Arquitectura, matriz de subagentes y flujo de trabajo con hooks y RDD.
-- [**Guía de StatusLine (statusline.md)**](statusline.md): Personalización de densidad, segmentos visibles y atajos.
-- [**Resolución de Problemas (troubleshooting.md)**](troubleshooting.md): Preguntas frecuentes y diagnóstico avanzado.
+Este comando:
+- Remueve el árbol del plugin desplegado (tanto en instalación global `~/.gemini/config/plugins/gentle-ai/` como en el workspace activo `.agents/plugins/gentle-ai/`).
+- Limpia de forma segura el registro en `~/.gemini/config/import_manifest.json`.
+- Restaura `~/.gemini/antigravity-cli/settings.json` eliminando la configuración de `statusLine` y `title` si se había configurado con `--include-theme`.
+- Preserva intactas las configuraciones de otros agentes que tengas instalados en tu máquina.
