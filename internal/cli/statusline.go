@@ -111,34 +111,42 @@ func statusLineGitChanges(cwd string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
-	porcelain, err := exec.CommandContext(ctx, "git", "-C", cwd, "status", "--porcelain").Output()
-	if err != nil {
-		return ""
-	}
-	count := 0
-	if trimmed := strings.TrimSpace(string(porcelain)); trimmed != "" {
-		count = len(strings.Split(trimmed, "\n"))
+	home, _ := os.UserHomeDir()
+	candidateRoots := antigravityCandidateRoots(ctx, cwd, home, "")
+	if len(candidateRoots) == 0 {
+		candidateRoots = []string{cwd}
 	}
 
-	added, deleted := 0, 0
-	if numstat, err := exec.CommandContext(ctx, "git", "-C", cwd, "diff", "--numstat").Output(); err == nil {
-		for _, line := range strings.Split(strings.TrimSpace(string(numstat)), "\n") {
-			fields := strings.Fields(line)
-			if len(fields) < 2 {
-				continue
-			}
-			if value, convErr := strconv.Atoi(fields[0]); convErr == nil && value > 0 {
-				added += value
-			}
-			if value, convErr := strconv.Atoi(fields[1]); convErr == nil && value > 0 {
-				deleted += value
+	for _, root := range candidateRoots {
+		porcelain, err := exec.CommandContext(ctx, "git", "-C", root, "status", "--porcelain").Output()
+		if err != nil {
+			continue
+		}
+		count := 0
+		if trimmed := strings.TrimSpace(string(porcelain)); trimmed != "" {
+			count = len(strings.Split(trimmed, "\n"))
+		}
+
+		added, deleted := 0, 0
+		if numstat, err := exec.CommandContext(ctx, "git", "-C", root, "diff", "--numstat").Output(); err == nil {
+			for _, line := range strings.Split(strings.TrimSpace(string(numstat)), "\n") {
+				fields := strings.Fields(line)
+				if len(fields) < 2 {
+					continue
+				}
+				if value, convErr := strconv.Atoi(fields[0]); convErr == nil && value > 0 {
+					added += value
+				}
+				if value, convErr := strconv.Atoi(fields[1]); convErr == nil && value > 0 {
+					deleted += value
+				}
 			}
 		}
+		if count > 0 || added > 0 || deleted > 0 {
+			return fmt.Sprintf("±%d +%d/−%d", count, added, deleted)
+		}
 	}
-	if count == 0 && added == 0 && deleted == 0 {
-		return ""
-	}
-	return fmt.Sprintf("±%d +%d/−%d", count, added, deleted)
+	return ""
 }
 
 // The changes cache (S18): the git subprocess runs at most once per cwd per

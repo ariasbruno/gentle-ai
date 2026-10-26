@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	rddStateCacheTTL = 30 * time.Second
-	rddStateDeadline = 500 * time.Millisecond
+	rddStateCacheTTL = 5 * time.Second
+	rddStateDeadline = 2 * time.Second
 )
 
 type rddStateCacheRecord struct {
@@ -39,10 +39,12 @@ func rddStateLabel(state reviewtransaction.State) string {
 	case reviewtransaction.StateUnreviewed:
 		return "Not reviewed yet"
 	case reviewtransaction.StateReviewing,
+		reviewtransaction.StateValidating,
 		reviewtransaction.StateFindingsFrozen,
 		reviewtransaction.StateEvidenceClassified:
 		return "Review in progress"
 	case reviewtransaction.StateFixRequired,
+		reviewtransaction.StateCorrectionRequired,
 		reviewtransaction.StateFixing,
 		reviewtransaction.StateFixValidating:
 		return "Fixing findings…"
@@ -76,27 +78,67 @@ func resolveStatusLineRDD(home, cwd string) string {
 		return "off"
 	}
 
-	// Resolve just the root before reading the cache, not the expensive status.
-	root, rootErr := (reviewtransaction.SnapshotBuilder{Repo: cwd}).ResolveRepositoryRoot(ctx)
-	if ctx.Err() != nil {
-		return "Review unavailable"
+	candidateRoots := antigravityCandidateRoots(ctx, cwd, home, "")
+	if len(candidateRoots) == 0 {
+		candidateRoots = []string{cwd}
 	}
-	if rootErr != nil {
-		return "on" // No repository: there cannot be a review authority.
-	}
-	if label, ok := readRDDStateCache(home, root); ok {
+	if label, ok := readRDDStateCache(home, candidateRoots[0]); ok {
 		return label
 	}
 
 	label := "on"
-	_, _, status, ok, resolveErr := antigravityResolveTargetIdentity(ctx, root)
-	if resolveErr != nil || ctx.Err() != nil {
+	hasValidRoot := false
+
+	for _, root := range candidateRoots {
+		_, targetIdentity, status, ok, resolveErr := antigravityResolveTargetIdentity(ctx, root)
+		if resolveErr != nil || ctx.Err() != nil {
+			continue
+		}
+		hasValidRoot = true
+
+		if ok && targetIdentity != "" {
+			// 1. If this exact candidate was already reviewed and acknowledged, show Approved.
+			if consumed, err := reviewtransaction.CompactTargetConsumed(ctx, root, targetIdentity); err == nil && consumed {
+				label = "✓ Approved"
+				writeRDDStateCache(home, candidateRoots[0], label)
+				return label
+			}
+
+			// 2. Inspect active compact authority leaves matching this target or active lineage.
+			leaves, leavesErr := reviewtransaction.CompactAuthorityLeaves(ctx, root)
+			if leavesErr == nil && len(leaves) > 0 {
+				var activeRecord *reviewtransaction.CompactRecord
+				for _, store := range leaves {
+					record, loadErr := store.LoadContext(ctx)
+					if loadErr != nil {
+						continue
+					}
+					matchesTarget := record.State.InitialSnapshot.Identity == targetIdentity ||
+						record.State.CurrentSnapshot.Identity == targetIdentity
+					matchesLineage := status.NextTransition.Execute != nil &&
+						status.NextTransition.Execute.Binding.LineageID != "" &&
+						status.NextTransition.Execute.Binding.LineageID == record.State.LineageID
+
+					if matchesTarget || matchesLineage {
+						if activeRecord == nil || record.State.Generation > activeRecord.State.Generation {
+							recCopy := record
+							activeRecord = &recCopy
+						}
+					}
+				}
+				if activeRecord != nil {
+					label = rddStateLabel(activeRecord.State.State)
+					writeRDDStateCache(home, candidateRoots[0], label)
+					return label
+				}
+			}
+		}
+	}
+
+	if !hasValidRoot && ctx.Err() != nil {
 		return "Review unavailable"
 	}
-	if ok && status.Authority != nil {
-		label = rddStateLabel(status.Authority.State)
-	}
-	writeRDDStateCache(home, root, label)
+	writeRDDStateCache(home, candidateRoots[0], label)
 	return label
 }
 
